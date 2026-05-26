@@ -1,0 +1,13 @@
+{
+  "name": "PerfectView",
+  "short_name": "PerfectView",
+  "start_url": "/PerfectView/",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "icono.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
