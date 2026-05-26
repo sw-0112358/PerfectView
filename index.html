@@ -1047,7 +1047,10 @@
         const visor = document.getElementById("visor");
         visor.innerHTML = "";
         const frame = document.createElement("iframe");
-        frame.src = url;
+       // frame.src = url;
+        
+        frame.src = servercloud + '/url?target=' + url;
+        
         frame.style.cssText = "width:100%;height:100vh;border:none;";
         if (filtroActivo) frame.classList.add("mangaImg", filtroActivo);
         visor.appendChild(frame);
