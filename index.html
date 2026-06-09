@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PerfectView</title>
-    
-    
+
+
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icono.jpg" type="image/jpeg">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="PerfectView">
     <link rel="apple-touch-icon" href="icono.jpg">
 
-   
+
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
     <style>
 
@@ -790,7 +790,7 @@
       const servercloud=   'https://shiny-bread-e818.gx0112358.workers.dev/raw?target=';
       const serverclouddw= 'https://shiny-bread-e818.gx0112358.workers.dev/download?target=';
 
-     
+
       /* =============================================
          2. UTILIDADES UI
       ============================================= */
@@ -1049,10 +1049,10 @@
         const visor = document.getElementById("visor");
         visor.innerHTML = "";
         const frame = document.createElement("iframe");
-       // frame.src = url;
-        
+        // frame.src = url;
+
         frame.src = servercloud + url;
-        
+
         frame.style.cssText = "width:100%;height:100vh;border:none;";
         if (filtroActivo) frame.classList.add("mangaImg", filtroActivo);
         visor.appendChild(frame);
@@ -1064,27 +1064,51 @@
         const fileInput = document.createElement("input");
         fileInput.type = "file";
         fileInput.accept = ".zip";
+        fileInput.multiple = true;                          // ← múltiples archivos
         fileInput.onchange = async () => {
-          const file = fileInput.files[0];
-          if (!file) return;
-          const zip = await JSZip.loadAsync(file);
+          const files = Array.from(fileInput.files);
+          if (!files.length) return;
+
+          // Orden ascendente por nombre (A→Z, 1→9)
+          files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+          // Reset visor + scroll al tope
           const visor = document.getElementById("visor");
           visor.innerHTML = "";
-          for (const filename of Object.keys(zip.files)) {
-            const entry = zip.files[filename];
-            if (!entry.dir) {
-              const blob = await entry.async("blob");
-              const img = document.createElement("img");
-              img.src = URL.createObjectURL(blob);
-              img.alt = filename;
-              img.classList.add("mangaImg");
-              img.style.maxWidth = "100%";
-              img.style.margin = "0";
-              if (filtroActivo) img.classList.add(filtroActivo);
-              visor.appendChild(img);
+          visor.scrollTop = 0;                              // ← regresa al inicio
+
+          for (const file of files) {
+            const zip = await JSZip.loadAsync(file);
+
+            // Ordenar entradas dentro del ZIP también
+            const nombres = Object.keys(zip.files).sort((a, b) =>
+                                                        a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+                                                       );
+
+            for (const filename of nombres) {
+              const entry = zip.files[filename];
+              if (!entry.dir) {
+                const blob = await entry.async("blob");
+
+                // ← copia en memoria para GuardarZip()
+                archivosDescargados.push({
+                  nombre: file.name.replace(/\.zip$/i, "") + "/" + filename,
+                  blob
+                });
+
+                const img = document.createElement("img");
+                img.src = URL.createObjectURL(blob);
+                img.alt = filename;
+                img.classList.add("mangaImg");
+                img.style.maxWidth = "100%";
+                img.style.margin = "0";
+                if (filtroActivo) img.classList.add(filtroActivo);
+                visor.appendChild(img);
+              }
             }
           }
-          actualizarStatus("✅ ZIP cargado correctamente.");
+
+          actualizarStatus("✅ " + files.length + " ZIP(s) cargados correctamente.");
           traslape();
         };
         fileInput.click();
