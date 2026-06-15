@@ -724,6 +724,9 @@
             <button class="action-btn" onclick="mostrarWebEnVisor()">
               <span class="icon">🌐</span> Mostrar Web
             </button>
+            <button class="action-btn" onclick="abrirConfigWorker()">
+              <span class="icon">☁️</span> Worker URL
+            </button>
           </div>
           <div style="margin-top:8px">
             <button class="btn-ghost btn-sm" style="width:100%;color:var(--danger);border-color:var(--border)" onclick="limpiarLinks()">🗑️ Limpiar lista</button>
@@ -787,13 +790,35 @@
       let trabajandoDn = false;
       let filtroActivo = 'colorMagenta';
       const archivosDescargados = [];
-      const servercloud=   'https://shiny-bread-e818.gx0112358.workers.dev/raw?target=';
-      const serverclouddw= 'https://shiny-bread-e818.gx0112358.workers.dev/download?target=';
 
-
+      let CF_WORKER      = localStorage.getItem('_cf_worker_url');
+      let servercloud    = CF_WORKER + '/raw?target=';
+      let serverclouddw  = CF_WORKER + '/download?target=';
+     
       /* =============================================
          2. UTILIDADES UI
       ============================================= */
+
+
+      function abrirConfigWorker() {
+        const actual = localStorage.getItem('_cf_worker_url') 
+        || 'https://shiny-bread-e818.gx0112358.workers.dev';
+        const nueva = prompt('☁️ Cloudflare Worker URL:', actual);
+        if (nueva === null) return; // canceló
+        if (!nueva.trim()) { actualizarStatus("⚠️ URL vacía, no se guardó."); return; }
+
+        const url = nueva.trim().replace(/\/$/, ''); // quitar / final si tiene
+        localStorage.setItem('_cf_worker_url', url);
+
+        // Actualizar variables en memoria
+        CF_WORKER      = url ;
+        servercloud    = url + '/raw?target=';
+        serverclouddw  = url + '/download?target=';
+
+        actualizarStatus("✅ Worker URL actualizado: " + url);
+      }
+
+
 
       function actualizarStatus(mensaje) {
         const el = document.getElementById("status");
