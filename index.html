@@ -1161,10 +1161,8 @@
             }
           }
           
-          visor.scrollTop = 0;
-
           actualizarStatus("✅ " + files.length + " ZIP(s) cargados correctamente.");
-          traslape();
+          traslape(); visor.scrollTop = 0;
         };
         fileInput.click();
       }
