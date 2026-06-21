@@ -1128,12 +1128,7 @@
           // Reset visor + scroll al tope
           const visor = document.getElementById("visor");
           visor.innerHTML = "";
-          visor.scrollTop = 0;                              // ← regresa al inicio
-
-          // Forzar scroll al inicio si ya estamos en el visor
-          if (pantallaActual === 2) {
-            visor.scrollTop = 0;
-          }
+          visor.scrollTop = 0;
 
           for (const file of files) {
             const zip = await JSZip.loadAsync(file);
@@ -1165,6 +1160,8 @@
               }
             }
           }
+          
+          visor.scrollTop = 0;
 
           actualizarStatus("✅ " + files.length + " ZIP(s) cargados correctamente.");
           traslape();
