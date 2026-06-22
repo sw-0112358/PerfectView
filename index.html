@@ -2575,9 +2575,10 @@
         const info   = document.getElementById('mwInfo');
         if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ URL inválida'; return; }
         if (!inicio || !final || inicio > final)  { info.textContent = '⚠️ Rango inválido'; return; }
-        const slug       = url.replace(/\/$/, '').split('/').pop();
-        const tituloSlug = slug.replace(/_\d{10,}$/, ''); // quitar ID numérico final
-        const nombre     = tituloSlug.replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const rawSlug    = decodeURIComponent(url.replace(/\/$/, '').split('/').pop());
+        const slug       = rawSlug.replace(/[^a-zA-Z0-9_\-]/g, ''); // quitar caracteres especiales
+        const tituloSlug = rawSlug.replace(/_\d{10,}$/, '');
+        const nombre     = tituloSlug.replace(/[^a-zA-Z0-9\s_\-]/g, '').replace(/_/g, ' ').replace(/-/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
         const caps   = [];
         for (let i = inicio; i <= final; i++) caps.push({ num: i });
         try {
