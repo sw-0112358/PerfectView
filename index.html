@@ -2696,6 +2696,27 @@
         } catch(err) { actualizarStatus('❌ ' + err.message); }
       }
 
+      // — Agregar episodios manualmente —
+      async function mwAgregarEpisodios() {
+        if (!_mwColeccionActual) return;
+        const caps     = _mwColeccionActual.capitulos;
+        const maxLocal = Math.max(...caps.map(c => c.num));
+        const input    = prompt('➕ Último episodio disponible actualmente:\n(ahora tienes hasta el ' + maxLocal + ')', maxLocal + 1);
+        if (input === null) return;
+        const nuevoMax = parseInt(input);
+        if (isNaN(nuevoMax) || nuevoMax <= maxLocal) {
+          actualizarStatus('⚠️ El número debe ser mayor a ' + maxLocal);
+          return;
+        }
+        const nuevas = [];
+        for (let i = maxLocal + 1; i <= nuevoMax; i++) nuevas.push({ num: i });
+        const nuevasCaps = [...caps, ...nuevas];
+        await mwActualizarColeccion(_mwColeccionActual.id, nuevasCaps);
+        _mwColeccionActual.capitulos = nuevasCaps;
+        actualizarStatus('✅ ' + nuevas.length + ' episodios agregados — hasta el ' + nuevoMax);
+        renderBoveda();
+      }
+
       // — Render Manhwa —
       async function renderManhwa(contenedor) {
         contenedor.innerHTML = '';
@@ -2707,7 +2728,7 @@
           bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_mwColeccionActual=null;renderBoveda()">← Manhwa</button>'
             + '<span class="bv-breadcrumb-sep">/</span>'
             + '<span class="bv-breadcrumb-label">📖 ' + _mwColeccionActual.nombre + '</span>'
-            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="mwBuscarNuevos()" title="Buscar nuevos">🔄</button>'
+            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="mwAgregarEpisodios()" title="Agregar episodios">➕</button>'
             + '<button class="bv-breadcrumb-back" onclick="_mwOrdenDesc=!_mwOrdenDesc;renderBoveda()" title="Invertir orden">'
             + (_mwOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
           contenedor.appendChild(bc);
