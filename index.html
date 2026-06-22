@@ -1538,7 +1538,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 3);
+          const req = indexedDB.open('PerfectViewBoveda', 4);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1550,6 +1550,9 @@
             }
             if (!db.objectStoreNames.contains('sjz_colecciones')) {
               db.createObjectStore('sjz_colecciones', { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('mw_colecciones')) {
+              db.createObjectStore('mw_colecciones', { keyPath: 'id', autoIncrement: true });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -2368,6 +2371,389 @@
         contenedor.appendChild(grid);
       }
 
+      /* =============================================
+         MANHWA — manhwaweb.com
+      ============================================= */
+
+      let _mwColeccionActual = null;
+      let _mwOrdenDesc       = true;
+
+      // — CRUD IndexedDB —
+      async function mwListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('mw_colecciones', 'readonly')
+                        .objectStore('mw_colecciones').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function mwGuardar(nombre, base_url, slug, capitulos) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('mw_colecciones', 'readwrite');
+          const req = tx.objectStore('mw_colecciones')
+                        .add({ nombre, base_url, slug, capitulos, fecha: new Date().toISOString() });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function mwEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('mw_colecciones', 'readwrite');
+          tx.objectStore('mw_colecciones').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function mwActualizarColeccion(id, capitulos) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('mw_colecciones', 'readwrite');
+          const req = tx.objectStore('mw_colecciones').get(id);
+          req.onsuccess = e => {
+            const reg = e.target.result;
+            if (!reg) { reject(new Error('No encontrado')); return; }
+            reg.capitulos = capitulos;
+            tx.objectStore('mw_colecciones').put(reg);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — ZIP de capítulo Manhwa en store zips —
+      async function mwGuardarCapitulo(nombre, blob, coleccion_id, cap_num) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('zips', 'readwrite');
+          const req = tx.objectStore('zips').add({
+            nombre, fecha: new Date().toISOString(),
+            tamaño: blob.size, blob,
+            categoria: 'manhwa',
+            mw_coleccion_id: coleccion_id,
+            mw_cap_num: cap_num
+          });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+          tx.onabort    = e => reject(e.target.error);
+        });
+      }
+
+      async function mwBuscarZipCapitulo(coleccion_id, cap_num) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const found = e.target.result.find(
+              r => r.mw_coleccion_id === coleccion_id && r.mw_cap_num === cap_num
+            );
+            resolve(found || null);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      async function mwListarDescargados(coleccion_id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const mapa = {};
+            e.target.result
+              .filter(r => r.mw_coleccion_id === coleccion_id)
+              .forEach(r => { mapa[r.mw_cap_num] = r.id; });
+            resolve(mapa);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      // — Detectar episodios desde la página del manhwa —
+      async function mwVerEpisodios() {
+        const url  = document.getElementById('mwUrl').value.trim();
+        const info = document.getElementById('mwInfo');
+        if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ URL inválida'; return; }
+        if (!CF_WORKER) { info.textContent = '⚠️ Configura el Worker primero'; return; }
+        info.textContent = '⏳ Buscando episodios…';
+        try {
+          const slug = url.replace(/\/$/, '').split('/').pop();
+          const base = CF_WORKER.replace(/\/$/, '');
+          const html = await fetch(base + '/raw?target=' + encodeURIComponent(url)).then(r => r.text());
+          const esc  = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const nums = [...html.matchAll(new RegExp(esc + '-(\\d+)_', 'gi'))].map(m => parseInt(m[1]));
+          if (!nums.length) { info.textContent = '⚠️ No detectado — ingresa el total manualmente'; return; }
+          const maxCap = Math.max(...nums);
+          document.getElementById('mwFinal').value  = maxCap;
+          if (!document.getElementById('mwInicio').value) document.getElementById('mwInicio').value = 1;
+          info.textContent = '✅ Episodios detectados: ' + maxCap;
+        } catch(err) { info.textContent = '❌ ' + err.message; }
+      }
+
+      // — Crear carpeta Manhwa —
+      async function mwCrearCarpeta() {
+        const url    = document.getElementById('mwUrl').value.trim();
+        const inicio = parseInt(document.getElementById('mwInicio').value);
+        const final  = parseInt(document.getElementById('mwFinal').value);
+        const info   = document.getElementById('mwInfo');
+        if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ URL inválida'; return; }
+        if (!inicio || !final || inicio > final)  { info.textContent = '⚠️ Rango inválido'; return; }
+        const slug       = url.replace(/\/$/, '').split('/').pop();
+        const tituloSlug = slug.replace(/_\d{10,}$/, ''); // quitar ID numérico final
+        const nombre     = tituloSlug.replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const caps   = [];
+        for (let i = inicio; i <= final; i++) caps.push({ num: i });
+        try {
+          await mwGuardar(nombre, url, slug, caps);
+          info.textContent = '✅ "' + nombre + '" creado con ' + caps.length + ' episodios';
+          document.getElementById('mwUrl').value    = '';
+          document.getElementById('mwInicio').value = '';
+          document.getElementById('mwFinal').value  = '';
+          renderManhwa(document.getElementById('bvLista'));
+        } catch(err) { info.textContent = '❌ ' + err.message; }
+      }
+
+      // — Auto-descubrir CDN y extensión —
+      async function mwDescubrirCDN(slug, capNum) {
+        const workerBase = CF_WORKER.replace(/\/$/, '');
+        const cdns = ['1', '2', '3', '4', '5'];
+        const exts = ['jpg', 'webp', 'png', 'jpeg'];
+        for (const cdn of cdns) {
+          for (const ext of exts) {
+            const url = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
+                      + '/chapter_' + capNum + '/ver_01/001.' + ext;
+            try {
+              const resp = await fetch(workerBase + '/download?target=' + encodeURIComponent(url));
+              if (!resp.ok) continue;
+              const blob = await resp.blob();
+              if (blob.size > 500) return { cdn, ext, primerBlob: blob };
+            } catch(e) {}
+          }
+        }
+        return null;
+      }
+
+      // — Descargar imágenes directamente del CDN —
+      async function mwDescargarImagenes(slug, capNum, onProgreso) {
+        const workerBase = CF_WORKER.replace(/\/$/, '');
+
+        actualizarStatus('🔍 Detectando CDN para cap. ' + capNum + '…');
+        const desc = await mwDescubrirCDN(slug, capNum);
+        if (!desc) throw new Error('No se encontró el CDN — verifica el slug o el número de capítulo');
+
+        const { cdn, ext, primerBlob } = desc;
+        const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
+                      + '/chapter_' + capNum + '/ver_01/';
+
+        // La primera imagen ya la tenemos del descubrimiento
+        const archivos = [{ nombre: '001.' + ext, blob: primerBlob }];
+        if (onProgreso) onProgreso(1);
+
+        let i = 2;
+        while (i <= 300) {
+          const nombre = String(i).padStart(3, '0') + '.' + ext;
+          try {
+            const resp = await fetch(workerBase + '/download?target=' + encodeURIComponent(imgBase + nombre));
+            if (!resp.ok) break;
+            const blob = await resp.blob();
+            if (blob.size < 500) break;
+            archivos.push({ nombre, blob });
+            if (onProgreso) onProgreso(i);
+          } catch(e) { break; }
+          i++;
+        }
+        return archivos;
+      }
+
+      // — Abrir capítulo Manhwa —
+      async function mwAbrirCapitulo(coleccion, cap, chipEl) {
+        const existente = await mwBuscarZipCapitulo(coleccion.id, cap.num);
+        if (existente) {
+          actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
+          const zip      = await JSZip.loadAsync(existente.blob);
+          const entradas = Object.values(zip.files)
+            .filter(f => !f.dir)
+            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          archivosDescargados.length = 0;
+          for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+          bvNavegar('pantalla1');
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
+          return;
+        }
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        chipEl.classList.add('descargando');
+        try {
+          const archivos = await mwDescargarImagenes(coleccion.slug, cap.num, n => {
+            actualizarStatus('⏳ Cap.' + cap.num + ' · imagen ' + n);
+          });
+          if (!archivos.length) throw new Error('No se encontraron imágenes — verifica el slug o el episodio');
+          actualizarStatus('⏳ Creando ZIP…');
+          const zip = new JSZip();
+          archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const zipId   = await mwGuardarCapitulo(
+            coleccion.nombre + ' - Cap ' + cap.num + '.zip',
+            zipBlob, coleccion.id, cap.num
+          );
+          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado';
+          archivosDescargados.length = 0;
+          archivos.forEach(a => archivosDescargados.push(a));
+          bvNavegar('pantalla1');
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
+        } catch(err) {
+          chipEl.classList.remove('descargando');
+          actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
+        }
+      }
+
+      // — Buscar nuevos episodios Manhwa —
+      async function mwBuscarNuevos() {
+        if (!_mwColeccionActual || !CF_WORKER) return;
+        actualizarStatus('🔄 Buscando nuevos episodios…');
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const html = await fetch(base + '/raw?target=' + encodeURIComponent(_mwColeccionActual.base_url)).then(r => r.text());
+          const slug = _mwColeccionActual.slug;
+          const esc  = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const nums = [...html.matchAll(new RegExp(esc + '-(\\d+)_', 'gi'))].map(m => parseInt(m[1]));
+          if (!nums.length) { actualizarStatus('⚠️ No se pudo detectar el total'); return; }
+          const maxSitio = Math.max(...nums);
+          const caps     = _mwColeccionActual.capitulos;
+          const maxLocal = Math.max(...caps.map(c => c.num));
+          if (maxSitio <= maxLocal) { actualizarStatus('✅ Todo al día — último: ' + maxLocal); return; }
+          const nuevos = [];
+          for (let i = maxLocal + 1; i <= maxSitio; i++) nuevos.push(i);
+          if (!confirm('🆕 ' + nuevos.length + ' episodio(s) nuevo(s) (del ' + nuevos[0] + ' al ' + nuevos[nuevos.length-1] + ').\n¿Agregar?')) return;
+          const nuevasCaps = [...caps, ...nuevos.map(n => ({ num: n }))];
+          await mwActualizarColeccion(_mwColeccionActual.id, nuevasCaps);
+          _mwColeccionActual.capitulos = nuevasCaps;
+          actualizarStatus('✅ ' + nuevos.length + ' episodios agregados');
+          renderBoveda();
+        } catch(err) { actualizarStatus('❌ ' + err.message); }
+      }
+
+      // — Render Manhwa —
+      async function renderManhwa(contenedor) {
+        contenedor.innerHTML = '';
+
+        if (_mwColeccionActual) {
+          // — Vista capítulos —
+          const bc = document.createElement('div');
+          bc.className = 'bv-breadcrumb';
+          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_mwColeccionActual=null;renderBoveda()">← Manhwa</button>'
+            + '<span class="bv-breadcrumb-sep">/</span>'
+            + '<span class="bv-breadcrumb-label">📖 ' + _mwColeccionActual.nombre + '</span>'
+            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="mwBuscarNuevos()" title="Buscar nuevos">🔄</button>'
+            + '<button class="bv-breadcrumb-back" onclick="_mwOrdenDesc=!_mwOrdenDesc;renderBoveda()" title="Invertir orden">'
+            + (_mwOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
+          contenedor.appendChild(bc);
+
+          const meta = document.createElement('div');
+          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px';
+          meta.textContent = _mwColeccionActual.capitulos.length + ' episodios · ' + _mwColeccionActual.slug;
+          contenedor.appendChild(meta);
+
+          let descargados = {};
+          try { descargados = await mwListarDescargados(_mwColeccionActual.id); } catch(e) {}
+
+          const capsOrdenadas = _mwOrdenDesc
+            ? [..._mwColeccionActual.capitulos].reverse()
+            : [..._mwColeccionActual.capitulos];
+
+          const grid = document.createElement('div');
+          grid.className = 'sjz-cap-grid';
+          capsOrdenadas.forEach(cap => {
+            const yaDesc = !!descargados[cap.num];
+            const chip   = document.createElement('div');
+            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
+            chip.textContent = cap.num;
+            chip.title = yaDesc ? '✅ Descargado' : '⬇️ Tap para descargar';
+            chip.onclick = () => mwAbrirCapitulo(_mwColeccionActual, cap, chip);
+            grid.appendChild(chip);
+          });
+          contenedor.appendChild(grid);
+          return;
+        }
+
+        // — Vista lista de manhwas —
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">📖 Manhwa</span>';
+        contenedor.appendChild(bc);
+
+        const panel = document.createElement('div');
+        panel.className = 'sjz-panel';
+        panel.innerHTML =
+          '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
+        + '<div class="sjz-row">'
+        +   '<input class="sjz-input" id="mwUrl" placeholder="https://manhwaweb.com/manhwa/titulo_id" type="url">'
+        +   '<button class="sjz-btn sjz-btn-secondary" onclick="mwVerEpisodios()">🔍 Ver</button>'
+        + '</div>'
+        + '<div class="sjz-info" id="mwInfo"></div>'
+        + '<div class="sjz-row">'
+        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+        +   '<input class="sjz-input sjz-input-sm" id="mwInicio" type="number" min="1" placeholder="1">'
+        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+        +   '<input class="sjz-input sjz-input-sm" id="mwFinal" type="number" min="1" placeholder="30">'
+        +   '<button class="sjz-btn sjz-btn-primary" onclick="mwCrearCarpeta()">📁 Crear</button>'
+        + '</div>';
+        contenedor.appendChild(panel);
+
+        let colecciones;
+        try { colecciones = await mwListar(); } catch(e) { colecciones = []; }
+
+        if (!colecciones.length) {
+          const empty = document.createElement('div');
+          empty.className = 'bv-empty';
+          empty.innerHTML = '📖 Sin manhwas guardados<br><span style="font-size:.8rem">Agrega uno con el panel de arriba</span>';
+          contenedor.appendChild(empty);
+          return;
+        }
+
+        colecciones.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        const grid = document.createElement('div');
+        grid.className = 'sjz-col-grid';
+
+        colecciones.forEach(col => {
+          const card = document.createElement('div');
+          card.className = 'sjz-col-card';
+
+          const nombre = document.createElement('div');
+          nombre.className = 'sjz-col-nombre';
+          nombre.textContent = col.nombre;
+
+          const meta = document.createElement('div');
+          meta.className = 'sjz-col-meta';
+          meta.textContent = col.capitulos.length + ' caps · ' + new Date(col.fecha).toLocaleDateString('es-ES');
+
+          const del = document.createElement('button');
+          del.className = 'sjz-col-del';
+          del.textContent = '🗑️';
+          del.onclick = async e => {
+            e.stopPropagation();
+            if (!confirm('¿Eliminar "' + col.nombre + '"?')) return;
+            await mwEliminarDB(col.id);
+            renderManhwa(contenedor);
+          };
+
+          card.append(nombre, meta, del);
+          card.onclick = () => { _mwColeccionActual = col; renderManhwa(contenedor); };
+          grid.appendChild(card);
+        });
+        contenedor.appendChild(grid);
+      }
+
       // — Render pantalla3 —
       async function renderBoveda() {
         const contenedor = document.getElementById('bvLista');
@@ -2412,6 +2798,13 @@
         if (categoriaActual === 'samurai') {
           _sjzColeccionActual = null;
           renderSamurai(contenedor);
+          return;
+        }
+
+        // Manhwa tiene su propio render
+        if (categoriaActual === 'manhwa') {
+          _mwColeccionActual = null;
+          renderManhwa(contenedor);
           return;
         }
 
