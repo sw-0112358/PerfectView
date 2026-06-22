@@ -1579,6 +1579,12 @@
       async function renderBoveda() {
         const contenedor = document.getElementById('bvLista');
         contenedor.innerHTML = '<div class="bv-empty" style="padding:30px 0;font-size:.9rem;opacity:.6">Cargando…</div>';
+        navigator.storage.estimate().then(est => {
+          const usado = (est.usage / 1048576).toFixed(1);
+          const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const el = document.getElementById('bvEspacio');
+          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
+        }).catch(() => {});
         let items;
         try {
           items = await bvListar();
