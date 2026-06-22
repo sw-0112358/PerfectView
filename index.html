@@ -815,13 +815,13 @@
               <span class="icon">🌐</span> Mostrar Web
             </button>
             <button class="action-btn" onclick="abrirConfigWorker()">
-              <span class="icon">☁️</span> Worker URL
+              <span class="icon">☁️</span> Worker
             </button>
             <button class="action-btn" onclick="enviarABoveda()">
-              <span class="icon">📦</span> Enviar a Bóveda
+              <span class="icon">📨🔐</span> 
             </button>
-            <button class="action-btn" onclick="irABoveda()">
-              <span class="icon">🏛️</span> Ver Bóveda
+            <button class="action-btn" id="btnBoveda" onclick="irABoveda()">
+              <span class="icon" id="iconBoveda">🔐</span>
             </button>
           </div>
           <div style="margin-top:8px">
@@ -1457,6 +1457,7 @@
           const ok = await bvVerificarPIN(pin);
           if (ok) {
             bovedaDesbloqueada = true;
+            bvActualizarIcono();
             overlay.remove();
             callback();
           } else {
@@ -1492,7 +1493,7 @@
       function bvPrimerAcceso() {
         const pin = prompt('🔒 Configura una contraseña para la Bóveda\n(deja vacío para acceso sin contraseña):');
         if (pin === null) return;
-        const accion = () => { bovedaDesbloqueada = true; bvNavegar('pantalla3'); renderBoveda(); };
+        const accion = () => { bovedaDesbloqueada = true; bvActualizarIcono(); bvNavegar('pantalla3'); renderBoveda(); };
         if (pin.trim()) {
           bvConfigurarPIN(pin.trim()).then(accion);
         } else {
@@ -1500,8 +1501,14 @@
         }
       }
 
+      function bvActualizarIcono() {
+        const ic = document.getElementById('iconBoveda');
+        if (ic) ic.textContent = bovedaDesbloqueada ? '🔓' : '🔐';
+      }
+
       function bvBloquear() {
         bovedaDesbloqueada = false;
+        bvActualizarIcono();
         bvNavegar('pantalla1');
         actualizarStatus('🔒 Bóveda bloqueada');
       }
