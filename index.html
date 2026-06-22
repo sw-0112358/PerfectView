@@ -21,6 +21,7 @@
       Versiones # 
       v4.2 -bug corregidos en el visor scrollTop reset después de traslape()
       v4.3 -Bóveda agregada
+      v4.4 -mejoras de la v4.3
 
       =============================================*/
 
@@ -721,7 +722,8 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        pointer-events: none;
+        pointer-events: auto;
+        cursor: text;
       }
 
       .bv-menu-btn {
@@ -1634,6 +1636,47 @@
         fileInput.click();
       }
 
+      // — Renombrar en IndexedDB —
+      async function bvRenombrarDB(id, nuevoNombre) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('zips', 'readwrite');
+          const req = tx.objectStore('zips').get(id);
+          req.onsuccess = e => {
+            const reg = e.target.result;
+            if (!reg) { reject(new Error('No encontrado')); return; }
+            reg.nombre = nuevoNombre;
+            tx.objectStore('zips').put(reg);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function bvRenombrar(item, footerEl) {
+        const actual = item.nombre.replace(/\.zip$/i, '');
+        const nuevo  = prompt('✏️ Editar nombre:', actual);
+        if (nuevo === null || !nuevo.trim() || nuevo.trim() === actual) return;
+        const nuevoConExt = nuevo.trim() + '.zip';
+        try {
+          await bvRenombrarDB(item.id, nuevoConExt);
+          item.nombre = nuevoConExt;
+          if (footerEl) footerEl.textContent = nuevo.trim();
+        } catch(err) {
+          actualizarStatus('❌ Error al renombrar: ' + err.message);
+        }
+      }
+
+      async function bvCopiarNombre(nombre) {
+        const texto = nombre.replace(/\.zip$/i, '');
+        try {
+          await navigator.clipboard.writeText(texto);
+          actualizarStatus('📋 Nombre copiado: ' + texto);
+        } catch {
+          prompt('Copia el nombre:', texto);
+        }
+      }
+
       // — Portadas: thumbnails cacheados por id —
       const _bvPortadas = {};
       let _bvDropdownActivo = null;
@@ -1644,11 +1687,13 @@
 
       document.addEventListener('click', bvCerrarDropdown);
 
-      function bvAbrirDropdown(btnEl, item, cardEl) {
+      function bvAbrirDropdown(btnEl, item, cardEl, footer) {
         bvCerrarDropdown();
         const dd = document.createElement('div');
         dd.className = 'bv-dropdown';
         const opciones = [
+          { icon: '✏️', fn: () => bvRenombrar(item, footer) },
+          { icon: '📋', fn: () => bvCopiarNombre(item.nombre) },
           { icon: '🔽', fn: () => bovedaDescargar(item.id, item.nombre) },
           { icon: '🗑️', fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
         ];
@@ -1730,11 +1775,13 @@
           const menuBtn = document.createElement('button');
           menuBtn.className = 'bv-menu-btn';
           menuBtn.textContent = '···';
-          menuBtn.onclick = e => { e.stopPropagation(); bvAbrirDropdown(menuBtn, item, card); };
+          menuBtn.onclick = e => { e.stopPropagation(); bvAbrirDropdown(menuBtn, item, card, footer); };
 
           card.append(placeholder, img, footer, menuBtn);
 
-          // Tap en la portada → abrir en visor
+          // Tap en nombre → renombrar
+          footer.addEventListener('click', e => { e.stopPropagation(); bvRenombrar(item, footer); });
+          // Tap en portada → abrir en visor
           card.addEventListener('click', () => bovedaAbrirEnVisor(item.id));
 
           grid.appendChild(card);
