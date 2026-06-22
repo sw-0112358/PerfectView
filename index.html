@@ -2169,6 +2169,8 @@
         }
       }
 
+      let _sjzOrdenDesc = true; // true = más reciente primero
+
       // — Render Samurai —
       async function renderSamurai(contenedor) {
         contenedor.innerHTML = '';
@@ -2181,7 +2183,9 @@
           // — Vista de capítulos —
           bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_sjzColeccionActual=null;renderBoveda()">← Samurai</button>'
             + '<span class="bv-breadcrumb-sep">/</span>'
-            + '<span class="bv-breadcrumb-label">⚔️ ' + _sjzColeccionActual.nombre + '</span>';
+            + '<span class="bv-breadcrumb-label">⚔️ ' + _sjzColeccionActual.nombre + '</span>'
+            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="_sjzOrdenDesc=!_sjzOrdenDesc;renderBoveda()" title="Invertir orden">'
+            + (_sjzOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
           contenedor.appendChild(bc);
 
           const meta = document.createElement('div');
@@ -2193,9 +2197,13 @@
           let descargados = {};
           try { descargados = await sjzListarDescargados(_sjzColeccionActual.id); } catch(e) {}
 
+          const capsOrdenadas = _sjzOrdenDesc
+            ? [..._sjzColeccionActual.capitulos].reverse()
+            : [..._sjzColeccionActual.capitulos];
+
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
-          _sjzColeccionActual.capitulos.forEach(cap => {
+          capsOrdenadas.forEach(cap => {
             const chip = document.createElement('div');
             const yaDesc = !!descargados[cap.num];
             chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
