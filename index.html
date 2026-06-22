@@ -1416,12 +1416,15 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 1);
+          const req = indexedDB.open('PerfectViewBoveda', 2);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
               db.createObjectStore('zips', { keyPath: 'id', autoIncrement: true })
                 .createIndex('fecha', 'fecha', { unique: false });
+            }
+            if (!db.objectStoreNames.contains('portadas')) {
+              db.createObjectStore('portadas', { keyPath: 'id' });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -1614,7 +1617,10 @@
           const zip = new JSZip();
           archivosDescargados.forEach(a => zip.file(a.nombre, a.blob));
           const blob = await zip.generateAsync({ type: 'blob' });
-          await bvGuardar(nombre.trim() + '.zip', blob);
+          const id = await bvGuardar(nombre.trim() + '.zip', blob);
+          bvExtraerPortada(blob)
+            .then(pb => pb && bvGuardarPortada(id, pb))
+            .catch(() => {});
           actualizarStatus('✅ Guardado en Bóveda: ' + nombre.trim());
         } catch(err) {
           actualizarStatus('❌ Error al guardar: ' + err.message);
@@ -1630,15 +1636,18 @@
         fileInput.onchange = async () => {
           const archivos = Array.from(fileInput.files);
           if (!archivos.length) return;
-          let ok = 0;
+          let ok = 0;         
           for (const archivo of archivos) {
             try {
-              await bvGuardar(archivo.name, archivo);
-              ok++;
+              const id = await bvGuardar(archivo.name, archivo);
+              guardados++;
+              bvExtraerPortada(archivo)
+                .then(pb => pb && bvGuardarPortada(id, pb))
+                .catch(() => {});
             } catch(err) {
-              actualizarStatus('❌ Error: ' + archivo.name + ' — ' + err.message);
+              actualizarStatus('❌ Error al importar ' + archivo.name + ': ' + err.message);
             }
-          }
+          }       
           actualizarStatus('✅ ' + ok + ' archivo(s) importado(s) a la Bóveda');
           renderBoveda();
         };
@@ -1646,6 +1655,35 @@
       }
 
       // — Renombrar en IndexedDB —
+      async function bvGuardarPortada(id, blob) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('portadas', 'readwrite');
+          tx.objectStore('portadas').put({ id, blob });
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function bvCargarPortada(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('portadas', 'readonly').objectStore('portadas').get(id);
+          req.onsuccess = e => resolve(e.target.result ? e.target.result.blob : null);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function bvEliminarPortada(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('portadas', 'readwrite');
+          tx.objectStore('portadas').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
       async function bvRenombrarDB(id, nuevoNombre) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -1717,14 +1755,13 @@
         _bvDropdownActivo = dd;
       }
 
-      async function bvExtraerPortada(blob) {
-        const zip = await JSZip.loadAsync(blob);
+      async function bvExtraerPortada(zipBlob) {
+        const zip = await JSZip.loadAsync(zipBlob);
         const imagenes = Object.values(zip.files)
-        .filter(f => !f.dir && /\.(jpe?g|png|webp|gif)$/i.test(f.name))
-        .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .filter(f => !f.dir && /\.(jpe?g|png|webp|gif)$/i.test(f.name))
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         if (!imagenes.length) return null;
-        const imgBlob = await imagenes[0].async('blob');
-        return URL.createObjectURL(imgBlob);
+        return await imagenes[0].async('blob');
       }
 
       // — Render pantalla3 —
@@ -1795,17 +1832,22 @@
 
           grid.appendChild(card);
 
-          // Extraer portada en segundo plano
+          // Cargar portada desde IndexedDB (sin abrir el ZIP)
           if (_bvPortadas[item.id]) {
             img.src = _bvPortadas[item.id];
             img.style.display = 'block';
             placeholder.style.display = 'none';
           } else {
-            bvCargar(item.id).then(reg => {
-              if (!reg) return;
-              return bvExtraerPortada(reg.blob);
-            }).then(url => {
-              if (!url) return;
+            bvCargarPortada(item.id).then(async blob => {
+              if (!blob) {
+                // No hay portada guardada — generarla desde el ZIP y persistirla
+                const reg = await bvCargar(item.id);
+                if (!reg) return;
+                blob = await bvExtraerPortada(reg.blob);
+                if (!blob) return;
+                bvGuardarPortada(item.id, blob).catch(() => {});
+              }
+              const url = URL.createObjectURL(blob);
               _bvPortadas[item.id] = url;
               img.src = url;
               img.style.display = 'block';
@@ -1859,6 +1901,8 @@
         if (!confirm('¿Eliminar este ZIP de la Bóveda? No se puede deshacer.')) return;
         try {
           await bvEliminarDB(id);
+          bvEliminarPortada(id).catch(() => {});
+          delete _bvPortadas[id];
           cardEl.style.opacity = '0';
           cardEl.style.transform = 'translateX(20px)';
           setTimeout(() => {
