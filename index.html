@@ -764,7 +764,7 @@
 
       .bv-drop-item {
         padding: 7px 8px;
-        font-size: 1rem;
+        font-size: .8rem;
         cursor: pointer;
         display: flex; align-items: center; justify-content: center;
         transition: background .12s;
@@ -1701,7 +1701,7 @@
         opciones.forEach(op => {
           const el = document.createElement('div');
           el.className = 'bv-drop-item' + (op.cls ? ' ' + op.cls : '');
-          el.innerHTML = '<span style="font-size:1.1rem">' + op.icon + '</span>';
+          el.innerHTML = '<span>' + op.icon + '</span>';
           el.onclick = e => { e.stopPropagation(); bvCerrarDropdown(); op.fn(); };
           dd.appendChild(el);
         });
