@@ -2033,6 +2033,87 @@
         }
       }
 
+      // — Actualizar colección en IndexedDB —
+      async function sjzActualizarColeccion(id, capitulos) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('sjz_colecciones', 'readwrite');
+          const req = tx.objectStore('sjz_colecciones').get(id);
+          req.onsuccess = e => {
+            const reg = e.target.result;
+            if (!reg) { reject(new Error('No encontrado')); return; }
+            reg.capitulos = capitulos;
+            tx.objectStore('sjz_colecciones').put(reg);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — Buscar nuevos episodios —
+      async function sjzBuscarNuevos() {
+        if (!_sjzColeccionActual) return;
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+
+        actualizarStatus('🔄 Buscando nuevos episodios…');
+        try {
+          const base      = CF_WORKER.replace(/\/$/, '');
+          const url       = _sjzColeccionActual.base_url;
+          const html      = await fetch(base + '/raw?target=' + encodeURIComponent(url)).then(r => r.text());
+          let maxSitio    = 0;
+
+          // Intentar admin-ajax
+          const matchId = html.match(/id="manga-chapters-holder"[^>]*data-id="(\d+)"/);
+          if (matchId) {
+            const ajaxUrl  = new URL(url).origin + '/wp-admin/admin-ajax.php';
+            try {
+              const ajaxHtml = await fetch(base + '/raw?target=' + encodeURIComponent(ajaxUrl), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=manga_get_chapters&manga=' + matchId[1]
+              }).then(r => r.text());
+              const nums = [...ajaxHtml.matchAll(/capitulo-(\d+)/gi)].map(m => parseInt(m[1]));
+              if (nums.length) maxSitio = Math.max(...nums);
+            } catch(e) {}
+          }
+
+          // Fallback: parsear desde HTML visible
+          if (!maxSitio) {
+            const slug = url.replace(/\/$/, '').split('/').pop();
+            const re   = new RegExp(slug + '\\/capitulo-(\\d+)', 'gi');
+            const nums = [...html.matchAll(re)].map(m => parseInt(m[1]));
+            if (nums.length) maxSitio = Math.max(...nums);
+          }
+
+          if (!maxSitio) { actualizarStatus('⚠️ No se pudo detectar el total de episodios'); return; }
+
+          const caps        = _sjzColeccionActual.capitulos;
+          const maxLocal    = Math.max(...caps.map(c => c.num));
+          const nuevosNums  = [];
+          for (let i = maxLocal + 1; i <= maxSitio; i++) nuevosNums.push(i);
+
+          if (!nuevosNums.length) {
+            actualizarStatus('✅ Todo al día — último episodio: ' + maxLocal);
+            return;
+          }
+
+          if (!confirm('🆕 Hay ' + nuevosNums.length + ' episodio(s) nuevo(s) (del ' + nuevosNums[0] + ' al ' + nuevosNums[nuevosNums.length - 1] + ').\n¿Agregar a la colección?')) return;
+
+          const nuevasCaps = [
+            ...caps,
+            ...nuevosNums.map(n => ({ num: n, url: _sjzColeccionActual.base_url + 'capitulo-' + n + '/' }))
+          ];
+
+          await sjzActualizarColeccion(_sjzColeccionActual.id, nuevasCaps);
+          _sjzColeccionActual.capitulos = nuevasCaps;
+          actualizarStatus('✅ ' + nuevosNums.length + ' episodios agregados');
+          renderBoveda();
+
+        } catch(err) {
+          actualizarStatus('❌ ' + err.message);
+        }
+      }
+
       // — Extraer URLs de imágenes de una página de capítulo —
       function sjzExtraerImagenes(html) {
         const urls = [];
@@ -2107,7 +2188,7 @@
           for (const e of entradas) {
             archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
           }
-          bvNavegar('pantalla2');
+          bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
           return;
@@ -2159,7 +2240,7 @@
           // 7. Cargar en visor
           archivosDescargados.length = 0;
           archivos.forEach(a => archivosDescargados.push(a));
-          bvNavegar('pantalla2');
+          bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
 
@@ -2184,7 +2265,8 @@
           bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_sjzColeccionActual=null;renderBoveda()">← Samurai</button>'
             + '<span class="bv-breadcrumb-sep">/</span>'
             + '<span class="bv-breadcrumb-label">⚔️ ' + _sjzColeccionActual.nombre + '</span>'
-            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="_sjzOrdenDesc=!_sjzOrdenDesc;renderBoveda()" title="Invertir orden">'
+            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="sjzBuscarNuevos()" title="Buscar nuevos episodios">🔄</button>'
+            + '<button class="bv-breadcrumb-back" onclick="_sjzOrdenDesc=!_sjzOrdenDesc;renderBoveda()" title="Invertir orden">'
             + (_sjzOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
           contenedor.appendChild(bc);
 
