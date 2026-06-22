@@ -1403,6 +1403,25 @@
           if (filtroActivo) img.classList.add(filtroActivo);
           visor.appendChild(img);
         });
+
+        // Sentinel de siguiente episodio
+        if (_visorContexto) {
+          const sig      = visorSiguienteCap();
+          const sentinel = document.createElement('div');
+          sentinel.style.cssText = 'padding:28px 16px;text-align:center;';
+          if (sig) {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.style.cssText = 'width:100%;padding:14px;font-size:1rem;';
+            btn.textContent = '▶️ Siguiente · Cap. ' + sig.num;
+            btn.onclick = visorCargarSiguiente;
+            sentinel.appendChild(btn);
+          } else {
+            sentinel.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:8px">✅ Último episodio</div>';
+          }
+          visor.appendChild(sentinel);
+        }
+
         traslape();
       }
 
@@ -1543,6 +1562,27 @@
       /* =============================================
          BÓVEDA — IndexedDB + PIN
       ============================================= */
+
+      // — Contexto del visor para navegación entre episodios —
+      let _visorContexto = null;
+
+      function visorSiguienteCap() {
+        if (!_visorContexto) return null;
+        const ordenadas = [..._visorContexto.coleccion.capitulos].sort((a,b) => a.num - b.num);
+        const idx = ordenadas.findIndex(c => c.num === _visorContexto.capNum);
+        if (idx === -1 || idx >= ordenadas.length - 1) return null;
+        return ordenadas[idx + 1];
+      }
+
+      async function visorCargarSiguiente() {
+        const sig = visorSiguienteCap();
+        if (!sig || !_visorContexto) return;
+        const dummy = document.createElement('div');
+        dummy.classList = { add: () => {}, remove: () => {} };
+        const ctx = { ..._visorContexto };
+        if (ctx.tipo === 'manhwa')   await mwAbrirCapitulo(ctx.coleccion, sig, dummy);
+        else if (ctx.tipo === 'samurai') await sjzAbrirCapitulo(ctx.coleccion, sig, dummy);
+      }
 
       // — Navegación segura (compatible con pantallas existentes) —
       function bvNavegar(id) {
@@ -2215,6 +2255,7 @@
           for (const e of entradas) {
             archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
           }
+          _visorContexto = { tipo: 'samurai', coleccion, capNum: cap.num };
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
@@ -2267,6 +2308,7 @@
           // 7. Cargar en visor
           archivosDescargados.length = 0;
           archivos.forEach(a => archivosDescargados.push(a));
+          _visorContexto = { tipo: 'samurai', coleccion, capNum: cap.num };
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
@@ -2580,6 +2622,7 @@
             .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           archivosDescargados.length = 0;
           for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+          _visorContexto = { tipo: 'manhwa', coleccion, capNum: cap.num };
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
@@ -2606,6 +2649,7 @@
           chipEl.title = '✅ Descargado';
           archivosDescargados.length = 0;
           archivos.forEach(a => archivosDescargados.push(a));
+          _visorContexto = { tipo: 'manhwa', coleccion, capNum: cap.num };
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
