@@ -659,6 +659,61 @@
       .mangaImg.colorRosado {
         filter: sepia(40%) saturate(200%) hue-rotate(310deg) contrast(120%);
       }
+      
+      
+      /* =============================================
+         BÓVEDA
+      ============================================= */
+
+      .bv-header {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        padding: 16px 0 18px;
+      }
+      .bv-titulo { font-size: 1.3rem; font-weight: 600; color: var(--text); }
+
+      .bv-toolbar {
+        display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+      }
+      .bv-toolbar .action-btn { flex: 1; min-width: 140px; }
+
+      .bv-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        display: flex; align-items: center;
+        justify-content: space-between; gap: 12px;
+        margin-bottom: 10px;
+        box-shadow: var(--shadow-sm);
+        transition: box-shadow .2s, opacity .3s, transform .3s;
+      }
+      .bv-card:hover { box-shadow: var(--shadow-md); }
+
+      .bv-info { flex: 1; min-width: 0; }
+      .bv-nombre {
+        font-weight: 500; font-size: .95rem; color: var(--text);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .bv-meta { font-size: .75rem; color: var(--text-muted); margin-top: 3px; }
+
+      .bv-acciones { display: flex; gap: 6px; flex-shrink: 0; }
+
+      .bv-btn {
+        padding: 7px 12px; border-radius: var(--radius-sm); border: none;
+        cursor: pointer; font-size: .8rem; font-weight: 500;
+        transition: opacity .15s, transform .1s;
+      }
+      .bv-btn:active { transform: scale(.95); opacity: .8; }
+      .bv-btn-primary   { background: var(--accent); color: #fff; }
+      .bv-btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+      .bv-btn-danger    { background: rgba(224,80,80,.1); color: var(--danger); border: 1px solid rgba(224,80,80,.2); }
+
+      .bv-empty {
+        text-align: center; color: var(--text-muted);
+        padding: 60px 20px; font-size: 1rem; line-height: 2;
+      }
+      
 
     </style>
   </head>
@@ -762,6 +817,12 @@
             <button class="action-btn" onclick="abrirConfigWorker()">
               <span class="icon">☁️</span> Worker URL
             </button>
+            <button class="action-btn" onclick="enviarABoveda()">
+              <span class="icon">📦</span> Enviar a Bóveda
+            </button>
+            <button class="action-btn" onclick="irABoveda()">
+              <span class="icon">🏛️</span> Ver Bóveda
+            </button>
           </div>
           <div style="margin-top:8px">
             <button class="btn-ghost btn-sm" style="width:100%;color:var(--danger);border-color:var(--border)" onclick="limpiarLinks()">🗑️ Limpiar lista</button>
@@ -813,6 +874,30 @@
     ============================================================ -->
     <div id="pantalla2" class="pantalla">
       <div id="visor"></div>
+    </div>
+
+    <!-- ============================================================
+         PANTALLA 3 — BÓVEDA
+    ============================================================ -->
+    <div id="pantalla3" class="pantalla" style="display:none">
+      <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
+
+        <div class="bv-header">
+          <div class="bv-titulo">🏛️ Bóveda</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-ghost btn-sm" onclick="bvBloquear()">🔒 Bloquear</button>
+            <button class="btn-ghost btn-sm" onclick="bvNavegar('pantalla1')">← Volver</button>
+          </div>
+        </div>
+
+        <div class="bv-toolbar">
+          <button class="action-btn" onclick="importarZipBoveda()">
+            <span class="icon">📂</span> Importar ZIP
+          </button>
+        </div>
+
+        <div id="bvLista"></div>
+      </div>
     </div>
 
 
@@ -1233,6 +1318,353 @@
         } else {
           fab.textContent = "🖼️";
           fab.classList.remove("fab-transparente");
+        }
+      }
+      
+      
+      /* =============================================
+         BÓVEDA — IndexedDB + PIN
+      ============================================= */
+
+      // — Navegación segura (compatible con pantallas existentes) —
+      function bvNavegar(id) {
+        document.querySelectorAll('.pantalla').forEach(p => {
+          p.style.display = (p.id === id) ? 'block' : 'none';
+        });
+        const el = document.getElementById(id);
+        if (el) el.scrollTop = 0;
+        // Sincronizar pantallaActual para que traslape() siga funcionando
+        if (id === 'pantalla1') pantallaActual = 1;
+        else if (id === 'pantalla2') pantallaActual = 2;
+      }
+
+      // — Base de datos IndexedDB —
+      let _bvDB = null;
+
+      function bvAbrirDB() {
+        return new Promise((resolve, reject) => {
+          if (_bvDB) { resolve(_bvDB); return; }
+          const req = indexedDB.open('PerfectViewBoveda', 1);
+          req.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('zips')) {
+              db.createObjectStore('zips', { keyPath: 'id', autoIncrement: true })
+                .createIndex('fecha', 'fecha', { unique: false });
+            }
+          };
+          req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function bvGuardar(nombre, blob) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx    = db.transaction('zips', 'readwrite');
+          const store = tx.objectStore('zips');
+          const req   = store.add({ nombre, fecha: new Date().toISOString(), tamaño: blob.size, blob });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+          tx.onabort    = e => reject(e.target.error);
+        });
+      }
+
+      async function bvListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function bvCargar(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').get(id);
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function bvEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readwrite').objectStore('zips').delete(id);
+          req.onsuccess = () => resolve();
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      // — PIN (SHA-256 en localStorage) —
+      let bovedaDesbloqueada = false;
+
+      async function sha256hex(texto) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+      }
+
+      async function bvVerificarPIN(pin) {
+        const hash = localStorage.getItem('_bv_pin_hash');
+        if (!hash) return true;
+        return (await sha256hex(pin)) === hash;
+      }
+
+      async function bvConfigurarPIN(pin) {
+        localStorage.setItem('_bv_pin_hash', await sha256hex(pin));
+      }
+
+      // — Modal PIN —
+      function bvMostrarModalPIN(callback) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
+
+        const card = document.createElement('div');
+        card.style.cssText = 'background:var(--surface);border-radius:var(--radius-lg);padding:32px 28px;width:min(320px,90vw);text-align:center;box-shadow:var(--shadow-lg)';
+
+        const titulo = document.createElement('div');
+        titulo.textContent = '🔒 Bóveda bloqueada';
+        titulo.style.cssText = 'font-size:1.15rem;font-weight:600;margin-bottom:6px;color:var(--text)';
+
+        const sub = document.createElement('div');
+        sub.textContent = 'Ingresa tu contraseña para continuar';
+        sub.style.cssText = 'font-size:.85rem;color:var(--text-muted);margin-bottom:20px';
+
+        const input = document.createElement('input');
+        input.type = 'password';
+        input.placeholder = 'Contraseña';
+        input.style.cssText = 'width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;text-align:left;letter-spacing:2px;background:var(--surface2);color:var(--text);outline:none;margin-bottom:8px';
+
+        const errEl = document.createElement('div');
+        errEl.style.cssText = 'color:var(--danger);font-size:.8rem;min-height:18px;margin-bottom:14px';
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:10px';
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.textContent = 'Cancelar';
+        btnCancelar.className = 'btn-ghost';
+        btnCancelar.style.cssText = 'flex:1;padding:10px';
+        btnCancelar.onclick = () => overlay.remove();
+
+        const btnEntrar = document.createElement('button');
+        btnEntrar.textContent = 'Entrar';
+        btnEntrar.className = 'action-btn';
+        btnEntrar.style.cssText = 'flex:1;padding:10px';
+        btnEntrar.onclick = async () => {
+          const pin = input.value.trim();
+          if (!pin) { errEl.textContent = 'Ingresa el PIN'; return; }
+          const ok = await bvVerificarPIN(pin);
+          if (ok) {
+            bovedaDesbloqueada = true;
+            overlay.remove();
+            callback();
+          } else {
+            errEl.textContent = '❌ PIN incorrecto';
+            input.value = '';
+            input.focus();
+          }
+        };
+
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') btnEntrar.click(); });
+        btnRow.append(btnCancelar, btnEntrar);
+        card.append(titulo, sub, input, errEl, btnRow);
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+        setTimeout(() => input.focus(), 80);
+      }
+
+      // — Navegación a la Bóveda —
+      function irABoveda() {
+        if (bovedaDesbloqueada) {
+          bvNavegar('pantalla3');
+          renderBoveda();
+          return;
+        }
+        const tienePIN = !!localStorage.getItem('_bv_pin_hash');
+        if (tienePIN) {
+          bvMostrarModalPIN(() => { bvNavegar('pantalla3'); renderBoveda(); });
+        } else {
+          bvPrimerAcceso();
+        }
+      }
+
+      function bvPrimerAcceso() {
+        const pin = prompt('🔒 Configura una contraseña para la Bóveda\n(deja vacío para acceso sin contraseña):');
+        if (pin === null) return;
+        const accion = () => { bovedaDesbloqueada = true; bvNavegar('pantalla3'); renderBoveda(); };
+        if (pin.trim()) {
+          bvConfigurarPIN(pin.trim()).then(accion);
+        } else {
+          accion();
+        }
+      }
+
+      function bvBloquear() {
+        bovedaDesbloqueada = false;
+        bvNavegar('pantalla1');
+        actualizarStatus('🔒 Bóveda bloqueada');
+      }
+
+      // — Enviar archivosDescargados → Bóveda —
+      async function enviarABoveda() {
+        if (!archivosDescargados.length) {
+          actualizarStatus('⚠️ No hay archivos descargados para enviar.');
+          return;
+        }
+        const nombre = prompt('📦 Nombre para guardar en Bóveda:', getnombrePrevio() || 'manga');
+        if (nombre === null || !nombre.trim()) return;
+        try {
+          actualizarStatus('⏳ Generando ZIP para bóveda…');
+          const zip = new JSZip();
+          archivosDescargados.forEach(a => zip.file(a.nombre, a.blob));
+          const blob = await zip.generateAsync({ type: 'blob' });
+          await bvGuardar(nombre.trim() + '.zip', blob);
+          actualizarStatus('✅ Guardado en Bóveda: ' + nombre.trim());
+        } catch(err) {
+          actualizarStatus('❌ Error al guardar: ' + err.message);
+        }
+      }
+
+      // — Importar .zip(s) desde explorador de archivos —
+      function importarZipBoveda() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.zip';
+        fileInput.multiple = true;
+        fileInput.onchange = async () => {
+          const archivos = Array.from(fileInput.files);
+          if (!archivos.length) return;
+          let ok = 0;
+          for (const archivo of archivos) {
+            try {
+              await bvGuardar(archivo.name, archivo);
+              ok++;
+            } catch(err) {
+              actualizarStatus('❌ Error: ' + archivo.name + ' — ' + err.message);
+            }
+          }
+          actualizarStatus('✅ ' + ok + ' archivo(s) importado(s) a la Bóveda');
+          renderBoveda();
+        };
+        fileInput.click();
+      }
+
+      // — Render pantalla3 —
+      async function renderBoveda() {
+        const contenedor = document.getElementById('bvLista');
+        contenedor.innerHTML = '<div class="bv-empty" style="padding:30px 0;font-size:.9rem;opacity:.6">Cargando…</div>';
+        let items;
+        try {
+          items = await bvListar();
+        } catch(err) {
+          contenedor.innerHTML = '<div class="bv-empty">❌ Error al leer la bóveda</div>';
+          return;
+        }
+        if (!items.length) {
+          contenedor.innerHTML = '<div class="bv-empty">🏛️ Bóveda vacía<br><span style="font-size:.8rem">Agrega tu primer manga</span></div>';
+          return;
+        }
+        contenedor.innerHTML = '';
+        items.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        items.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'bv-card';
+
+          const info = document.createElement('div');
+          info.className = 'bv-info';
+
+          const nombre = document.createElement('div');
+          nombre.className = 'bv-nombre';
+          nombre.textContent = item.nombre;
+
+          const meta = document.createElement('div');
+          meta.className = 'bv-meta';
+          const fecha = new Date(item.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' });
+          const mb    = (item.tamaño / 1048576).toFixed(1);
+          meta.textContent = fecha + ' · ' + mb + ' MB';
+
+          info.append(nombre, meta);
+
+          const acciones = document.createElement('div');
+          acciones.className = 'bv-acciones';
+
+          const btnVisor = document.createElement('button');
+          btnVisor.className = 'bv-btn bv-btn-primary';
+          btnVisor.textContent = '▶️ Visor';
+          btnVisor.onclick = () => bovedaAbrirEnVisor(item.id);
+
+          const btnDescargar = document.createElement('button');
+          btnDescargar.className = 'bv-btn bv-btn-secondary';
+          btnDescargar.textContent = '⬇️ ZIP';
+          btnDescargar.onclick = () => bovedaDescargar(item.id, item.nombre);
+
+          const btnEliminar = document.createElement('button');
+          btnEliminar.className = 'bv-btn bv-btn-danger';
+          btnEliminar.textContent = '🗑️';
+          btnEliminar.onclick = () => bvEliminar(item.id, card);
+
+          acciones.append(btnVisor, btnDescargar, btnEliminar);
+          card.append(info, acciones);
+          contenedor.appendChild(card);
+        });
+      }
+
+      // — Abrir ZIP de bóveda en el Visor —
+      async function bovedaAbrirEnVisor(id) {
+        try {
+          actualizarStatus('⏳ Cargando desde bóveda…');
+          const registro = await bvCargar(id);
+          if (!registro) { actualizarStatus('❌ Archivo no encontrado'); return; }
+          archivosDescargados.length = 0;
+          const zip      = await JSZip.loadAsync(registro.blob);
+          const entradas = Object.values(zip.files)
+            .filter(f => !f.dir)
+            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          for (const entrada of entradas) {
+            const blob = await entrada.async('blob');
+            archivosDescargados.push({ nombre: entrada.name, blob });
+          }
+          bvNavegar('pantalla1');
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ ' + entradas.length + ' imágenes cargadas');
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+        }
+      }
+
+      // — Descargar ZIP desde bóveda —
+      async function bovedaDescargar(id, nombre) {
+        try {
+          const registro = await bvCargar(id);
+          if (!registro) return;
+          const url = URL.createObjectURL(registro.blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = nombre;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+        } catch(err) {
+          actualizarStatus('❌ Error al descargar: ' + err.message);
+        }
+      }
+
+      // — Eliminar de bóveda —
+      async function bvEliminar(id, cardEl) {
+        if (!confirm('¿Eliminar este ZIP de la Bóveda? No se puede deshacer.')) return;
+        try {
+          await bvEliminarDB(id);
+          cardEl.style.opacity = '0';
+          cardEl.style.transform = 'translateX(20px)';
+          setTimeout(() => {
+            cardEl.remove();
+            const lista = document.getElementById('bvLista');
+            if (!lista.querySelector('.bv-card')) {
+              lista.innerHTML = '<div class="bv-empty">🏛️ Bóveda vacía<br><span style="font-size:.8rem">Agrega tu primer manga</span></div>';
+            }
+          }, 300);
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
         }
       }
 
