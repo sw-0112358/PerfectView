@@ -720,6 +720,81 @@
       .bv-breadcrumb-sep { color: var(--text-muted); font-size: .8rem; }
       .bv-breadcrumb-label { font-size: .85rem; font-weight: 600; color: var(--text); }
 
+      /* ── Panel SJZ ── */
+      .sjz-panel {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px; margin-bottom: 14px;
+      }
+      .sjz-panel-title {
+        font-size: .72rem; font-weight: 600;
+        color: var(--text-muted); margin-bottom: 10px;
+        letter-spacing: .06em; text-transform: uppercase;
+      }
+      .sjz-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+      .sjz-input {
+        flex: 1; padding: 9px 12px;
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface); color: var(--text);
+        font-size: .82rem; outline: none;
+      }
+      .sjz-input:focus { border-color: var(--accent); }
+      .sjz-input-sm { flex: none; width: 68px; text-align: center; }
+      .sjz-btn {
+        padding: 9px 12px; border-radius: var(--radius-sm);
+        border: none; cursor: pointer;
+        font-size: .82rem; font-weight: 500;
+        white-space: nowrap; transition: opacity .15s;
+      }
+      .sjz-btn:active { opacity: .7; }
+      .sjz-btn-primary   { background: var(--accent); color: #fff; }
+      .sjz-btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+      .sjz-info {
+        font-size: .75rem; color: var(--text-muted);
+        min-height: 16px; margin: 4px 0 2px;
+      }
+
+      /* Colección cards */
+      .sjz-col-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+      }
+      .sjz-col-card {
+        background: var(--surface); border: 1.5px solid var(--border);
+        border-radius: var(--radius); padding: 14px 12px;
+        cursor: pointer; position: relative;
+        transition: transform .18s, box-shadow .18s;
+      }
+      .sjz-col-card:active { transform: scale(.96); }
+      .sjz-col-nombre {
+        font-weight: 600; font-size: .88rem; color: var(--text);
+        margin-bottom: 4px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        padding-right: 20px;
+      }
+      .sjz-col-meta { font-size: .7rem; color: var(--text-muted); }
+      .sjz-col-del {
+        position: absolute; top: 8px; right: 8px;
+        background: none; border: none; cursor: pointer;
+        font-size: .8rem; opacity: .45;
+        transition: opacity .15s;
+      }
+      .sjz-col-del:hover { opacity: 1; }
+
+      /* Capítulo chips */
+      .sjz-cap-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+      }
+      .sjz-cap-chip {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-sm); padding: 8px 4px;
+        text-align: center; font-size: .72rem; font-weight: 500;
+        color: var(--text); cursor: pointer;
+        transition: background .12s, border-color .12s;
+      }
+      .sjz-cap-chip:active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
       /* Grid de portadas */
       .bv-grid {
         display: grid;
@@ -1457,7 +1532,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 2);
+          const req = indexedDB.open('PerfectViewBoveda', 3);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1466,6 +1541,9 @@
             }
             if (!db.objectStoreNames.contains('portadas')) {
               db.createObjectStore('portadas', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('sjz_colecciones')) {
+              db.createObjectStore('sjz_colecciones', { keyPath: 'id', autoIncrement: true });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -1832,6 +1910,230 @@
         return await imagenes[0].async('blob');
       }
 
+      /* =============================================
+         SJZ — samurai.j5z.xyz
+      ============================================= */
+
+      let _sjzColeccionActual = null; // null = lista de mangas, object = capítulos
+
+      // — CRUD IndexedDB —
+      async function sjzListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('sjz_colecciones', 'readonly')
+                        .objectStore('sjz_colecciones').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function sjzGuardar(nombre, base_url, capitulos) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('sjz_colecciones', 'readwrite');
+          const req = tx.objectStore('sjz_colecciones')
+                        .add({ nombre, base_url, capitulos, fecha: new Date().toISOString() });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function sjzEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('sjz_colecciones', 'readwrite');
+          tx.objectStore('sjz_colecciones').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — Obtener capítulos vía fetch —
+      async function sjzVerEpisodios() {
+        const url   = document.getElementById('sjzUrl').value.trim();
+        const info  = document.getElementById('sjzInfo');
+        if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ Ingresa una URL válida'; return; }
+        if (!CF_WORKER) { info.textContent = '⚠️ Configura el Worker primero'; return; }
+        info.textContent = '⏳ Buscando…';
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const html = await fetch(base + '/raw?target=' + encodeURIComponent(url)).then(r => r.text());
+
+          // Intentar admin-ajax con el data-id del manga
+          const matchId = html.match(/id="manga-chapters-holder"[^>]*data-id="(\d+)"/);
+          let maxCap = 0;
+
+          if (matchId) {
+            const mangaId  = matchId[1];
+            const ajaxUrl  = new URL(url).origin + '/wp-admin/admin-ajax.php';
+            try {
+              const ajaxHtml = await fetch(base + '/raw?target=' + encodeURIComponent(ajaxUrl), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=manga_get_chapters&manga=' + mangaId
+              }).then(r => r.text());
+              const nums = [...ajaxHtml.matchAll(/capitulo-(\d+)/gi)].map(m => parseInt(m[1]));
+              if (nums.length) maxCap = Math.max(...nums);
+            } catch(e) {}
+          }
+
+          // Fallback: parsear capítulos visibles en el HTML de la página
+          if (!maxCap) {
+            const slug = url.replace(/\/$/, '').split('/').pop();
+            const re   = new RegExp(slug + '\\/capitulo-(\\d+)', 'gi');
+            const nums = [...html.matchAll(re)].map(m => parseInt(m[1]));
+            if (nums.length) maxCap = Math.max(...nums);
+          }
+
+          if (!maxCap) { info.textContent = '⚠️ No se detectaron capítulos — ingrésalos manualmente'; return; }
+
+          document.getElementById('sjzFinal').value = maxCap;
+          if (!document.getElementById('sjzInicio').value) document.getElementById('sjzInicio').value = 1;
+          info.textContent = '✅ Capítulos detectados: ' + maxCap;
+        } catch(err) {
+          info.textContent = '❌ ' + err.message;
+        }
+      }
+
+      // — Crear carpeta de capítulos —
+      async function sjzCrearCarpeta() {
+        const url    = document.getElementById('sjzUrl').value.trim();
+        const inicio = parseInt(document.getElementById('sjzInicio').value);
+        const final  = parseInt(document.getElementById('sjzFinal').value);
+        const info   = document.getElementById('sjzInfo');
+
+        if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ URL inválida'; return; }
+        if (!inicio || !final || inicio > final)  { info.textContent = '⚠️ Rango inválido'; return; }
+
+        // Extraer nombre desde el slug
+        const slug   = url.replace(/\/$/, '').split('/').pop();
+        const nombre = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const base   = url.endsWith('/') ? url : url + '/';
+
+        const capitulos = [];
+        for (let i = inicio; i <= final; i++) {
+          capitulos.push({ num: i, url: base + 'capitulo-' + i + '/' });
+        }
+
+        try {
+          await sjzGuardar(nombre, base, capitulos);
+          info.textContent = '✅ Carpeta "' + nombre + '" creada con ' + capitulos.length + ' capítulos';
+          document.getElementById('sjzUrl').value   = '';
+          document.getElementById('sjzInicio').value = '';
+          document.getElementById('sjzFinal').value  = '';
+          renderSamurai(document.getElementById('bvLista'));
+        } catch(err) {
+          info.textContent = '❌ ' + err.message;
+        }
+      }
+
+      // — Render Samurai —
+      async function renderSamurai(contenedor) {
+        contenedor.innerHTML = '';
+
+        // Breadcrumb
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+
+        if (_sjzColeccionActual) {
+          // — Vista de capítulos —
+          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_sjzColeccionActual=null;renderBoveda()">← Samurai</button>'
+            + '<span class="bv-breadcrumb-sep">/</span>'
+            + '<span class="bv-breadcrumb-label">⚔️ ' + _sjzColeccionActual.nombre + '</span>';
+          contenedor.appendChild(bc);
+
+          const meta = document.createElement('div');
+          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px';
+          meta.textContent = _sjzColeccionActual.capitulos.length + ' capítulos · ' + _sjzColeccionActual.base_url;
+          contenedor.appendChild(meta);
+
+          const grid = document.createElement('div');
+          grid.className = 'sjz-cap-grid';
+          _sjzColeccionActual.capitulos.forEach(cap => {
+            const chip = document.createElement('div');
+            chip.className = 'sjz-cap-chip';
+            chip.textContent = cap.num;
+            chip.title = cap.url;
+            chip.onclick = () => {
+              navigator.clipboard.writeText(cap.url).catch(() => {});
+              actualizarStatus('📋 Cap. ' + cap.num + ' copiado');
+            };
+            grid.appendChild(chip);
+          });
+          contenedor.appendChild(grid);
+          return;
+        }
+
+        // — Vista lista de mangas —
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">⚔️ Samurai</span>';
+        contenedor.appendChild(bc);
+
+        // Panel de entrada
+        const panel = document.createElement('div');
+        panel.className = 'sjz-panel';
+        panel.innerHTML =
+          '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
+        + '<div class="sjz-row">'
+        +   '<input class="sjz-input" id="sjzUrl" placeholder="https://samurai.j5z.xyz/son/manga-slug/" type="url">'
+        +   '<button class="sjz-btn sjz-btn-secondary" onclick="sjzVerEpisodios()">🔍 Ver</button>'
+        + '</div>'
+        + '<div class="sjz-info" id="sjzInfo"></div>'
+        + '<div class="sjz-row">'
+        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+        +   '<input class="sjz-input sjz-input-sm" id="sjzInicio" type="number" min="1" placeholder="1">'
+        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+        +   '<input class="sjz-input sjz-input-sm" id="sjzFinal" type="number" min="1" placeholder="872">'
+        +   '<button class="sjz-btn sjz-btn-primary" onclick="sjzCrearCarpeta()">📁 Crear</button>'
+        + '</div>';
+        contenedor.appendChild(panel);
+
+        // Lista de colecciones guardadas
+        let colecciones;
+        try { colecciones = await sjzListar(); } catch(e) { colecciones = []; }
+
+        if (!colecciones.length) {
+          const empty = document.createElement('div');
+          empty.className = 'bv-empty';
+          empty.innerHTML = '⚔️ Sin mangas guardados<br><span style="font-size:.8rem">Agrega uno con el panel de arriba</span>';
+          contenedor.appendChild(empty);
+          return;
+        }
+
+        colecciones.sort((a, b) => b.fecha.localeCompare(a.fecha));
+        const grid = document.createElement('div');
+        grid.className = 'sjz-col-grid';
+
+        colecciones.forEach(col => {
+          const card = document.createElement('div');
+          card.className = 'sjz-col-card';
+
+          const nombre = document.createElement('div');
+          nombre.className = 'sjz-col-nombre';
+          nombre.textContent = col.nombre;
+
+          const meta = document.createElement('div');
+          meta.className = 'sjz-col-meta';
+          meta.textContent = col.capitulos.length + ' caps · ' + new Date(col.fecha).toLocaleDateString('es-ES');
+
+          const del = document.createElement('button');
+          del.className = 'sjz-col-del';
+          del.textContent = '🗑️';
+          del.onclick = async e => {
+            e.stopPropagation();
+            if (!confirm('¿Eliminar "' + col.nombre + '"?')) return;
+            await sjzEliminarDB(col.id);
+            renderSamurai(contenedor);
+          };
+
+          card.append(nombre, meta, del);
+          card.onclick = () => { _sjzColeccionActual = col; renderSamurai(contenedor); };
+          grid.appendChild(card);
+        });
+        contenedor.appendChild(grid);
+      }
+
       // — Render pantalla3 —
       async function renderBoveda() {
         const contenedor = document.getElementById('bvLista');
@@ -1871,6 +2173,13 @@
         // — Vista Carpeta —
         const carpeta = BV_CARPETAS.find(c => c.id === categoriaActual);
         if (toolbar) toolbar.style.display = categoriaActual === 'mangas' ? '' : 'none';
+
+        // Samurai tiene su propio render
+        if (categoriaActual === 'samurai') {
+          _sjzColeccionActual = null;
+          renderSamurai(contenedor);
+          return;
+        }
 
         // Breadcrumb
         const bc = document.createElement('div');
