@@ -749,7 +749,7 @@
         border-radius: var(--radius-sm);
         box-shadow: var(--shadow-lg);
         z-index: 20;
-        min-width: 148px;
+        min-width: 52px;
         overflow: hidden;
         animation: bvDropIn .15s ease;
       }
@@ -760,14 +760,13 @@
       }
 
       .bv-drop-item {
-        padding: 10px 14px;
-        font-size: .82rem; color: var(--text);
+        padding: 10px;
+        font-size: 1.2rem;
         cursor: pointer;
-        display: flex; align-items: center; gap: 8px;
+        display: flex; align-items: center; justify-content: center;
         transition: background .12s;
       }
       .bv-drop-item:hover   { background: var(--accent-lt); }
-      .bv-drop-item.danger  { color: var(--danger); }
       .bv-drop-item.danger:hover { background: rgba(224,80,80,.08); }
 
       .bv-empty {
@@ -1650,13 +1649,13 @@
         const dd = document.createElement('div');
         dd.className = 'bv-dropdown';
         const opciones = [
-          { icon: '🔽',  fn: () => bovedaDescargar(item.id, item.nombre) },
-          { icon: '🗑️',  fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
+          { icon: '🔽', fn: () => bovedaDescargar(item.id, item.nombre) },
+          { icon: '🗑️', fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
         ];
         opciones.forEach(op => {
           const el = document.createElement('div');
           el.className = 'bv-drop-item' + (op.cls ? ' ' + op.cls : '');
-          el.innerHTML = '<span>' + op.icon + '</span><span>' + op.label + '</span>';
+          el.innerHTML = '<span style="font-size:1.1rem">' + op.icon + '</span>';
           el.onclick = e => { e.stopPropagation(); bvCerrarDropdown(); op.fn(); };
           dd.appendChild(el);
         });
