@@ -2598,7 +2598,9 @@
           const resp = await fetch(endpoint);
           if (!resp.ok) return null;
           const blob = await resp.blob();
-          return blob.size > 500 ? blob : null;
+          if (blob.size < 500) return null;
+          if (blob.type && !blob.type.startsWith('image/')) return null;
+          return blob;
         } catch(e) { return null; }
       }
 
@@ -2608,8 +2610,10 @@
         const archivos = [];
         for (let i = 1; i <= 300; i++) {
           const nombre = String(i).padStart(3, '0') + '.webp';
-          const blob   = await proxyImagen(imgBase + nombre, 'https://manhwaweb.com/');
-          if (!blob) break;
+          const resp   = await proxyImagen(imgBase + nombre, 'https://manhwaweb.com/', true);
+          if (!resp) break;
+          if (!resp.type.startsWith('image/')) break;
+          const blob = resp;
           archivos.push({ nombre, blob });
           if (onProgreso) onProgreso(i);
         }
