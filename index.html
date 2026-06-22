@@ -15,6 +15,13 @@
 
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
     <style>
+      
+      /*=============================================
+      
+      Version v4.2 bug corregidos en el visor scrollTop reset después de traslape()
+      
+      
+      =============================================*/
 
       /* =============================================
       VARIABLES Y RESET
@@ -1125,10 +1132,9 @@
           // Orden ascendente por nombre (A→Z, 1→9)
           files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
-          // Reset visor + scroll al tope
+          // Reset visor
           const visor = document.getElementById("visor");
           visor.innerHTML = "";
-          visor.scrollTop = 0;
 
           for (const file of files) {
             const zip = await JSZip.loadAsync(file);
