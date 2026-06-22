@@ -785,6 +785,7 @@
       /* Capítulo chips */
       .sjz-cap-grid {
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+        align-items: start;
       }
       .sjz-cap-chip {
         background: var(--surface); border: 1px solid var(--border);
@@ -801,45 +802,27 @@
       }
       .sjz-cap-chip.descargando { opacity: .4; pointer-events: none; }
 
-      /* Grid de portadas de capítulos */
-      .mw-cap-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-      }
-      .mw-cap-chip {
+      /* Chip con portada descargada */
+      .sjz-cap-chip.con-portada {
         position: relative;
-        border-radius: var(--radius);
-        overflow: hidden;
-        background: var(--surface2);
-        border: 1px solid var(--border);
         aspect-ratio: 2 / 3;
-        cursor: pointer;
-        transition: transform .18s, opacity .3s;
-        display: flex; align-items: center; justify-content: center;
-        font-size: .82rem; font-weight: 600; color: var(--text-muted);
+        overflow: hidden;
+        padding: 0;
+        border-color: rgba(80,200,120,.4);
       }
-      .mw-cap-chip:active { transform: scale(.95); }
-      .mw-cap-chip.descargando { opacity: .4; pointer-events: none; }
-      .mw-cap-chip img {
+      .sjz-cap-chip.con-portada img {
         position: absolute; inset: 0;
         width: 100%; height: 100%;
         object-fit: cover; display: block;
       }
-      .mw-cap-chip-num {
+      .sjz-cap-chip.con-portada .cap-num {
         position: absolute;
         bottom: 0; left: 0; right: 0;
-        padding: 14px 4px 5px;
+        padding: 12px 4px 4px;
         background: linear-gradient(transparent, rgba(0,0,0,0.7));
         color: #fff;
-        font-size: .7rem; font-weight: 600;
+        font-size: .65rem; font-weight: 700;
         text-align: center;
-      }
-      .mw-cap-chip-num.sin-portada {
-        position: static;
-        background: none;
-        color: var(--text-muted);
-        padding: 0;
       }
 
       /* Grid de portadas */
@@ -2687,28 +2670,28 @@
             : [..._mwColeccionActual.capitulos];
 
           const grid = document.createElement('div');
-          grid.className = 'mw-cap-grid';
+          grid.className = 'sjz-cap-grid';
           capsOrdenadas.forEach(cap => {
             const yaDesc = !!descargados[cap.num];
             const zipId  = descargados[cap.num];
             const chip   = document.createElement('div');
-            chip.className = 'mw-cap-chip';
-            chip.title = yaDesc ? '✅ Cap. ' + cap.num + ' — tap para abrir' : '⬇️ Cap. ' + cap.num;
+            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
+            chip.textContent = cap.num;
+            chip.title = yaDesc ? '✅ Cap. ' + cap.num : '⬇️ Cap. ' + cap.num;
             chip.onclick = () => mwAbrirCapitulo(_mwColeccionActual, cap, chip);
 
-            const numEl = document.createElement('div');
-            numEl.className = 'mw-cap-chip-num sin-portada';
-            numEl.textContent = cap.num;
-            chip.appendChild(numEl);
-
-            // Cargar portada si está descargado
+            // Si tiene portada → crecer y mostrar imagen
             if (yaDesc && zipId) {
               bvCargarPortada(zipId).then(blob => {
                 if (!blob) return;
+                chip.textContent = '';
+                chip.classList.add('con-portada');
                 const img = document.createElement('img');
                 img.src   = URL.createObjectURL(blob);
-                chip.insertBefore(img, numEl);
-                numEl.classList.remove('sin-portada');
+                const num = document.createElement('div');
+                num.className   = 'cap-num';
+                num.textContent = cap.num;
+                chip.append(img, num);
               }).catch(() => {});
             }
 
