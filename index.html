@@ -884,7 +884,10 @@
       <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
 
         <div class="bv-header">
-          <div class="bv-titulo">🏛️ Bóveda</div>
+          <div>
+            <div class="bv-titulo">🏛️ Bóveda</div>
+            <div id="bvEspacio" style="font-size:.72rem;color:var(--text-muted);margin-top:3px;cursor:pointer" onclick="bvVerEspacio()">📦 calculando…</div>
+          </div>
           <div style="display:flex;gap:8px">
             <button class="btn-ghost btn-sm" onclick="bvBloquear()">🔒 Bloquear</button>
             <button class="btn-ghost btn-sm" onclick="bvNavegar('pantalla1')">← Volver</button>
@@ -1386,6 +1389,20 @@
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
+      }
+
+      async function bvVerEspacio() {
+        try {
+          const est = await navigator.storage.estimate();
+          const usado = (est.usage / 1048576).toFixed(1);
+          const total = (est.quota / 1048576).toFixed(1);
+          const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const el = document.getElementById('bvEspacio');
+          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
+          alert(`Almacenamiento del sitio\n\nUsado: ${usado} MB\nLibre: ${libre} MB\nTotal asignado: ${total} MB`);
+        } catch(err) {
+          alert('No se pudo obtener el espacio: ' + err.message);
+        }
       }
 
       async function bvEliminarDB(id) {
