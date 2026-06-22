@@ -1650,9 +1650,8 @@
         const dd = document.createElement('div');
         dd.className = 'bv-dropdown';
         const opciones = [
-          { icon: '▶️', label: 'Abrir en Visor', fn: () => bovedaAbrirEnVisor(item.id) },
-          { icon: '⬇️', label: 'Descargar ZIP',  fn: () => bovedaDescargar(item.id, item.nombre) },
-          { icon: '🗑️', label: 'Eliminar',        fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
+          { icon: '🔽',  fn: () => bovedaDescargar(item.id, item.nombre) },
+          { icon: '🗑️',  fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
         ];
         opciones.forEach(op => {
           const el = document.createElement('div');
