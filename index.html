@@ -2517,36 +2517,29 @@
         } catch(err) { info.textContent = '❌ ' + err.message; }
       }
       
+      // — Fetch genérico con Referer vía Worker —
+      async function proxyImagen(url, referer) {
+        if (!CF_WORKER) return null;
+        const endpoint = CF_WORKER.replace(/\/$/, '') + '/proxy-img?target='
+          + encodeURIComponent(url) + '&referer=' + encodeURIComponent(referer);
+        try {
+          const resp = await fetch(endpoint);
+          if (!resp.ok) return null;
+          const blob = await resp.blob();
+          return blob.size > 500 ? blob : null;
+        } catch(e) { return null; }
+      }
+
       // — Descargar imágenes del CDN fijo —
       async function mwDescargarImagenes(slug, capNum, onProgreso) {
-        const workerBase = CF_WORKER.replace(/\/$/, '');
-        const imgBase    = 'https://img2mw.xyz/manhwas/' + slug + '/chapter_' + capNum + '/ver_01/';
-        const archivos   = [];
-
-        // Debug: copiar la primera URL al portapapeles
-        const urlDebug = workerBase + '/download?target=' + imgBase + '001.webp';
-        navigator.clipboard.writeText(urlDebug).catch(() => {});
-
+        const imgBase = 'https://img2mw.xyz/manhwas/' + slug + '/chapter_' + capNum + '/ver_01/';
+        const archivos = [];
         for (let i = 1; i <= 300; i++) {
           const nombre = String(i).padStart(3, '0') + '.webp';
-          const url    = imgBase + nombre;
-          try {
-            const resp = await fetch(workerBase + '/download?target=' + url);
-            if (!resp.ok) {
-              if (i === 1) throw new Error('Primera imagen falló — HTTP ' + resp.status + ' · URL copiada al portapapeles');
-              break;
-            }
-            const blob = await resp.blob();
-            if (blob.size < 500) {
-              if (i === 1) throw new Error('Primera imagen vacía — size:' + blob.size + ' type:' + blob.type);
-              break;
-            }
-            archivos.push({ nombre, blob });
-            if (onProgreso) onProgreso(i);
-          } catch(e) {
-            if (i === 1) throw new Error('Fetch falló en img1: ' + e.message);
-            break;
-          }
+          const blob   = await proxyImagen(imgBase + nombre, 'https://manhwaweb.com/');
+          if (!blob) break;
+          archivos.push({ nombre, blob });
+          if (onProgreso) onProgreso(i);
         }
         return archivos;
       }
@@ -2574,7 +2567,7 @@
           const archivos = await mwDescargarImagenes(coleccion.slug, cap.num, n => {
             actualizarStatus('⏳ Cap.' + cap.num + ' · imagen ' + n);
           });
-          if (!archivos.length) throw new Error('No se encontraron imágenes — verifica el slug o el episodio');
+          if (!archivos.length) throw new Error('Sin imágenes — verifica que el Worker tenga el endpoint /proxy-img');
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
