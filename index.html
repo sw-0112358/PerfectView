@@ -2516,65 +2516,41 @@
           renderManhwa(document.getElementById('bvLista'));
         } catch(err) { info.textContent = '❌ ' + err.message; }
       }
-
-      // — Auto-descubrir CDN y extensión —
-      async function mwDescubrirCDN(slug, capNum) {
-        const workerBase = CF_WORKER.replace(/\/$/, '');
-        const cdns = ['1', '2', '3', '4', '5'];
-        const exts = ['jpg', 'webp', 'png', 'jpeg'];
-        for (const cdn of cdns) {
-          for (const ext of exts) {
-            const url = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
-                      + '/chapter_' + capNum + '/ver_01/001.' + ext;
-            try {
-              const resp = await fetch(workerBase + '/download?target=' + encodeURIComponent(url));
-              if (!resp.ok) continue;
-              const blob = await resp.blob();
-              if (blob.type && !blob.type.startsWith('image/')) continue;
-              if (blob.size < 2000) continue;
-              // Copiar URL encontrada al portapapeles para verificación
-              navigator.clipboard.writeText(url).catch(() => {});
-              actualizarStatus('🔗 CDN encontrado: img' + cdn + 'mw.xyz · ' + ext + ' · copiado al portapapeles');
-              return { cdn, ext, primerBlob: blob };
-            } catch(e) {}
-          }
-        }
-        return null;
-      }
-
-      // — Descargar imágenes directamente del CDN —
+      
+      // — Descargar imágenes del CDN fijo —
       async function mwDescargarImagenes(slug, capNum, onProgreso) {
         const workerBase = CF_WORKER.replace(/\/$/, '');
+        const imgBase    = 'https://img2mw.xyz/manhwas/' + slug + '/chapter_' + capNum + '/ver_01/';
+        const archivos   = [];
 
-        actualizarStatus('🔍 Detectando CDN para cap. ' + capNum + '…');
-        const desc = await mwDescubrirCDN(slug, capNum);
-        if (!desc) throw new Error('No se encontró el CDN — verifica el slug o el número de capítulo');
+        // Debug: copiar la primera URL al portapapeles
+        const urlDebug = workerBase + '/download?target=' + imgBase + '001.webp';
+        navigator.clipboard.writeText(urlDebug).catch(() => {});
 
-        const { cdn, ext, primerBlob } = desc;
-        const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
-                      + '/chapter_' + capNum + '/ver_01/';
-
-        // La primera imagen ya la tenemos del descubrimiento
-        const archivos = [{ nombre: '001.' + ext, blob: primerBlob }];
-        if (onProgreso) onProgreso(1);
-
-        let i = 2;
-        while (i <= 300) {
-          const nombre = String(i).padStart(3, '0') + '.' + ext;
+        for (let i = 1; i <= 300; i++) {
+          const nombre = String(i).padStart(3, '0') + '.webp';
+          const url    = imgBase + nombre;
           try {
-            const resp = await fetch(workerBase + '/download?target=' + encodeURIComponent(imgBase + nombre));
-            if (!resp.ok) break;
+            const resp = await fetch(workerBase + '/download?target=' + url);
+            if (!resp.ok) {
+              if (i === 1) throw new Error('Primera imagen falló — HTTP ' + resp.status + ' · URL copiada al portapapeles');
+              break;
+            }
             const blob = await resp.blob();
-            // Detener si el Content-Type no es imagen o el tamaño es sospechosamente pequeño
-            if (blob.type && !blob.type.startsWith('image/')) break;
-            if (blob.size < 2000) break;
+            if (blob.size < 500) {
+              if (i === 1) throw new Error('Primera imagen vacía — size:' + blob.size + ' type:' + blob.type);
+              break;
+            }
             archivos.push({ nombre, blob });
             if (onProgreso) onProgreso(i);
-          } catch(e) { break; }
-          i++;
+          } catch(e) {
+            if (i === 1) throw new Error('Fetch falló en img1: ' + e.message);
+            break;
+          }
         }
         return archivos;
       }
+      
 
       // — Abrir capítulo Manhwa —
       async function mwAbrirCapitulo(coleccion, cap, chipEl) {
