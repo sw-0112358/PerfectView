@@ -794,6 +794,12 @@
         transition: background .12s, border-color .12s;
       }
       .sjz-cap-chip:active { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .sjz-cap-chip.descargado {
+        background: rgba(80,200,120,.12);
+        border-color: rgba(80,200,120,.5);
+        color: #3a9e60;
+      }
+      .sjz-cap-chip.descargando { opacity: .4; pointer-events: none; }
 
       /* Grid de portadas */
       .bv-grid {
@@ -2027,6 +2033,142 @@
         }
       }
 
+      // — Extraer URLs de imágenes de una página de capítulo —
+      function sjzExtraerImagenes(html) {
+        const urls = [];
+        const imgRegex = /<img[^>]+class="wp-manga-chapter-img"[^>]*>/gi;
+        for (const match of html.matchAll(imgRegex)) {
+          const srcMatch = match[0].match(/src="([^"]+)"/i);
+          if (srcMatch) urls.push(srcMatch[1].trim());
+        }
+        return urls;
+      }
+
+      // — Guardar capítulo descargado en zips store con metadatos SJZ —
+      async function sjzGuardarCapitulo(nombre, blob, coleccion_id, cap_num) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('zips', 'readwrite');
+          const req = tx.objectStore('zips').add({
+            nombre, fecha: new Date().toISOString(),
+            tamaño: blob.size, blob,
+            categoria: 'samurai',
+            sjz_coleccion_id: coleccion_id,
+            sjz_cap_num: cap_num
+          });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+          tx.onabort    = e => reject(e.target.error);
+        });
+      }
+
+      // — Buscar ZIP de un capítulo concreto —
+      async function sjzBuscarZipCapitulo(coleccion_id, cap_num) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const found = e.target.result.find(
+              r => r.sjz_coleccion_id === coleccion_id && r.sjz_cap_num === cap_num
+            );
+            resolve(found || null);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      // — Mapa de capítulos descargados para una colección —
+      async function sjzListarDescargados(coleccion_id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const mapa = {};
+            e.target.result
+              .filter(r => r.sjz_coleccion_id === coleccion_id)
+              .forEach(r => { mapa[r.sjz_cap_num] = r.id; });
+            resolve(mapa);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      // — Abrir capítulo: descarga o carga desde DB —
+      async function sjzAbrirCapitulo(coleccion, cap, chipEl) {
+        // Ya descargado → cargar directo desde IndexedDB
+        const existente = await sjzBuscarZipCapitulo(coleccion.id, cap.num);
+        if (existente) {
+          actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
+          const zip      = await JSZip.loadAsync(existente.blob);
+          const entradas = Object.values(zip.files)
+            .filter(f => !f.dir)
+            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          archivosDescargados.length = 0;
+          for (const e of entradas) {
+            archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+          }
+          bvNavegar('pantalla2');
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
+          return;
+        }
+
+        // No descargado → descargar
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        chipEl.classList.add('descargando');
+        actualizarStatus('⏳ Descargando cap. ' + cap.num + '…');
+
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+
+          // 1. Fetch página del episodio
+          const html      = await fetch(base + '/raw?target=' + encodeURIComponent(cap.url)).then(r => r.text());
+          const imageUrls = sjzExtraerImagenes(html);
+          if (!imageUrls.length) throw new Error('No se encontraron imágenes');
+
+          // 2. Descargar imágenes
+          const archivos = [];
+          for (let i = 0; i < imageUrls.length; i++) {
+            actualizarStatus('⏳ Cap.' + cap.num + ' · ' + (i + 1) + '/' + imageUrls.length);
+            const imgUrl = imageUrls[i];
+            const ext    = (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase();
+            const nombre = String(i).padStart(3, '0') + '.' + ext;
+            const blob   = await fetch(base + '/download?target=' + encodeURIComponent(imgUrl)).then(r => r.blob());
+            archivos.push({ nombre, blob });
+          }
+
+          // 3. Crear ZIP
+          const zip = new JSZip();
+          archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+          // 4. Guardar en IndexedDB
+          const zipId = await sjzGuardarCapitulo(
+            coleccion.nombre + ' - Cap ' + cap.num + '.zip',
+            zipBlob, coleccion.id, cap.num
+          );
+
+          // 5. Guardar portada
+          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+
+          // 6. Marcar chip como descargado
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado';
+
+          // 7. Cargar en visor
+          archivosDescargados.length = 0;
+          archivos.forEach(a => archivosDescargados.push(a));
+          bvNavegar('pantalla2');
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
+
+        } catch(err) {
+          chipEl.classList.remove('descargando');
+          actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
+        }
+      }
+
       // — Render Samurai —
       async function renderSamurai(contenedor) {
         contenedor.innerHTML = '';
@@ -2047,17 +2189,19 @@
           meta.textContent = _sjzColeccionActual.capitulos.length + ' capítulos · ' + _sjzColeccionActual.base_url;
           contenedor.appendChild(meta);
 
+          // Cargar mapa de descargados antes de renderizar
+          let descargados = {};
+          try { descargados = await sjzListarDescargados(_sjzColeccionActual.id); } catch(e) {}
+
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
           _sjzColeccionActual.capitulos.forEach(cap => {
             const chip = document.createElement('div');
-            chip.className = 'sjz-cap-chip';
+            const yaDesc = !!descargados[cap.num];
+            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
             chip.textContent = cap.num;
-            chip.title = cap.url;
-            chip.onclick = () => {
-              navigator.clipboard.writeText(cap.url).catch(() => {});
-              actualizarStatus('📋 Cap. ' + cap.num + ' copiado');
-            };
+            chip.title = yaDesc ? '✅ Descargado — tap para abrir' : '⬇️ Tap para descargar';
+            chip.onclick = () => sjzAbrirCapitulo(_sjzColeccionActual, cap, chip);
             grid.appendChild(chip);
           });
           contenedor.appendChild(grid);
