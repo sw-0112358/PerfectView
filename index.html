@@ -1580,8 +1580,14 @@
         const dummy = document.createElement('div');
         dummy.classList = { add: () => {}, remove: () => {} };
         const ctx = { ..._visorContexto };
-        if (ctx.tipo === 'manhwa')   await mwAbrirCapitulo(ctx.coleccion, sig, dummy);
-        else if (ctx.tipo === 'samurai') await sjzAbrirCapitulo(ctx.coleccion, sig, dummy);
+        if (ctx.tipo === 'manhwa')        await mwAbrirCapitulo(ctx.coleccion, sig, dummy);
+        else if (ctx.tipo === 'samurai')  await sjzAbrirCapitulo(ctx.coleccion, sig, dummy);
+        // Reiniciar scroll al inicio del nuevo episodio
+        const p2 = document.getElementById('pantalla2');
+        const vr = document.getElementById('visor');
+        if (p2) p2.scrollTop = 0;
+        if (vr) vr.scrollTop = 0;
+        window.scrollTo(0, 0);
       }
 
       // — Navegación segura (compatible con pantallas existentes) —
