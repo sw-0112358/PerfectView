@@ -15,13 +15,13 @@
 
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
     <style>
-      
+
       /*=============================================
-      
+
       Versiones # 
       v4.2 -bug corregidos en el visor scrollTop reset después de traslape()
       v4.3 -Bóveda agregada
-      
+
       =============================================*/
 
       /* =============================================
@@ -660,10 +660,10 @@
       .mangaImg.colorRosado {
         filter: sepia(40%) saturate(200%) hue-rotate(310deg) contrast(120%);
       }
-      
-      
+
+
       /* =============================================
-         BÓVEDA
+      BÓVEDA
       ============================================= */
 
       .bv-header {
@@ -678,43 +678,103 @@
       }
       .bv-toolbar .action-btn { flex: 1; min-width: 140px; }
 
-      .bv-card {
+      /* Grid de portadas */
+      .bv-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+
+      .bv-cover-card {
+        position: relative;
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        cursor: pointer;
+        aspect-ratio: 2 / 3;
+        transition: transform .2s, box-shadow .2s, opacity .3s;
+      }
+      .bv-cover-card:active { transform: scale(.96); }
+
+      .bv-cover-img {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: none;
+      }
+
+      .bv-cover-placeholder {
+        width: 100%; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 2rem; color: var(--text-muted);
+      }
+
+      .bv-cover-footer {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        padding: 24px 8px 6px;
+        background: linear-gradient(transparent, rgba(0,0,0,0.72));
+        color: #fff;
+        font-size: .68rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        pointer-events: none;
+      }
+
+      .bv-menu-btn {
+        position: absolute;
+        top: 6px; right: 6px;
+        width: 26px; height: 26px;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.45);
+        backdrop-filter: blur(4px);
+        border: none; color: #fff;
+        font-size: 13px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+        line-height: 1;
+        letter-spacing: 1px;
+      }
+      .bv-menu-btn:active { transform: scale(.9); }
+
+      .bv-dropdown {
+        position: absolute;
+        top: 34px; right: 6px;
         background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 14px 16px;
-        display: flex; align-items: center;
-        justify-content: space-between; gap: 12px;
-        margin-bottom: 10px;
-        box-shadow: var(--shadow-sm);
-        transition: box-shadow .2s, opacity .3s, transform .3s;
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-lg);
+        z-index: 20;
+        min-width: 148px;
+        overflow: hidden;
+        animation: bvDropIn .15s ease;
       }
-      .bv-card:hover { box-shadow: var(--shadow-md); }
 
-      .bv-info { flex: 1; min-width: 0; }
-      .bv-nombre {
-        font-weight: 500; font-size: .95rem; color: var(--text);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      @keyframes bvDropIn {
+        from { opacity: 0; transform: translateY(-6px) scale(.97); }
+        to   { opacity: 1; transform: translateY(0)   scale(1);    }
       }
-      .bv-meta { font-size: .75rem; color: var(--text-muted); margin-top: 3px; }
 
-      .bv-acciones { display: flex; gap: 6px; flex-shrink: 0; }
-
-      .bv-btn {
-        padding: 7px 12px; border-radius: var(--radius-sm); border: none;
-        cursor: pointer; font-size: .8rem; font-weight: 500;
-        transition: opacity .15s, transform .1s;
+      .bv-drop-item {
+        padding: 10px 14px;
+        font-size: .82rem; color: var(--text);
+        cursor: pointer;
+        display: flex; align-items: center; gap: 8px;
+        transition: background .12s;
       }
-      .bv-btn:active { transform: scale(.95); opacity: .8; }
-      .bv-btn-primary   { background: var(--accent); color: #fff; }
-      .bv-btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-      .bv-btn-danger    { background: rgba(224,80,80,.1); color: var(--danger); border: 1px solid rgba(224,80,80,.2); }
+      .bv-drop-item:hover   { background: var(--accent-lt); }
+      .bv-drop-item.danger  { color: var(--danger); }
+      .bv-drop-item.danger:hover { background: rgba(224,80,80,.08); }
 
       .bv-empty {
         text-align: center; color: var(--text-muted);
         padding: 60px 20px; font-size: 1rem; line-height: 2;
       }
-      
+
 
     </style>
   </head>
@@ -918,7 +978,7 @@
       let CF_WORKER      = localStorage.getItem('_cf_worker_url');
       let servercloud    = CF_WORKER + '/raw?target=';
       let serverclouddw  = CF_WORKER + '/download?target=';
-     
+
       /* =============================================
          2. UTILIDADES UI
       ============================================= */
@@ -1255,7 +1315,7 @@
               }
             }
           }
-          
+
           actualizarStatus("✅ " + files.length + " ZIP(s) cargados correctamente.");
           traslape(); visor.scrollTop = 0;
         };
@@ -1324,8 +1384,8 @@
           fab.classList.remove("fab-transparente");
         }
       }
-      
-      
+
+
       /* =============================================
          BÓVEDA — IndexedDB + PIN
       ============================================= */
@@ -1575,16 +1635,65 @@
         fileInput.click();
       }
 
+      // — Portadas: thumbnails cacheados por id —
+      const _bvPortadas = {};
+      let _bvDropdownActivo = null;
+
+      function bvCerrarDropdown() {
+        if (_bvDropdownActivo) { _bvDropdownActivo.remove(); _bvDropdownActivo = null; }
+      }
+
+      document.addEventListener('click', bvCerrarDropdown);
+
+      function bvAbrirDropdown(btnEl, item, cardEl) {
+        bvCerrarDropdown();
+        const dd = document.createElement('div');
+        dd.className = 'bv-dropdown';
+        const opciones = [
+          { icon: '▶️', label: 'Abrir en Visor', fn: () => bovedaAbrirEnVisor(item.id) },
+          { icon: '⬇️', label: 'Descargar ZIP',  fn: () => bovedaDescargar(item.id, item.nombre) },
+          { icon: '🗑️', label: 'Eliminar',        fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
+        ];
+        opciones.forEach(op => {
+          const el = document.createElement('div');
+          el.className = 'bv-drop-item' + (op.cls ? ' ' + op.cls : '');
+          el.innerHTML = '<span>' + op.icon + '</span><span>' + op.label + '</span>';
+          el.onclick = e => { e.stopPropagation(); bvCerrarDropdown(); op.fn(); };
+          dd.appendChild(el);
+        });
+        btnEl.closest('.bv-cover-card').appendChild(dd);
+        _bvDropdownActivo = dd;
+      }
+
+      async function bvExtraerPortada(blob) {
+        const zip = await JSZip.loadAsync(blob);
+        const imagenes = Object.values(zip.files)
+        .filter(f => !f.dir && /\.(jpe?g|png|webp|gif)$/i.test(f.name))
+        .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        if (!imagenes.length) return null;
+        const imgBlob = await imagenes[0].async('blob');
+        return URL.createObjectURL(imgBlob);
+      }
+
       // — Render pantalla3 —
       async function renderBoveda() {
         const contenedor = document.getElementById('bvLista');
         contenedor.innerHTML = '<div class="bv-empty" style="padding:30px 0;font-size:.9rem;opacity:.6">Cargando…</div>';
-        navigator.storage.estimate().then(est => {
-          const usado = (est.usage / 1048576).toFixed(1);
-          const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
-          const el = document.getElementById('bvEspacio');
-          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
-        }).catch(() => {});
+
+        const elEspacio = document.getElementById('bvEspacio');
+        try {
+          if (navigator.storage && navigator.storage.estimate) {
+            const est = await navigator.storage.estimate();
+            const usado = (est.usage / 1048576).toFixed(1);
+            const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
+            if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres';
+          } else {
+            if (elEspacio) elEspacio.textContent = '📦 espacio no disponible';
+          }
+        } catch(e) {
+          if (elEspacio) elEspacio.textContent = '📦 sin acceso al espacio';
+        }
+
         let items;
         try {
           items = await bvListar();
@@ -1596,49 +1705,60 @@
           contenedor.innerHTML = '<div class="bv-empty">🏛️ Bóveda vacía<br><span style="font-size:.8rem">Agrega tu primer manga</span></div>';
           return;
         }
+
         contenedor.innerHTML = '';
+        const grid = document.createElement('div');
+        grid.className = 'bv-grid';
+        contenedor.appendChild(grid);
+
         items.sort((a,b) => b.fecha.localeCompare(a.fecha));
-        items.forEach(item => {
+
+        for (const item of items) {
           const card = document.createElement('div');
-          card.className = 'bv-card';
+          card.className = 'bv-cover-card';
 
-          const info = document.createElement('div');
-          info.className = 'bv-info';
+          // Placeholder mientras carga la portada
+          const placeholder = document.createElement('div');
+          placeholder.className = 'bv-cover-placeholder';
+          placeholder.textContent = '📖';
 
-          const nombre = document.createElement('div');
-          nombre.className = 'bv-nombre';
-          nombre.textContent = item.nombre;
+          const img = document.createElement('img');
+          img.className = 'bv-cover-img';
 
-          const meta = document.createElement('div');
-          meta.className = 'bv-meta';
-          const fecha = new Date(item.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' });
-          const mb    = (item.tamaño / 1048576).toFixed(1);
-          meta.textContent = fecha + ' · ' + mb + ' MB';
+          const footer = document.createElement('div');
+          footer.className = 'bv-cover-footer';
+          footer.textContent = item.nombre.replace(/\.zip$/i, '');
 
-          info.append(nombre, meta);
+          const menuBtn = document.createElement('button');
+          menuBtn.className = 'bv-menu-btn';
+          menuBtn.textContent = '···';
+          menuBtn.onclick = e => { e.stopPropagation(); bvAbrirDropdown(menuBtn, item, card); };
 
-          const acciones = document.createElement('div');
-          acciones.className = 'bv-acciones';
+          card.append(placeholder, img, footer, menuBtn);
 
-          const btnVisor = document.createElement('button');
-          btnVisor.className = 'bv-btn bv-btn-primary';
-          btnVisor.textContent = '▶️ Visor';
-          btnVisor.onclick = () => bovedaAbrirEnVisor(item.id);
+          // Tap en la portada → abrir en visor
+          card.addEventListener('click', () => bovedaAbrirEnVisor(item.id));
 
-          const btnDescargar = document.createElement('button');
-          btnDescargar.className = 'bv-btn bv-btn-secondary';
-          btnDescargar.textContent = '⬇️ ZIP';
-          btnDescargar.onclick = () => bovedaDescargar(item.id, item.nombre);
+          grid.appendChild(card);
 
-          const btnEliminar = document.createElement('button');
-          btnEliminar.className = 'bv-btn bv-btn-danger';
-          btnEliminar.textContent = '🗑️';
-          btnEliminar.onclick = () => bvEliminar(item.id, card);
-
-          acciones.append(btnVisor, btnDescargar, btnEliminar);
-          card.append(info, acciones);
-          contenedor.appendChild(card);
-        });
+          // Extraer portada en segundo plano
+          if (_bvPortadas[item.id]) {
+            img.src = _bvPortadas[item.id];
+            img.style.display = 'block';
+            placeholder.style.display = 'none';
+          } else {
+            bvCargar(item.id).then(reg => {
+              if (!reg) return;
+              return bvExtraerPortada(reg.blob);
+            }).then(url => {
+              if (!url) return;
+              _bvPortadas[item.id] = url;
+              img.src = url;
+              img.style.display = 'block';
+              placeholder.style.display = 'none';
+            }).catch(() => {});
+          }
+        }
       }
 
       // — Abrir ZIP de bóveda en el Visor —
@@ -1650,8 +1770,8 @@
           archivosDescargados.length = 0;
           const zip      = await JSZip.loadAsync(registro.blob);
           const entradas = Object.values(zip.files)
-            .filter(f => !f.dir)
-            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .filter(f => !f.dir)
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           for (const entrada of entradas) {
             const blob = await entrada.async('blob');
             archivosDescargados.push({ nombre: entrada.name, blob });
