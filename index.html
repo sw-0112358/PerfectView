@@ -2494,33 +2494,47 @@
 
         colecciones.sort((a, b) => b.fecha.localeCompare(a.fecha));
         const grid = document.createElement('div');
-        grid.className = 'sjz-col-grid';
+        grid.className = 'bv-grid';
 
         colecciones.forEach(col => {
           const card = document.createElement('div');
-          card.className = 'sjz-col-card';
+          card.className = 'bv-cover-card';
+          card.onclick = () => { _sjzColeccionActual = col; renderSamurai(contenedor); };
 
-          const nombre = document.createElement('div');
-          nombre.className = 'sjz-col-nombre';
-          nombre.textContent = col.nombre;
+          const placeholder = document.createElement('div');
+          placeholder.className = 'bv-cover-placeholder';
+          placeholder.textContent = '⚔️';
 
-          const meta = document.createElement('div');
-          meta.className = 'sjz-col-meta';
-          meta.textContent = col.capitulos.length + ' caps · ' + new Date(col.fecha).toLocaleDateString('es-ES');
+          const img = document.createElement('img');
+          img.className = 'bv-cover-img';
 
-          const del = document.createElement('button');
-          del.className = 'sjz-col-del';
-          del.textContent = '🗑️';
-          del.onclick = async e => {
+          const footer = document.createElement('div');
+          footer.className = 'bv-cover-footer';
+          footer.textContent = col.nombre;
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'bv-menu-btn';
+          delBtn.textContent = '🗑️';
+          delBtn.onclick = async e => {
             e.stopPropagation();
             if (!confirm('¿Eliminar "' + col.nombre + '"?')) return;
             await sjzEliminarDB(col.id);
             renderSamurai(contenedor);
           };
 
-          card.append(nombre, meta, del);
-          card.onclick = () => { _sjzColeccionActual = col; renderSamurai(contenedor); };
+          card.append(placeholder, img, footer, delBtn);
           grid.appendChild(card);
+
+          // Cargar portada del capítulo 1
+          sjzBuscarZipCapitulo(col.id, 1).then(reg => {
+            if (!reg) return;
+            return bvCargarPortada(reg.id);
+          }).then(blob => {
+            if (!blob) return;
+            img.src = URL.createObjectURL(blob);
+            img.style.display = 'block';
+            placeholder.style.display = 'none';
+          }).catch(() => {});
         });
         contenedor.appendChild(grid);
       }
