@@ -2057,7 +2057,7 @@
       }
 
       async function htFetchGG() {
-        const url  = 'https://ltn.gold-usergeneratedcontent.net/gg.js';
+        const url  = 'https://ltn.gold-usergeneratedcontent.net/gg.js?_=' + Date.now();
         const resp = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(url));
         const js   = await resp.text();
         const bMatch = js.match(/b:\s*'([^']+)'/);
