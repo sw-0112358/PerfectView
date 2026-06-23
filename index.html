@@ -2084,36 +2084,46 @@
         });
       }
 
-      // — Fetch info desde la API —
+      // — Fetch info desde la página del lector (JSON embebido por SvelteKit) —
       async function nhFetchInfo(nhId) {
         if (!CF_WORKER) throw new Error('Configura el Worker primero');
-        const apiUrl = 'https://nhentai.net/api/gallery/' + nhId;
-        const resp   = await fetch(
-          CF_WORKER.replace(/\/$/, '') + '/nhentai-api?target=' + encodeURIComponent(apiUrl)
+        // El lector /g/ID/1/ embebe el JSON completo de la galería en un script tag
+        const readerUrl = 'https://nhentai.net/g/' + nhId + '/1/';
+        const resp = await fetch(
+          CF_WORKER.replace(/\/$/, '') + '/nhentai-api?target=' + encodeURIComponent(readerUrl)
         );
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        if (!data.media_id) throw new Error('Galería no encontrada o privada');
-        const extMap = { j: 'jpg', p: 'png', w: 'webp' };
+        const html = await resp.text();
+
+        // Extraer el JSON embebido: <script type="application/json" data-sveltekit-fetched ...>
+        const match = html.match(/<script type="application\/json" data-sveltekit-fetched[^>]*>([\s\S]*?)<\/script>/);
+        if (!match) throw new Error('No se encontró data — galería privada o inexistente');
+
+        const fetched = JSON.parse(match[1]);
+        const data    = JSON.parse(fetched.body);
+        if (!data.media_id) throw new Error('Galería no encontrada');
+
         return {
           nh_id:     String(data.id),
           media_id:  String(data.media_id),
           nombre:    (data.title?.english || data.title?.pretty || 'Sin título').slice(0, 80),
           num_pages: data.num_pages,
-          tipos:     data.images.pages.map(p => extMap[p.t] || 'jpg'),
+          paths:     data.pages.map(p => p.path), // "galleries/4004782/1.webp"
         };
       }
 
-      // — Descargar todas las páginas —
+      // — Descargar todas las páginas usando paths exactos —
       async function nhDescargarPaginas(galeria, onProgreso) {
         const archivos = [];
         for (let i = 0; i < galeria.num_pages; i++) {
           const pageNum = i + 1;
-          const ext     = galeria.tipos[i] || 'jpg';
-          let   blob    = null;
+          const path    = galeria.paths
+            ? galeria.paths[i]
+            : 'galleries/' + galeria.media_id + '/' + pageNum + '.webp';
+          const ext  = path.split('.').pop() || 'webp';
+          let   blob = null;
           for (const cdn of NH_CDN) {
-            const url = 'https://' + cdn + '.nhentai.net/galleries/'
-                      + galeria.media_id + '/' + pageNum + '.' + ext;
+            const url = 'https://' + cdn + '.nhentai.net/' + path;
             blob = await proxyImagen(url, 'https://nhentai.net/');
             if (blob) break;
           }
