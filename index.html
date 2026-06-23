@@ -2120,21 +2120,21 @@
         const jsUrl = 'https://ltn.gold-usergeneratedcontent.net/galleries/' + htId + '.js';
         const resp  = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(jsUrl));
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const js   = await resp.text();
-        // Debug: copiar primeros 300 chars para ver la estructura real
-        navigator.clipboard.writeText(js.slice(0, 300)).catch(() => {});
-        const match = js.match(/var galleryinfo = ([\s\S]+)/);
+        const js    = await resp.text();
+        const match = js.match(/var galleryinfo = (\{[\s\S]*\})\s*;?\s*$/m);
         if (!match) throw new Error('No se encontró galleryinfo en el JS');
-        // Limpiar posibles declaraciones extra al final
-        let jsonStr = match[1].trim();
-        if (jsonStr.endsWith(';')) jsonStr = jsonStr.slice(0, -1);
-        const data = JSON.parse(match[1]);
+        const data  = JSON.parse(match[1]);
         if (!data.files || !data.files.length) throw new Error('Galería sin imágenes');
         return {
           ht_id:     String(data.id),
-          nombre:    (data.title || data.japanese_title_pretty || 'Hitomi-' + htId).slice(0, 80),
+          nombre:    (data.title || data.japanese_title || 'Hitomi-' + htId).slice(0, 80),
           num_pages: data.files.length,
-          files:     data.files.map(f => ({ hash: f.hash, name: f.name, haswebp: f.haswebp })),
+          files:     data.files.map(f => ({
+            hash:    f.hash,
+            name:    f.name,
+            haswebp: f.haswebp  || 0,
+            hasavif: f.hasavif  || 0,
+          })),
         };
       }
 
