@@ -2097,11 +2097,25 @@
 
         // Extraer el JSON embebido: <script type="application/json" data-sveltekit-fetched ...>
         const match = html.match(/<script type="application\/json" data-sveltekit-fetched[^>]*>([\s\S]*?)<\/script>/);
-        if (!match) throw new Error('No se encontró data — galería privada o inexistente');
+        if (!match) {
+          // Copiar los primeros 500 chars del HTML para ver qué devolvió el Worker
+          navigator.clipboard.writeText(html.slice(0, 500)).catch(() => {});
+          throw new Error('Script tag no encontrado — HTML copiado al portapapeles');
+        }
 
-        const fetched = JSON.parse(match[1]);
-        const data    = JSON.parse(fetched.body);
-        if (!data.media_id) throw new Error('Galería no encontrada');
+        let fetched, data;
+        try {
+          fetched = JSON.parse(match[1]);
+          data    = typeof fetched.body === 'string' ? JSON.parse(fetched.body) : fetched.body;
+        } catch(e) {
+          navigator.clipboard.writeText(match[1].slice(0, 500)).catch(() => {});
+          throw new Error('Error al parsear JSON: ' + e.message + ' — contenido copiado');
+        }
+
+        if (!data || !data.media_id) {
+          navigator.clipboard.writeText(JSON.stringify({ status: fetched.status, keys: Object.keys(data || {}) })).catch(() => {});
+          throw new Error('media_id no encontrado — status:' + fetched.status + ' · keys copiadas al portapapeles');
+        }
 
         return {
           nh_id:     String(data.id),
