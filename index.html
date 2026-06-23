@@ -1687,7 +1687,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 5);
+          const req = indexedDB.open('PerfectViewBoveda', 6);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1705,6 +1705,9 @@
             }
             if (!db.objectStoreNames.contains('nh_galerias')) {
               db.createObjectStore('nh_galerias', { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('ht_galerias')) {
+              db.createObjectStore('ht_galerias', { keyPath: 'id', autoIncrement: true });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -2029,7 +2032,275 @@
         { id: 'samurai',  icon: '⚔️', label: 'Samurai'  },
         { id: 'manhwa',   icon: '📖', label: 'Manhwa'   },
         { id: 'nhentai',  icon: '🔞', label: 'nhentai'  },
+        { id: 'hitomi',   icon: '🌸', label: 'Hitomi'   },
       ];
+
+      /* =============================================
+         HITOMI.LA
+      ============================================= */
+
+      const HT_SUBDOMAINS = ['a', 'b', '1a', '2a', '3a'];
+
+      // — CRUD IndexedDB —
+      async function htListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('ht_galerias', 'readonly')
+                        .objectStore('ht_galerias').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function htGuardar(info) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('ht_galerias', 'readwrite');
+          const req = tx.objectStore('ht_galerias')
+                        .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function htEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('ht_galerias', 'readwrite');
+          tx.objectStore('ht_galerias').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function htActualizarZip(id, zip_id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('ht_galerias', 'readwrite');
+          const req = tx.objectStore('ht_galerias').get(id);
+          req.onsuccess = e => {
+            const reg = e.target.result;
+            if (!reg) { reject(new Error('No encontrado')); return; }
+            reg.zip_id = zip_id;
+            tx.objectStore('ht_galerias').put(reg);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — Fetch info desde galleries/{id}.js —
+      async function htFetchInfo(htId) {
+        if (!CF_WORKER) throw new Error('Configura el Worker primero');
+        const jsUrl = 'https://ltn.gold-usergeneratedcontent.net/galleries/' + htId + '.js';
+        const resp  = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(jsUrl));
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const js   = await resp.text();
+        const match = js.match(/var galleryinfo = ([\s\S]+?);\s*$/m);
+        if (!match) throw new Error('No se encontró galleryinfo en el JS');
+        const data = JSON.parse(match[1]);
+        if (!data.files || !data.files.length) throw new Error('Galería sin imágenes');
+        return {
+          ht_id:     String(data.id),
+          nombre:    (data.title || data.japanese_title || 'Hitomi-' + htId).slice(0, 80),
+          num_pages: data.files.length,
+          files:     data.files.map(f => ({ hash: f.hash, name: f.name, haswebp: f.haswebp })),
+        };
+      }
+
+      // — Construir URL de imagen desde hash —
+      function htImagePath(hash) {
+        const last = hash.slice(-1);
+        const prev = hash.slice(-3, -1);
+        return '/webp/' + last + '/' + prev + '/' + hash + '.webp';
+      }
+
+      // — Descargar imagen intentando subdomains —
+      async function htDescargarImagen(hash) {
+        const path = htImagePath(hash);
+        for (const sub of HT_SUBDOMAINS) {
+          const url  = 'https://' + sub + '.hitomi.la' + path;
+          const blob = await proxyImagen(url, 'https://hitomi.la/');
+          if (blob) return { blob, url };
+        }
+        return null;
+      }
+
+      // — Descargar todas las páginas —
+      async function htDescargarPaginas(galeria, onProgreso) {
+        const archivos = [];
+        for (let i = 0; i < galeria.files.length; i++) {
+          const file    = galeria.files[i];
+          const pageNum = i + 1;
+          const result  = await htDescargarImagen(file.hash);
+          if (!result) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible'); continue; }
+          const ext    = file.name.split('.').pop() || 'webp';
+          archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob: result.blob });
+          if (onProgreso) onProgreso(pageNum, galeria.files.length);
+        }
+        return archivos;
+      }
+
+      // — Abrir galería en visor —
+      async function htAbrirEnVisor(galeria) {
+        if (!galeria.zip_id) { htDescargarGaleria(galeria, null); return; }
+        actualizarStatus('⏳ Cargando…');
+        const reg = await bvCargar(galeria.zip_id);
+        if (!reg) { actualizarStatus('❌ ZIP no encontrado'); return; }
+        const zip      = await JSZip.loadAsync(reg.blob);
+        const entradas = Object.values(zip.files)
+          .filter(f => !f.dir)
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        archivosDescargados.length = 0;
+        for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+        _visorContexto = null;
+        mostrarVisor(true);
+        mostrarImagenesEnVisor();
+        actualizarStatus('✅ ' + entradas.length + ' páginas');
+      }
+
+      // — Descargar galería completa —
+      async function htDescargarGaleria(galeria, cardEl) {
+        const ph = cardEl?.querySelector('.bv-cover-placeholder');
+        if (ph) ph.textContent = '⏳';
+        try {
+          const archivos = await htDescargarPaginas(galeria, (p, t) => {
+            actualizarStatus('⏳ HT · ' + p + '/' + t);
+          });
+          if (!archivos.length) throw new Error('No se descargó ninguna imagen');
+          actualizarStatus('⏳ Creando ZIP…');
+          const zip = new JSZip();
+          archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
+          await htActualizarZip(galeria.id, zipId);
+          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          archivosDescargados.length = 0;
+          archivos.forEach(a => archivosDescargados.push(a));
+          _visorContexto = null;
+          mostrarVisor(true);
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ ' + galeria.nombre + ' — ' + archivos.length + ' páginas');
+        } catch(err) {
+          if (ph) ph.textContent = '⬇️';
+          actualizarStatus('❌ HT: ' + err.message);
+        }
+      }
+
+      // — Buscar info —
+      let _htInfoPendiente = null;
+
+      async function htBuscarInfo() {
+        const url  = document.getElementById('htUrl').value.trim();
+        const info = document.getElementById('htInfo');
+        const btn  = document.getElementById('htBtnDescargar');
+        _htInfoPendiente = null;
+        btn.style.display = 'none';
+        if (!url) { info.textContent = '⚠️ Ingresa una URL'; return; }
+        const match = url.match(/(\d+)\.html/);
+        if (!match) { info.textContent = '⚠️ URL no reconocida — debe ser hitomi.la/.../ID.html'; return; }
+        info.textContent = '⏳ Buscando…';
+        try {
+          const data       = await htFetchInfo(match[1]);
+          _htInfoPendiente = data;
+          info.textContent = '📖 ' + data.nombre + ' · ' + data.num_pages + ' páginas';
+          btn.style.display = 'block';
+        } catch(err) { info.textContent = '❌ ' + err.message; }
+      }
+
+      async function htConfirmarDescarga() {
+        if (!_htInfoPendiente) return;
+        document.getElementById('htBtnDescargar').style.display = 'none';
+        document.getElementById('htInfo').textContent = '⏳ Iniciando descarga…';
+        const id       = await htGuardar(_htInfoPendiente);
+        const galConId = { ..._htInfoPendiente, id };
+        await htDescargarGaleria(galConId, null);
+        _htInfoPendiente = null;
+        document.getElementById('htUrl').value = '';
+        renderHitomi(document.getElementById('bvLista'));
+      }
+
+      // — Render hitomi —
+      async function renderHitomi(contenedor) {
+        contenedor.innerHTML = '';
+
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">🌸 Hitomi</span>';
+        contenedor.appendChild(bc);
+
+        const panel = document.createElement('div');
+        panel.className = 'sjz-panel';
+        panel.innerHTML =
+          '<div class="sjz-panel-title">🌸 hitomi.la</div>'
+        + '<div class="sjz-row">'
+        +   '<input class="sjz-input" id="htUrl" placeholder="https://hitomi.la/.../ID.html" type="url">'
+        +   '<button class="sjz-btn sjz-btn-secondary" onclick="htBuscarInfo()">🔍</button>'
+        + '</div>'
+        + '<div class="sjz-info" id="htInfo"></div>'
+        + '<div id="htBtnDescargar" style="display:none;margin-top:8px">'
+        +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">⬇️ Descargar</button>'
+        + '</div>';
+        contenedor.appendChild(panel);
+
+        let galerias;
+        try { galerias = await htListar(); } catch(e) { galerias = []; }
+
+        if (!galerias.length) {
+          const empty = document.createElement('div');
+          empty.className = 'bv-empty';
+          empty.innerHTML = '🌸 Sin galerías guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
+          contenedor.appendChild(empty);
+          return;
+        }
+
+        galerias.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        const grid = document.createElement('div');
+        grid.className = 'bv-grid';
+
+        galerias.forEach(gal => {
+          const card = document.createElement('div');
+          card.className = 'bv-cover-card';
+          card.onclick = () => htAbrirEnVisor(gal);
+
+          const placeholder = document.createElement('div');
+          placeholder.className = 'bv-cover-placeholder';
+          placeholder.textContent = gal.zip_id ? '📖' : '⬇️';
+
+          const img = document.createElement('img');
+          img.className = 'bv-cover-img';
+
+          const footer = document.createElement('div');
+          footer.className = 'bv-cover-footer';
+          footer.textContent = gal.nombre;
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'bv-menu-btn';
+          delBtn.textContent = '🗑️';
+          delBtn.onclick = async e => {
+            e.stopPropagation();
+            if (!confirm('¿Eliminar "' + gal.nombre + '"?')) return;
+            if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+            await htEliminarDB(gal.id);
+            renderHitomi(contenedor);
+          };
+
+          card.append(placeholder, img, footer, delBtn);
+          grid.appendChild(card);
+
+          if (gal.zip_id) {
+            bvCargarPortada(gal.zip_id).then(blob => {
+              if (!blob) return;
+              img.src = URL.createObjectURL(blob);
+              img.style.display = 'block';
+              placeholder.style.display = 'none';
+            }).catch(() => {});
+          }
+        });
+        contenedor.appendChild(grid);
+      }
 
       /* =============================================
          NHENTAI
@@ -3342,6 +3613,12 @@
         // nhentai tiene su propio render
         if (categoriaActual === 'nhentai') {
           renderNhentai(contenedor);
+          return;
+        }
+
+        // hitomi tiene su propio render
+        if (categoriaActual === 'hitomi') {
+          renderHitomi(contenedor);
           return;
         }
 
