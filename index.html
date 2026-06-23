@@ -2096,25 +2096,25 @@
         const html = await resp.text();
 
         // Extraer el JSON embebido: <script type="application/json" data-sveltekit-fetched ...>
-        const match = html.match(/<script type="application\/json" data-sveltekit-fetched[^>]*>([\s\S]*?)<\/script>/);
-        if (!match) {
-          // Copiar los primeros 500 chars del HTML para ver qué devolvió el Worker
-          navigator.clipboard.writeText(html.slice(0, 500)).catch(() => {});
-          throw new Error('Script tag no encontrado — HTML copiado al portapapeles');
+        // Buscar el script tag que contiene la data de la galería (data-url con /api/v2/galleries/)
+        const matches = [...html.matchAll(/<script type="application\/json" data-sveltekit-fetched[^>]*data-url="([^"]*)"[^>]*>([\s\S]*?)<\/script>/g)];
+        
+        let data = null;
+        for (const m of matches) {
+          const dataUrl = m[1];
+          if (!dataUrl.includes('galleries')) continue;
+          try {
+            const fetched = JSON.parse(m[2]);
+            const body    = typeof fetched.body === 'string' ? JSON.parse(fetched.body) : fetched.body;
+            if (body && body.media_id) { data = body; break; }
+          } catch(e) {}
         }
 
-        let fetched, data;
-        try {
-          fetched = JSON.parse(match[1]);
-          data    = typeof fetched.body === 'string' ? JSON.parse(fetched.body) : fetched.body;
-        } catch(e) {
-          navigator.clipboard.writeText(match[1].slice(0, 500)).catch(() => {});
-          throw new Error('Error al parsear JSON: ' + e.message + ' — contenido copiado');
-        }
-
-        if (!data || !data.media_id) {
-          navigator.clipboard.writeText(JSON.stringify({ status: fetched.status, keys: Object.keys(data || {}) })).catch(() => {});
-          throw new Error('media_id no encontrado — status:' + fetched.status + ' · keys copiadas al portapapeles');
+        if (!data) {
+          // Debug: copiar todos los data-url encontrados
+          const urls = matches.map(m => m[1]);
+          navigator.clipboard.writeText(JSON.stringify(urls)).catch(() => {});
+          throw new Error('No se encontró data de la galería — URLs copiadas al portapapeles (' + matches.length + ' scripts encontrados)');
         }
 
         return {
