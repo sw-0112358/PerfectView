@@ -2090,7 +2090,7 @@
         // El lector /g/ID/1/ embebe el JSON completo de la galería en un script tag
         const readerUrl = 'https://nhentai.net/g/' + nhId + '/1/';
         const resp = await fetch(
-          CF_WORKER.replace(/\/$/, '') + '/nhentai-api?target=' + encodeURIComponent(readerUrl)
+          CF_WORKER.replace(/\/$/, '') + '/fetch-html?target=' + encodeURIComponent(readerUrl)
         );
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const html = await resp.text();
