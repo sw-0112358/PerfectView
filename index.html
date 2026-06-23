@@ -1004,10 +1004,6 @@
           <span>📖</span>
           PerfectView
         </div>
-        <div class="header-actions">
-          <button class="btn-ghost btn-sm" onclick="cargarLinksLocal()">↺ Restaurar</button>
-          <button class="btn-ghost btn-sm" onclick="guardarLinksLocal()">💾 Guardar</button>
-        </div>
       </header>
 
       <!-- Status — siempre visible debajo del header -->
@@ -1055,6 +1051,12 @@
               <span class="toggle-label">Descargar → Visor</span>
             </label>
           </div>
+          
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn-ghost btn-sm" onclick="cargarLinksLocal()">↺ Restaurar</button>
+            <button class="btn-ghost btn-sm" onclick="guardarLinksLocal()">💾 Guardar</button>
+          </div>
+     
         </div>
 
         <!-- Lista de links -->
