@@ -2039,7 +2039,32 @@
          HITOMI.LA
       ============================================= */
 
-      const HT_SUBDOMAINS = ['a', 'b', '1a', '2a', '3a'];
+      // — gg.js helpers —
+      function htGGs(hash) {
+        const m = /(..)(.)$/.exec(hash);
+        return parseInt(m[2] + m[1], 16).toString(10);
+      }
+
+      function htGGm(shard, m0Set) {
+        return m0Set.has(shard) ? 0 : 1;
+      }
+
+      function htConstruirUrl(hash, ext, gg) {
+        const shard     = htGGs(hash);
+        const m         = htGGm(parseInt(shard), gg.m0Set);
+        const subdomain = String.fromCharCode(97 + m) + '1';
+        return 'https://' + subdomain + '.gold-usergeneratedcontent.net/' + gg.b + shard + '/' + hash + '.' + ext;
+      }
+
+      async function htFetchGG() {
+        const url  = 'https://ltn.gold-usergeneratedcontent.net/gg.js';
+        const resp = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(url));
+        const js   = await resp.text();
+        const bMatch = js.match(/b:\s*'([^']+)'/);
+        const b      = bMatch ? bMatch[1] : '1782248401/';
+        const nums   = [...js.matchAll(/case (\d+):/g)].map(m => parseInt(m[1]));
+        return { b, m0Set: new Set(nums) };
+      }
 
       // — CRUD IndexedDB —
       async function htListar() {
@@ -2113,34 +2138,22 @@
         };
       }
 
-      // — Construir URL de imagen desde hash —
-      function htImagePath(hash) {
-        const last = hash.slice(-1);
-        const prev = hash.slice(-3, -1);
-        return '/webp/' + last + '/' + prev + '/' + hash + '.webp';
-      }
-
-      // — Descargar imagen intentando subdomains —
-      async function htDescargarImagen(hash) {
-        const path = htImagePath(hash);
-        for (const sub of HT_SUBDOMAINS) {
-          const url  = 'https://' + sub + '.hitomi.la' + path;
-          const blob = await proxyImagen(url, 'https://hitomi.la/');
-          if (blob) return { blob, url };
-        }
-        return null;
-      }
-
-      // — Descargar todas las páginas —
+      // — Descargar todas las páginas usando gg.js —
       async function htDescargarPaginas(galeria, onProgreso) {
+        actualizarStatus('⏳ Obteniendo rutas de imagen…');
+        let gg;
+        try { gg = await htFetchGG(); }
+        catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
+
         const archivos = [];
         for (let i = 0; i < galeria.files.length; i++) {
           const file    = galeria.files[i];
           const pageNum = i + 1;
-          const result  = await htDescargarImagen(file.hash);
-          if (!result) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible'); continue; }
-          const ext    = file.name.split('.').pop() || 'webp';
-          archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob: result.blob });
+          const ext     = file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp');
+          const url     = htConstruirUrl(file.hash, ext, gg);
+          const blob    = await proxyImagen(url, 'https://hitomi.la/');
+          if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible · ' + url); continue; }
+          archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
           if (onProgreso) onProgreso(pageNum, galeria.files.length);
         }
         return archivos;
