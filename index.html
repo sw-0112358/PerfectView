@@ -2608,10 +2608,9 @@
         const info   = document.getElementById('mwInfo');
         if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ URL inválida'; return; }
         if (!inicio || !final || inicio > final)  { info.textContent = '⚠️ Rango inválido'; return; }
-        const rawSlug    = decodeURIComponent(url.replace(/\/$/, '').split('/').pop());
-        const slug       = rawSlug.replace(/[^a-zA-Z0-9_\-]/g, ''); // quitar caracteres especiales
-        const tituloSlug = rawSlug.replace(/_\d{10,}$/, '');
-        const nombre     = tituloSlug.replace(/[^a-zA-Z0-9\s_\-]/g, '').replace(/_/g, ' ').replace(/-/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+        const slug       = decodeURIComponent(url.replace(/\/$/, '').split('/').pop());
+        const tituloSlug = slug.replace(/_\d{10,}$/, '');
+        const nombre     = tituloSlug.replace(/_/g, ' ').replace(/-/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
         const caps   = [];
         for (let i = inicio; i <= final; i++) caps.push({ num: i });
         try {
@@ -2639,16 +2638,40 @@
         } catch(e) { return null; }
       }
 
-      // — Descargar imágenes del CDN fijo —
+      // — Auto-descubrir CDN y extensión —
+      async function mwDescubrirCDN(slug, capNum) {
+        const cdns = ['1', '2', '3', '4', '5'];
+        const exts = ['jpg', 'webp', 'png', 'jpeg'];
+        for (const cdn of cdns) {
+          for (const ext of exts) {
+            const url  = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
+                       + '/chapter_' + capNum + '/ver_01/001.' + ext;
+            const blob = await proxyImagen(url, 'https://manhwaweb.com/');
+            if (blob) return { cdn, ext, primerBlob: blob };
+          }
+        }
+        return null;
+      }
+
+      // — Descargar imágenes del CDN —
       async function mwDescargarImagenes(slug, capNum, onProgreso) {
-        const imgBase = 'https://img2mw.xyz/manhwas/' + slug + '/chapter_' + capNum + '/ver_01/';
-        const archivos = [];
-        for (let i = 1; i <= 300; i++) {
-          const nombre = String(i).padStart(3, '0') + '.webp';
-          const resp   = await proxyImagen(imgBase + nombre, 'https://manhwaweb.com/', true);
-          if (!resp) break;
-          if (!resp.type.startsWith('image/')) break;
-          const blob = resp;
+        actualizarStatus('🔍 Detectando CDN para cap. ' + capNum + '…');
+        const desc = await mwDescubrirCDN(slug, capNum);
+        if (!desc) throw new Error('No se encontró CDN — verifica el slug o el episodio');
+
+        const { cdn, ext, primerBlob } = desc;
+        const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
+                      + '/chapter_' + capNum + '/ver_01/';
+
+        const archivos = [{ nombre: '001.' + ext, blob: primerBlob }];
+        if (onProgreso) onProgreso(1);
+
+        for (let i = 2; i <= 300; i++) {
+          const nombre = String(i).padStart(3, '0') + '.' + ext;
+          const blob   = await proxyImagen(imgBase + nombre, 'https://manhwaweb.com/');
+          if (!blob) break;
+          // Solo romper si el tipo es explícitamente no-imagen (ignorar tipo vacío)
+          if (blob.type && !blob.type.startsWith('image/')) break;
           archivos.push({ nombre, blob });
           if (onProgreso) onProgreso(i);
         }
