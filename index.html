@@ -2149,9 +2149,9 @@
         for (let i = 0; i < galeria.files.length; i++) {
           const file    = galeria.files[i];
           const pageNum = i + 1;
-          const ext     = file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp');
+          const ext     = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
           const url     = htConstruirUrl(file.hash, ext, gg);
-          const blob    = await proxyImagen(url, 'https://hitomi.la/');
+          const blob    = await proxyImagen(url, 'https://hitomi.la/reader/' + galeria.ht_id + '.html');
           if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible · ' + url); continue; }
           archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
           if (onProgreso) onProgreso(pageNum, galeria.files.length);
