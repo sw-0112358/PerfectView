@@ -2928,7 +2928,8 @@
               const est  = await navigator.storage.estimate();
               const usado = (est.usage / 1048576).toFixed(1);
               const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
-              if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres';
+              const persiste = await navigator.storage.persisted();
+            if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? ' · 🔒 persistente' : ' · ⚠️ no persistente');
             }
           } catch(e) {}
 
@@ -2980,7 +2981,8 @@
             const est  = await navigator.storage.estimate();
             const usado = (est.usage / 1048576).toFixed(1);
             const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
-            if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres';
+            const persiste = await navigator.storage.persisted();
+            if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? ' · 🔒 persistente' : ' · ⚠️ no persistente');
           }
         } catch(e) {}
 
