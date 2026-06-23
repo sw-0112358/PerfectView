@@ -2139,24 +2139,43 @@
       }
 
       // — Descargar todas las páginas usando gg.js —
+      // — Fetch directo desde el browser (usa cookies del usuario) —
+      async function htFetchDirecto(url) {
+        try {
+          const resp = await fetch(url, {
+            credentials: 'include',
+            headers: { 'Referer': 'https://hitomi.la/' }
+          });
+          if (!resp.ok) return null;
+          const blob = await resp.blob();
+          return blob.size > 500 ? blob : null;
+        } catch(e) { return null; }
+      }
+
+      // — Descargar todas las páginas usando gg.js —
       async function htDescargarPaginas(galeria, onProgreso) {
         actualizarStatus('⏳ Obteniendo rutas de imagen…');
+        if (!galeria.files || !galeria.files.length) {
+          throw new Error('Sin archivos — files: ' + JSON.stringify(galeria.files?.slice(0,1)));
+        }
         let gg;
         try { gg = await htFetchGG(); }
         catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
 
+        const referer  = 'https://hitomi.la/reader/' + galeria.ht_id + '.html';
         const archivos = [];
         for (let i = 0; i < galeria.files.length; i++) {
           const file    = galeria.files[i];
           const pageNum = i + 1;
           const ext     = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
           const url     = htConstruirUrl(file.hash, ext, gg);
-          const blob    = await proxyImagen(url, 'https://hitomi.la/reader/' + galeria.ht_id + '.html');
-          if (!blob) {
-            navigator.clipboard.writeText(url).catch(() => {});
-            actualizarStatus('⚠️ Pág.' + pageNum + ' · URL copiada: ' + url.slice(0, 60) + '…');
-            break; // parar en la primera falla para ver la URL
-          }
+
+          // Intentar directo con cookies del browser primero
+          let blob = await htFetchDirecto(url);
+          // Fallback al Worker si falla
+          if (!blob) blob = await proxyImagen(url, referer);
+
+          if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible'); continue; }
           archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
           if (onProgreso) onProgreso(pageNum, galeria.files.length);
         }
