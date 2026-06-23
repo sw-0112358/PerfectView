@@ -2152,7 +2152,11 @@
           const ext     = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
           const url     = htConstruirUrl(file.hash, ext, gg);
           const blob    = await proxyImagen(url, 'https://hitomi.la/reader/' + galeria.ht_id + '.html');
-          if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible · ' + url); continue; }
+          if (!blob) {
+            navigator.clipboard.writeText(url).catch(() => {});
+            actualizarStatus('⚠️ Pág.' + pageNum + ' · URL copiada: ' + url.slice(0, 60) + '…');
+            break; // parar en la primera falla para ver la URL
+          }
           archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
           if (onProgreso) onProgreso(pageNum, galeria.files.length);
         }
@@ -2229,13 +2233,16 @@
       async function htConfirmarDescarga() {
         if (!_htInfoPendiente) return;
         document.getElementById('htBtnDescargar').style.display = 'none';
-        document.getElementById('htInfo').textContent = '⏳ Iniciando descarga…';
-        const id       = await htGuardar(_htInfoPendiente);
-        const galConId = { ..._htInfoPendiente, id };
-        await htDescargarGaleria(galConId, null);
-        _htInfoPendiente = null;
-        document.getElementById('htUrl').value = '';
-        renderHitomi(document.getElementById('bvLista'));
+        document.getElementById('htInfo').textContent = '⏳ Guardando…';
+        try {
+          await htGuardar(_htInfoPendiente);
+          document.getElementById('htInfo').textContent = '✅ Agregado — toca la portada para descargar';
+          document.getElementById('htUrl').value = '';
+          _htInfoPendiente = null;
+          renderHitomi(document.getElementById('bvLista'));
+        } catch(err) {
+          document.getElementById('htInfo').textContent = '❌ ' + err.message;
+        }
       }
 
       // — Render hitomi —
@@ -2259,7 +2266,7 @@
         + '</div>'
         + '<div class="sjz-info" id="htInfo"></div>'
         + '<div id="htBtnDescargar" style="display:none;margin-top:8px">'
-        +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">⬇️ Descargar</button>'
+        +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">➕ Agregar a biblioteca</button>'
         + '</div>';
         contenedor.appendChild(panel);
 
@@ -2286,6 +2293,10 @@
           const placeholder = document.createElement('div');
           placeholder.className = 'bv-cover-placeholder';
           placeholder.textContent = gal.zip_id ? '📖' : '⬇️';
+          if (!gal.zip_id) {
+            placeholder.style.cssText = 'cursor:pointer;font-size:2rem';
+            placeholder.title = 'Tap para descargar';
+          }
 
           const img = document.createElement('img');
           img.className = 'bv-cover-img';
@@ -2304,6 +2315,39 @@
             await htEliminarDB(gal.id);
             renderHitomi(contenedor);
           };
+
+          // Botón copiar links al portapapeles (solo cuando no hay ZIP)
+          if (!gal.zip_id) {
+            const linkBtn = document.createElement('button');
+            linkBtn.className = 'bv-menu-btn';
+            linkBtn.textContent = '🔗';
+            linkBtn.style.cssText = 'top:6px;right:36px';
+            linkBtn.title = 'Copiar URLs al portapapeles';
+            linkBtn.onclick = async e => {
+              e.stopPropagation();
+              actualizarStatus('⏳ Generando URLs…');
+              try {
+                let gg;
+                try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
+                const lineas = gal.files.map((f, i) => {
+                  const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
+                  return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
+                });
+                const contenido = lineas.join('\n');
+                const blob      = new Blob([contenido], { type: 'text/plain' });
+                const url       = URL.createObjectURL(blob);
+                const a         = document.createElement('a');
+                a.href          = url;
+                a.download      = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_links.txt';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(url), 3000);
+                actualizarStatus('✅ ' + lineas.length + ' URLs descargadas como .txt');
+              } catch(err) {
+                actualizarStatus('❌ ' + err.message);
+              }
+            };
+            card.appendChild(linkBtn);
+          }
 
           card.append(placeholder, img, footer, delBtn);
           grid.appendChild(card);
@@ -2564,6 +2608,10 @@
           const placeholder = document.createElement('div');
           placeholder.className = 'bv-cover-placeholder';
           placeholder.textContent = gal.zip_id ? '📖' : '⬇️';
+          if (!gal.zip_id) {
+            placeholder.style.cssText = 'cursor:pointer;font-size:2rem';
+            placeholder.title = 'Tap para descargar';
+          }
 
           const img = document.createElement('img');
           img.className = 'bv-cover-img';
