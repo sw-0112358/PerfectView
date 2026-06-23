@@ -2045,25 +2045,28 @@
         return parseInt(m[2] + m[1], 16).toString(10);
       }
 
-      function htGGm(shard, m0Set) {
-        return m0Set.has(shard) ? 0 : 1;
+      function htGGm(shard, gg) {
+        return gg.caseSet.has(shard) ? gg.caseO : gg.defaultO;
       }
 
       function htConstruirUrl(hash, ext, gg) {
         const shard     = htGGs(hash);
-        const m         = htGGm(parseInt(shard), gg.m0Set);
-        const subdomain = 'a' + (m + 1); // a1 cuando m=0, a2 cuando m=1
+        const m         = htGGm(parseInt(shard), gg);
+        const subdomain = 'a' + (m + 1);
         return 'https://' + subdomain + '.gold-usergeneratedcontent.net/' + gg.b + shard + '/' + hash + '.' + ext;
       }
 
       async function htFetchGG() {
-        const url  = 'https://ltn.gold-usergeneratedcontent.net/gg.js?_=' + Date.now();
-        const resp = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(url));
+        const resp = await fetch(CF_WORKER.replace(/\/$/, '') + '/gg?' + Date.now());
         const js   = await resp.text();
-        const bMatch = js.match(/b:\s*'([^']+)'/);
-        const b      = bMatch ? bMatch[1] : '1782248401/';
-        const nums   = [...js.matchAll(/case (\d+):/g)].map(m => parseInt(m[1]));
-        return { b, m0Set: new Set(nums) };
+        const bMatch       = js.match(/b:\s*'([^']+)'/);
+        const b            = bMatch ? bMatch[1] : '1782255601/';
+        const defaultMatch = js.match(/var o = (\d+);/);
+        const defaultO     = defaultMatch ? parseInt(defaultMatch[1]) : 0;
+        const caseMatch    = js.match(/o = (\d+); break;/);
+        const caseO        = caseMatch ? parseInt(caseMatch[1]) : 1;
+        const nums         = [...js.matchAll(/case (\d+):/g)].map(m => parseInt(m[1]));
+        return { b, defaultO, caseO, caseSet: new Set(nums) };
       }
 
       // — CRUD IndexedDB —
