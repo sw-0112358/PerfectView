@@ -1687,7 +1687,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 4);
+          const req = indexedDB.open('PerfectViewBoveda', 5);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1702,6 +1702,9 @@
             }
             if (!db.objectStoreNames.contains('mw_colecciones')) {
               db.createObjectStore('mw_colecciones', { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('nh_galerias')) {
+              db.createObjectStore('nh_galerias', { keyPath: 'id', autoIncrement: true });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -2022,10 +2025,265 @@
       let categoriaActual = 'menu';
 
       const BV_CARPETAS = [
-        { id: 'mangas',  icon: '📚', label: 'Mangas'  },
-        { id: 'samurai', icon: '⚔️', label: 'Samurai' },
-        { id: 'manhwa',  icon: '📖', label: 'Manhwa'  },
+        { id: 'mangas',   icon: '📚', label: 'Mangas'   },
+        { id: 'samurai',  icon: '⚔️', label: 'Samurai'  },
+        { id: 'manhwa',   icon: '📖', label: 'Manhwa'   },
+        { id: 'nhentai',  icon: '🔞', label: 'nhentai'  },
       ];
+
+      /* =============================================
+         NHENTAI
+      ============================================= */
+
+      const NH_CDN = ['i3', 'i1', 'i2'];
+
+      async function nhListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('nh_galerias', 'readonly')
+                        .objectStore('nh_galerias').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function nhGuardar(info) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('nh_galerias', 'readwrite');
+          const req = tx.objectStore('nh_galerias')
+                        .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function nhEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('nh_galerias', 'readwrite');
+          tx.objectStore('nh_galerias').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function nhActualizarZip(id, zip_id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('nh_galerias', 'readwrite');
+          const req = tx.objectStore('nh_galerias').get(id);
+          req.onsuccess = e => {
+            const reg = e.target.result;
+            if (!reg) { reject(new Error('No encontrado')); return; }
+            reg.zip_id = zip_id;
+            tx.objectStore('nh_galerias').put(reg);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — Fetch info desde la API —
+      async function nhFetchInfo(nhId) {
+        if (!CF_WORKER) throw new Error('Configura el Worker primero');
+        const apiUrl = 'https://nhentai.net/api/gallery/' + nhId;
+        const resp   = await fetch(
+          CF_WORKER.replace(/\/$/, '') + '/nhentai-api?target=' + encodeURIComponent(apiUrl)
+        );
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.media_id) throw new Error('Galería no encontrada o privada');
+        const extMap = { j: 'jpg', p: 'png', w: 'webp' };
+        return {
+          nh_id:     String(data.id),
+          media_id:  String(data.media_id),
+          nombre:    (data.title?.english || data.title?.pretty || 'Sin título').slice(0, 80),
+          num_pages: data.num_pages,
+          tipos:     data.images.pages.map(p => extMap[p.t] || 'jpg'),
+        };
+      }
+
+      // — Descargar todas las páginas —
+      async function nhDescargarPaginas(galeria, onProgreso) {
+        const archivos = [];
+        for (let i = 0; i < galeria.num_pages; i++) {
+          const pageNum = i + 1;
+          const ext     = galeria.tipos[i] || 'jpg';
+          let   blob    = null;
+          for (const cdn of NH_CDN) {
+            const url = 'https://' + cdn + '.nhentai.net/galleries/'
+                      + galeria.media_id + '/' + pageNum + '.' + ext;
+            blob = await proxyImagen(url, 'https://nhentai.net/');
+            if (blob) break;
+          }
+          if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible'); continue; }
+          archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
+          if (onProgreso) onProgreso(pageNum, galeria.num_pages);
+        }
+        return archivos;
+      }
+
+      // — Abrir galería descargada en visor —
+      async function nhAbrirEnVisor(galeria) {
+        if (!galeria.zip_id) { nhDescargarGaleria(galeria, null); return; }
+        actualizarStatus('⏳ Cargando…');
+        const reg = await bvCargar(galeria.zip_id);
+        if (!reg) { actualizarStatus('❌ ZIP no encontrado'); return; }
+        const zip      = await JSZip.loadAsync(reg.blob);
+        const entradas = Object.values(zip.files)
+          .filter(f => !f.dir)
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        archivosDescargados.length = 0;
+        for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+        _visorContexto = null;
+        mostrarVisor(true);
+        mostrarImagenesEnVisor();
+        actualizarStatus('✅ ' + entradas.length + ' páginas');
+      }
+
+      // — Descargar galería completa y guardar —
+      async function nhDescargarGaleria(galeria, cardEl) {
+        const ph = cardEl?.querySelector('.bv-cover-placeholder');
+        if (ph) ph.textContent = '⏳';
+        try {
+          const archivos = await nhDescargarPaginas(galeria, (p, t) => {
+            actualizarStatus('⏳ NH · ' + p + '/' + t);
+          });
+          if (!archivos.length) throw new Error('No se descargó ninguna imagen');
+          actualizarStatus('⏳ Creando ZIP…');
+          const zip = new JSZip();
+          archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
+          await nhActualizarZip(galeria.id, zipId);
+          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          archivosDescargados.length = 0;
+          archivos.forEach(a => archivosDescargados.push(a));
+          _visorContexto = null;
+          mostrarVisor(true);
+          mostrarImagenesEnVisor();
+          actualizarStatus('✅ ' + galeria.nombre + ' — ' + archivos.length + ' páginas');
+        } catch(err) {
+          if (ph) ph.textContent = '⬇️';
+          actualizarStatus('❌ NH: ' + err.message);
+        }
+      }
+
+      // — Buscar info de la galería —
+      let _nhInfoPendiente = null;
+
+      async function nhBuscarInfo() {
+        const url  = document.getElementById('nhUrl').value.trim();
+        const info = document.getElementById('nhInfo');
+        const btn  = document.getElementById('nhBtnDescargar');
+        _nhInfoPendiente = null;
+        btn.style.display = 'none';
+        if (!url) { info.textContent = '⚠️ Ingresa una URL'; return; }
+        const match = url.match(/nhentai\.net\/g\/(\d+)/);
+        if (!match) { info.textContent = '⚠️ URL no reconocida — debe ser nhentai.net/g/ID/'; return; }
+        info.textContent = '⏳ Buscando…';
+        try {
+          const data       = await nhFetchInfo(match[1]);
+          _nhInfoPendiente = data;
+          info.textContent = '📖 ' + data.nombre + ' · ' + data.num_pages + ' páginas';
+          btn.style.display = 'block';
+        } catch(err) { info.textContent = '❌ ' + err.message; }
+      }
+
+      async function nhConfirmarDescarga() {
+        if (!_nhInfoPendiente) return;
+        document.getElementById('nhBtnDescargar').style.display = 'none';
+        document.getElementById('nhInfo').textContent = '⏳ Iniciando descarga…';
+        const id       = await nhGuardar(_nhInfoPendiente);
+        const galConId = { ..._nhInfoPendiente, id };
+        await nhDescargarGaleria(galConId, null);
+        _nhInfoPendiente = null;
+        document.getElementById('nhUrl').value = '';
+        renderNhentai(document.getElementById('bvLista'));
+      }
+
+      // — Render nhentai —
+      async function renderNhentai(contenedor) {
+        contenedor.innerHTML = '';
+
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">🔞 nhentai</span>';
+        contenedor.appendChild(bc);
+
+        const panel = document.createElement('div');
+        panel.className = 'sjz-panel';
+        panel.innerHTML =
+          '<div class="sjz-panel-title">🔞 nhentai.net</div>'
+        + '<div class="sjz-row">'
+        +   '<input class="sjz-input" id="nhUrl" placeholder="https://nhentai.net/g/658697/" type="url">'
+        +   '<button class="sjz-btn sjz-btn-secondary" onclick="nhBuscarInfo()">🔍</button>'
+        + '</div>'
+        + '<div class="sjz-info" id="nhInfo"></div>'
+        + '<div id="nhBtnDescargar" style="display:none;margin-top:8px">'
+        +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="nhConfirmarDescarga()">⬇️ Descargar</button>'
+        + '</div>';
+        contenedor.appendChild(panel);
+
+        let galerias;
+        try { galerias = await nhListar(); } catch(e) { galerias = []; }
+
+        if (!galerias.length) {
+          const empty = document.createElement('div');
+          empty.className = 'bv-empty';
+          empty.innerHTML = '🔞 Sin galerías guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
+          contenedor.appendChild(empty);
+          return;
+        }
+
+        galerias.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        const grid = document.createElement('div');
+        grid.className = 'bv-grid';
+
+        galerias.forEach(gal => {
+          const card = document.createElement('div');
+          card.className = 'bv-cover-card';
+          card.onclick = () => nhAbrirEnVisor(gal);
+
+          const placeholder = document.createElement('div');
+          placeholder.className = 'bv-cover-placeholder';
+          placeholder.textContent = gal.zip_id ? '📖' : '⬇️';
+
+          const img = document.createElement('img');
+          img.className = 'bv-cover-img';
+
+          const footer = document.createElement('div');
+          footer.className = 'bv-cover-footer';
+          footer.textContent = gal.nombre;
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'bv-menu-btn';
+          delBtn.textContent = '🗑️';
+          delBtn.onclick = async e => {
+            e.stopPropagation();
+            if (!confirm('¿Eliminar "' + gal.nombre + '"?')) return;
+            if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+            await nhEliminarDB(gal.id);
+            renderNhentai(contenedor);
+          };
+
+          card.append(placeholder, img, footer, delBtn);
+          grid.appendChild(card);
+
+          if (gal.zip_id) {
+            bvCargarPortada(gal.zip_id).then(blob => {
+              if (!blob) return;
+              img.src = URL.createObjectURL(blob);
+              img.style.display = 'block';
+              placeholder.style.display = 'none';
+            }).catch(() => {});
+          }
+        });
+        contenedor.appendChild(grid);
+      }
 
       function bvAbrirCarpeta(id) {
         categoriaActual = id;
@@ -3054,6 +3312,12 @@
         if (categoriaActual === 'manhwa') {
           _mwColeccionActual = null;
           renderManhwa(contenedor);
+          return;
+        }
+
+        // nhentai tiene su propio render
+        if (categoriaActual === 'nhentai') {
+          renderNhentai(contenedor);
           return;
         }
 
