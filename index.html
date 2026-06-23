@@ -2031,7 +2031,7 @@
         { id: 'mangas',   icon: '📚', label: 'Mangas'   },
         { id: 'samurai',  icon: '⚔️', label: 'Samurai'  },
         { id: 'manhwa',   icon: '📖', label: 'Manhwa'   },
-        { id: 'nhentai',  icon: '🔞', label: 'nhentai'  },
+        { id: 'nhentai',  icon: '🪷', label: 'nhentai'  },
         { id: 'hitomi',   icon: '🌸', label: 'Hitomi'   },
       ];
 
@@ -2096,13 +2096,18 @@
         const resp  = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(jsUrl));
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const js   = await resp.text();
-        const match = js.match(/var galleryinfo = ([\s\S]+?);\s*$/m);
+        // Debug: copiar primeros 300 chars para ver la estructura real
+        navigator.clipboard.writeText(js.slice(0, 300)).catch(() => {});
+        const match = js.match(/var galleryinfo = ([\s\S]+)/);
         if (!match) throw new Error('No se encontró galleryinfo en el JS');
+        // Limpiar posibles declaraciones extra al final
+        let jsonStr = match[1].trim();
+        if (jsonStr.endsWith(';')) jsonStr = jsonStr.slice(0, -1);
         const data = JSON.parse(match[1]);
         if (!data.files || !data.files.length) throw new Error('Galería sin imágenes');
         return {
           ht_id:     String(data.id),
-          nombre:    (data.title || data.japanese_title || 'Hitomi-' + htId).slice(0, 80),
+          nombre:    (data.title || data.japanese_title_pretty || 'Hitomi-' + htId).slice(0, 80),
           num_pages: data.files.length,
           files:     data.files.map(f => ({ hash: f.hash, name: f.name, haswebp: f.haswebp })),
         };
@@ -2506,13 +2511,13 @@
         bc.className = 'bv-breadcrumb';
         bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
           + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">🔞 nhentai</span>';
+          + '<span class="bv-breadcrumb-label">🪷 nhentai</span>';
         contenedor.appendChild(bc);
 
         const panel = document.createElement('div');
         panel.className = 'sjz-panel';
         panel.innerHTML =
-          '<div class="sjz-panel-title">🔞 nhentai.net</div>'
+          '<div class="sjz-panel-title">🪷 nhentai.net</div>'
         + '<div class="sjz-row">'
         +   '<input class="sjz-input" id="nhUrl" placeholder="https://nhentai.net/g/658697/" type="url">'
         +   '<button class="sjz-btn sjz-btn-secondary" onclick="nhBuscarInfo()">🔍</button>'
@@ -2529,7 +2534,7 @@
         if (!galerias.length) {
           const empty = document.createElement('div');
           empty.className = 'bv-empty';
-          empty.innerHTML = '🔞 Sin galerías guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
+          empty.innerHTML = '🪷 Sin galerías guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
           contenedor.appendChild(empty);
           return;
         }
