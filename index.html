@@ -2426,12 +2426,29 @@
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
           capsOrdenadas.forEach(cap => {
-            const chip = document.createElement('div');
             const yaDesc = !!descargados[cap.num];
+            const zipId  = descargados[cap.num];
+            const chip   = document.createElement('div');
             chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
             chip.textContent = cap.num;
-            chip.title = yaDesc ? '✅ Descargado — tap para abrir' : '⬇️ Tap para descargar';
+            chip.title = yaDesc ? '✅ Cap. ' + cap.num : '⬇️ Cap. ' + cap.num;
             chip.onclick = () => sjzAbrirCapitulo(_sjzColeccionActual, cap, chip);
+
+            // Si tiene portada → crecer y mostrar imagen (igual que Manhwa)
+            if (yaDesc && zipId) {
+              bvCargarPortada(zipId).then(blob => {
+                if (!blob) return;
+                chip.textContent = '';
+                chip.classList.add('con-portada');
+                const img = document.createElement('img');
+                img.src   = URL.createObjectURL(blob);
+                const num = document.createElement('div');
+                num.className   = 'cap-num';
+                num.textContent = cap.num;
+                chip.append(img, num);
+              }).catch(() => {});
+            }
+
             grid.appendChild(chip);
           });
           contenedor.appendChild(grid);
