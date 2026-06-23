@@ -2052,7 +2052,7 @@
       function htConstruirUrl(hash, ext, gg) {
         const shard     = htGGs(hash);
         const m         = htGGm(parseInt(shard), gg.m0Set);
-        const subdomain = String.fromCharCode(97 + m) + '1';
+        const subdomain = 'a' + (m + 1); // a1 cuando m=0, a2 cuando m=1
         return 'https://' + subdomain + '.gold-usergeneratedcontent.net/' + gg.b + shard + '/' + hash + '.' + ext;
       }
 
