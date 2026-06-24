@@ -1621,6 +1621,10 @@
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '🖼️';
         fab.classList.remove('fab-transparente');
+        // Salir de pantalla completa al volver al menú
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
       }
 
       function mostrarVisor(reset = true) {
@@ -1635,6 +1639,10 @@
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '📖';
         fab.classList.add('fab-transparente');
+        // Pantalla completa automática al entrar al visor
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
       }
 
       function traslape() {
