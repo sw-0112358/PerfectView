@@ -2374,6 +2374,16 @@
             renderHitomi(contenedor);
           };
 
+          // Botón descargar ZIP (solo cuando hay ZIP)
+          if (gal.zip_id) {
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'bv-menu-btn';
+            dlBtn.textContent = '🔽';
+            dlBtn.style.cssText = 'top:6px;right:36px';
+            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            card.appendChild(dlBtn);
+          }
+
           // Botón copiar links al portapapeles (solo cuando no hay ZIP)
           if (!gal.zip_id) {
             const linkBtn = document.createElement('button');
