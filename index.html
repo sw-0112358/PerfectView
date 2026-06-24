@@ -1946,6 +1946,149 @@
       }
 
       // — Importar .zip(s) desde explorador de archivos —
+      // — Detectar tipo de ZIP e importar correctamente —
+      async function detectarYImportarZip(archivo) {
+        actualizarStatus('⏳ Analizando ' + archivo.name + '…');
+        try {
+          const zip = await JSZip.loadAsync(archivo);
+
+          // ¿Contiene coleccion.json?
+          const jsonFile = zip.file('coleccion.json');
+          if (jsonFile) {
+            const jsonStr = await jsonFile.async('string');
+            const meta    = JSON.parse(jsonStr);
+
+            if (meta.tipo === 'samurai') {
+              await importarColeccionSamurai(zip, meta, archivo.name);
+              return;
+            }
+            if (meta.tipo === 'manhwa') {
+              await importarColeccionManhwa(zip, meta, archivo.name);
+              return;
+            }
+          }
+
+          // ZIP normal → importar como manga
+          const id = await bvGuardar(archivo.name, archivo, categoriaActual);
+          bvExtraerPortada(archivo)
+            .then(pb => pb && bvGuardarPortada(id, pb))
+            .catch(() => {});
+          actualizarStatus('✅ Importado como manga: ' + archivo.name);
+          renderBoveda();
+
+        } catch(err) {
+          actualizarStatus('❌ Error al importar: ' + err.message);
+        }
+      }
+
+      // — Restaurar colección Samurai desde ZIP maestro —
+      async function importarColeccionSamurai(zip, meta, nombreArchivo) {
+        // Verificar si ya existe
+        const existentes = await sjzListar();
+        const yaExiste   = existentes.find(c => c.base_url === meta.base_url);
+        if (yaExiste) {
+          if (!confirm('⚠️ La colección "' + meta.nombre + '" ya existe.\n¿Reemplazar los capítulos descargados?')) return;
+        }
+
+        actualizarStatus('⏳ Restaurando colección Samurai: ' + meta.nombre);
+
+        // Crear o reutilizar colección
+        let colId;
+        if (yaExiste) {
+          colId = yaExiste.id;
+          // Actualizar capitulos por si hay nuevos
+          await sjzActualizarColeccion(colId, meta.capitulos.map(c => ({ num: c.num, url: c.url })));
+        } else {
+          colId = await sjzGuardar(
+            meta.nombre,
+            meta.base_url,
+            meta.capitulos.map(c => ({ num: c.num, url: c.url }))
+          );
+        }
+
+        // Importar cada cap_XXXX.zip
+        const archivosZip = Object.keys(zip.files)
+          .filter(n => /^cap_\d+\.zip$/i.test(n))
+          .sort();
+
+        let ok = 0;
+        for (let i = 0; i < archivosZip.length; i++) {
+          const nombre  = archivosZip[i];
+          const capNum  = parseInt(nombre.match(/\d+/)[0]);
+          actualizarStatus('⏳ Restaurando cap. ' + capNum + ' (' + (i+1) + '/' + archivosZip.length + ')…');
+          try {
+            const blob  = await zip.file(nombre).async('blob');
+            const zipId = await sjzGuardarCapitulo(
+              meta.nombre + ' - Cap ' + capNum + '.zip',
+              blob, colId, capNum
+            );
+            // Portada desde primera imagen del cap
+            JSZip.loadAsync(blob).then(capZip => {
+              const imgs = Object.values(capZip.files)
+                .filter(f => !f.dir)
+                .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+              if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
+            }).catch(() => {});
+            ok++;
+          } catch(e) {}
+        }
+
+        actualizarStatus('✅ "' + meta.nombre + '" restaurado — ' + ok + '/' + archivosZip.length + ' capítulos');
+        if (categoriaActual === 'samurai') renderBoveda();
+      }
+
+      // — Restaurar colección Manhwa desde ZIP maestro —
+      async function importarColeccionManhwa(zip, meta, nombreArchivo) {
+        const existentes = await mwListar();
+        const yaExiste   = existentes.find(c => c.base_url === meta.base_url);
+        if (yaExiste) {
+          if (!confirm('⚠️ La colección "' + meta.nombre + '" ya existe.\n¿Reemplazar los capítulos descargados?')) return;
+        }
+
+        actualizarStatus('⏳ Restaurando colección Manhwa: ' + meta.nombre);
+
+        let colId;
+        if (yaExiste) {
+          colId = yaExiste.id;
+          await mwActualizarColeccion(colId, meta.capitulos.map(c => ({ num: c.num })));
+        } else {
+          colId = await mwGuardar(
+            meta.nombre,
+            meta.base_url,
+            meta.slug || '',
+            meta.capitulos.map(c => ({ num: c.num }))
+          );
+        }
+
+        const archivosZip = Object.keys(zip.files)
+          .filter(n => /^cap_\d+\.zip$/i.test(n))
+          .sort();
+
+        let ok = 0;
+        for (let i = 0; i < archivosZip.length; i++) {
+          const nombre  = archivosZip[i];
+          const capNum  = parseInt(nombre.match(/\d+/)[0]);
+          actualizarStatus('⏳ Restaurando cap. ' + capNum + ' (' + (i+1) + '/' + archivosZip.length + ')…');
+          try {
+            const blob  = await zip.file(nombre).async('blob');
+            const zipId = await mwGuardarCapitulo(
+              meta.nombre + ' - Cap ' + capNum + '.zip',
+              blob, colId, capNum
+            );
+            JSZip.loadAsync(blob).then(capZip => {
+              const imgs = Object.values(capZip.files)
+                .filter(f => !f.dir)
+                .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+              if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
+            }).catch(() => {});
+            ok++;
+          } catch(e) {}
+        }
+
+        actualizarStatus('✅ "' + meta.nombre + '" restaurado — ' + ok + '/' + archivosZip.length + ' capítulos');
+        if (categoriaActual === 'manhwa') renderBoveda();
+      }
+
       function importarZipBoveda() {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -1954,20 +2097,9 @@
         fileInput.onchange = async () => {
           const archivos = Array.from(fileInput.files);
           if (!archivos.length) return;
-          let ok = 0;         
           for (const archivo of archivos) {
-            try {
-              const id = await bvGuardar(archivo.name, archivo, categoriaActual);
-              guardados++;
-              bvExtraerPortada(archivo)
-                .then(pb => pb && bvGuardarPortada(id, pb))
-                .catch(() => {});
-            } catch(err) {
-              actualizarStatus('❌ Error al importar ' + archivo.name + ': ' + err.message);
-            }
-          }       
-          actualizarStatus('✅ ' + ok + ' archivo(s) importado(s) a la Bóveda');
-          renderBoveda();
+            await detectarYImportarZip(archivo);
+          }
         };
         fileInput.click();
       }
@@ -3197,6 +3329,60 @@
         }
       }
 
+      // — Exportar colección Manhwa como ZIP maestro —
+      async function mwExportarZipCompleto(col) {
+        const descargados = await mwListarDescargados(col.id);
+        const capsDesc    = Object.keys(descargados).map(Number).sort((a,b) => a-b);
+        if (!capsDesc.length) {
+          actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
+          return;
+        }
+        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + capsDesc.length + ' capítulo(s)?\n\nPuede tardar varios minutos.')) return;
+
+        actualizarStatus('⏳ Preparando exportación Manhwa…');
+        try {
+          const masterZip = new JSZip();
+          const metaJson  = {
+            version:    1,
+            tipo:       'manhwa',
+            nombre:     col.nombre,
+            base_url:   col.base_url,
+            slug:       col.slug,
+            fecha:      col.fecha,
+            total_caps: col.capitulos.length,
+            capitulos:  col.capitulos.map(c => ({
+              num:        c.num,
+              descargado: !!descargados[c.num],
+            })),
+          };
+          masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
+
+          for (let i = 0; i < capsDesc.length; i++) {
+            const capNum = capsDesc[i];
+            const zipId  = descargados[capNum];
+            actualizarStatus('⏳ Empacando cap. ' + capNum + ' (' + (i+1) + '/' + capsDesc.length + ')…');
+            const reg = await bvCargar(zipId);
+            if (!reg) continue;
+            masterZip.file('cap_' + String(capNum).padStart(4, '0') + '.zip', reg.blob);
+          }
+
+          actualizarStatus('⏳ Generando ZIP maestro…');
+          const masterBlob = await masterZip.generateAsync({ type: 'blob' }, m => {
+            actualizarStatus('⏳ Comprimiendo… ' + Math.round(m.percent) + '%');
+          });
+
+          const url = URL.createObjectURL(masterBlob);
+          const a   = document.createElement('a');
+          a.href    = url;
+          a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          actualizarStatus('✅ Exportado: ' + capsDesc.length + ' capítulos');
+        } catch(err) {
+          actualizarStatus('❌ ' + err.message);
+        }
+      }
+
       // — Render Samurai —
       async function renderSamurai(contenedor) {
         contenedor.innerHTML = '';
@@ -3801,7 +3987,14 @@
             renderManhwa(contenedor);
           };
 
-          card.append(placeholder, img, footer, delBtn);
+          const dlBtnMw = document.createElement('button');
+          dlBtnMw.className = 'bv-menu-btn';
+          dlBtnMw.textContent = '📦';
+          dlBtnMw.style.cssText = 'top:6px;right:36px';
+          dlBtnMw.title = 'Exportar colección completa';
+          dlBtnMw.onclick = e => { e.stopPropagation(); mwExportarZipCompleto(col); };
+
+          card.append(placeholder, img, footer, dlBtnMw, delBtn);
           grid.appendChild(card);
 
           // Cargar portada del episodio 1
