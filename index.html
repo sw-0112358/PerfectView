@@ -1946,14 +1946,49 @@
       }
 
       // — Importar .zip(s) desde explorador de archivos —
+      // — Importar galería Hitomi —
+      async function importarGaleriaHitomi(zip, meta) {
+        actualizarStatus('⏳ Restaurando galería Hitomi: ' + meta.nombre);
+        const imagesFile = zip.file('images.zip');
+        if (!imagesFile) throw new Error('No se encontró images.zip dentro del archivo');
+        const imagesBlob = await imagesFile.async('blob');
+        const id    = await htGuardar({ ht_id: meta.ht_id, media_id: meta.media_id, nombre: meta.nombre, num_pages: meta.num_pages, files: meta.files || [], paths: meta.paths || [] });
+        const zipId = await bvGuardar(meta.nombre + '.zip', imagesBlob, 'hitomi');
+        await htActualizarZip(id, zipId);
+        // Portada desde primera imagen
+        JSZip.loadAsync(imagesBlob).then(iz => {
+          const imgs = Object.values(iz.files).filter(f => !f.dir).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
+        }).catch(() => {});
+        actualizarStatus('✅ Galería Hitomi restaurada: ' + meta.nombre);
+        if (categoriaActual === 'hitomi') renderBoveda();
+      }
+
+      // — Importar galería nhentai —
+      async function importarGaleriaNhentai(zip, meta) {
+        actualizarStatus('⏳ Restaurando galería nhentai: ' + meta.nombre);
+        const imagesFile = zip.file('images.zip');
+        if (!imagesFile) throw new Error('No se encontró images.zip dentro del archivo');
+        const imagesBlob = await imagesFile.async('blob');
+        const id    = await nhGuardar({ nh_id: meta.nh_id, media_id: meta.media_id, nombre: meta.nombre, num_pages: meta.num_pages, paths: meta.paths || [] });
+        const zipId = await bvGuardar(meta.nombre + '.zip', imagesBlob, 'nhentai');
+        await nhActualizarZip(id, zipId);
+        JSZip.loadAsync(imagesBlob).then(iz => {
+          const imgs = Object.values(iz.files).filter(f => !f.dir).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
+        }).catch(() => {});
+        actualizarStatus('✅ Galería nhentai restaurada: ' + meta.nombre);
+        if (categoriaActual === 'nhentai') renderBoveda();
+      }
+
       // — Detectar tipo de ZIP e importar correctamente —
       async function detectarYImportarZip(archivo) {
         actualizarStatus('⏳ Analizando ' + archivo.name + '…');
         try {
           const zip = await JSZip.loadAsync(archivo);
 
-          // ¿Contiene coleccion.json?
-          const jsonFile = zip.file('coleccion.json');
+          // ¿Contiene coleccion.json o galeria.json?
+          const jsonFile = zip.file('coleccion.json') || zip.file('galeria.json');
           if (jsonFile) {
             const jsonStr = await jsonFile.async('string');
             const meta    = JSON.parse(jsonStr);
@@ -1964,6 +1999,14 @@
             }
             if (meta.tipo === 'manhwa') {
               await importarColeccionManhwa(zip, meta, archivo.name);
+              return;
+            }
+            if (meta.tipo === 'hitomi') {
+              await importarGaleriaHitomi(zip, meta);
+              return;
+            }
+            if (meta.tipo === 'nhentai') {
+              await importarGaleriaNhentai(zip, meta);
               return;
             }
           }
@@ -2435,6 +2478,68 @@
         }
       }
 
+      // — Exportar galería Hitomi como ZIP maestro —
+      async function htExportarGaleria(gal) {
+        if (!gal.zip_id) { actualizarStatus('⚠️ Descarga la galería primero'); return; }
+        actualizarStatus('⏳ Preparando exportación…');
+        try {
+          const reg = await bvCargar(gal.zip_id);
+          if (!reg) throw new Error('ZIP no encontrado');
+          const masterZip = new JSZip();
+          const meta = {
+            version:   1,
+            tipo:      'hitomi',
+            ht_id:     gal.ht_id,
+            media_id:  gal.media_id,
+            nombre:    gal.nombre,
+            num_pages: gal.num_pages,
+            files:     gal.files,
+            fecha:     gal.fecha,
+          };
+          masterZip.file('galeria.json', JSON.stringify(meta, null, 2));
+          masterZip.file('images.zip', reg.blob);
+          const blob = await masterZip.generateAsync({ type: 'blob' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url;
+          a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          actualizarStatus('✅ Exportado: ' + gal.nombre);
+        } catch(err) { actualizarStatus('❌ ' + err.message); }
+      }
+
+      // — Exportar galería nhentai como ZIP maestro —
+      async function nhExportarGaleria(gal) {
+        if (!gal.zip_id) { actualizarStatus('⚠️ Descarga la galería primero'); return; }
+        actualizarStatus('⏳ Preparando exportación…');
+        try {
+          const reg = await bvCargar(gal.zip_id);
+          if (!reg) throw new Error('ZIP no encontrado');
+          const masterZip = new JSZip();
+          const meta = {
+            version:   1,
+            tipo:      'nhentai',
+            nh_id:     gal.nh_id,
+            media_id:  gal.media_id,
+            nombre:    gal.nombre,
+            num_pages: gal.num_pages,
+            paths:     gal.paths,
+            fecha:     gal.fecha,
+          };
+          masterZip.file('galeria.json', JSON.stringify(meta, null, 2));
+          masterZip.file('images.zip', reg.blob);
+          const blob = await masterZip.generateAsync({ type: 'blob' });
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url;
+          a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          actualizarStatus('✅ Exportado: ' + gal.nombre);
+        } catch(err) { actualizarStatus('❌ ' + err.message); }
+      }
+
       // — Render hitomi —
       async function renderHitomi(contenedor) {
         contenedor.innerHTML = '';
@@ -2506,13 +2611,13 @@
             renderHitomi(contenedor);
           };
 
-          // Botón descargar ZIP (solo cuando hay ZIP)
+          // Botón exportar (solo cuando hay ZIP)
           if (gal.zip_id) {
             const dlBtn = document.createElement('button');
             dlBtn.className = 'bv-menu-btn';
             dlBtn.textContent = '🔽';
             dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            dlBtn.onclick = e => { e.stopPropagation(); htExportarGaleria(gal); };
             card.appendChild(dlBtn);
           }
 
@@ -2838,34 +2943,7 @@
             dlBtn.className = 'bv-menu-btn';
             dlBtn.textContent = '🔽';
             dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
-            card.appendChild(dlBtn);
-          }
-
-          if (gal.zip_id) {
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'bv-menu-btn';
-            dlBtn.textContent = '🔽';
-            dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
-            card.appendChild(dlBtn);
-          }
-
-          if (gal.zip_id) {
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'bv-menu-btn';
-            dlBtn.textContent = '🔽';
-            dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
-            card.appendChild(dlBtn);
-          }
-
-          if (gal.zip_id) {
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'bv-menu-btn';
-            dlBtn.textContent = '🔽';
-            dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            dlBtn.onclick = e => { e.stopPropagation(); nhExportarGaleria(gal); };
             card.appendChild(dlBtn);
           }
 
