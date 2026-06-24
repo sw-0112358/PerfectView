@@ -1616,11 +1616,24 @@
       ============================================= */
 
       function mostrarFrame() {
+        desactivarFullscreen();
         document.getElementById('frameMain').style.display = 'block';
         document.getElementById('pantalla2').style.display = 'none';
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '🖼️';
         fab.classList.remove('fab-transparente');
+      }
+
+      function activarFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      }
+
+      function desactivarFullscreen() {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
       }
 
       function mostrarVisor(reset = true) {
@@ -1635,6 +1648,7 @@
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '📖';
         fab.classList.add('fab-transparente');
+        activarFullscreen();
       }
 
       function traslape() {
@@ -1814,6 +1828,7 @@
 
       // — Modal PIN —
       function bvMostrarModalPIN(callback) {
+        desactivarFullscreen();
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
 
