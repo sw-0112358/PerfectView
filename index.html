@@ -2057,8 +2057,25 @@
       }
 
       async function htFetchGG() {
-        const resp = await fetch(CF_WORKER.replace(/\/$/, '') + '/gg?' + Date.now());
-        const js   = await resp.text();
+        const ggUrl = 'https://ltn.gold-usergeneratedcontent.net/gg.js?nc=' + Date.now();
+        let js = null;
+
+        // Intento 1: fetch directo desde el browser
+        try {
+          const r = await fetch(ggUrl, { cache: 'no-store', credentials: 'omit' });
+          if (r.ok) js = await r.text();
+        } catch(e) {}
+
+        // Intento 2: vía Worker /raw como fallback
+        if (!js && CF_WORKER) {
+          try {
+            const r = await fetch(CF_WORKER.replace(/\/$/, '') + '/raw?target=' + encodeURIComponent(ggUrl));
+            if (r.ok) js = await r.text();
+          } catch(e) {}
+        }
+
+        if (!js) throw new Error('No se pudo obtener gg.js');
+
         const bMatch       = js.match(/b:\s*'([^']+)'/);
         const b            = bMatch ? bMatch[1] : '1782255601/';
         const defaultMatch = js.match(/var o = (\d+);/);
