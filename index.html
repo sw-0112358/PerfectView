@@ -1621,10 +1621,6 @@
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '🖼️';
         fab.classList.remove('fab-transparente');
-        // Salir de pantalla completa al volver al menú
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
       }
 
       function mostrarVisor(reset = true) {
@@ -1639,10 +1635,6 @@
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '📖';
         fab.classList.add('fab-transparente');
-        // Pantalla completa automática al entrar al visor (solo si no hay modal PIN activo)
-        if (!document.fullscreenElement && !document.querySelector('._bv_pin_overlay')) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
       }
 
       function traslape() {
@@ -1823,10 +1815,7 @@
       // — Modal PIN —
       function bvMostrarModalPIN(callback) {
         const overlay = document.createElement('div');
-        overlay.className = '_bv_pin_overlay';
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
-        // Salir de pantalla completa para que el teclado funcione
-        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 
         const card = document.createElement('div');
         card.style.cssText = 'background:var(--surface);border-radius:var(--radius-lg);padding:32px 28px;width:min(320px,90vw);text-align:center;box-shadow:var(--shadow-lg)';
