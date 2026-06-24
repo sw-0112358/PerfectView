@@ -1651,7 +1651,7 @@
       function visorSiguienteCap() {
         if (!_visorContexto) return null;
         const { tipo } = _visorContexto;
-        if (tipo === 'hitomi' || tipo === 'nhentai') {
+        if (tipo === 'hitomi' || tipo === 'nhentai' || tipo === 'mangas') {
           const { galeria, galerias } = _visorContexto;
           const idx = galerias.findIndex(g => g.id === galeria.id);
           if (idx === -1 || idx >= galerias.length - 1) return null;
@@ -1671,6 +1671,8 @@
           await htAbrirEnVisor(sig);
         } else if (ctx.tipo === 'nhentai') {
           await nhAbrirEnVisor(sig);
+        } else if (ctx.tipo === 'mangas') {
+          await bovedaAbrirEnVisor(sig, ctx.galerias);
         } else {
           const dummy = document.createElement('div');
           dummy.classList = { add: () => {}, remove: () => {} };
@@ -3817,7 +3819,7 @@
           // Tap en nombre → renombrar
           footer.addEventListener('click', e => { e.stopPropagation(); bvRenombrar(item, footer); });
           // Tap en portada → abrir en visor
-          card.addEventListener('click', () => bovedaAbrirEnVisor(item.id));
+          card.addEventListener('click', () => bovedaAbrirEnVisor(item, items));
 
           grid.appendChild(card);
 
@@ -3848,19 +3850,26 @@
 
 
       // — Abrir ZIP de bóveda en el Visor —
-      async function bovedaAbrirEnVisor(id) {
+      async function bovedaAbrirEnVisor(item, todos) {
         try {
+          const id = typeof item === 'number' ? item : item.id;
           actualizarStatus('⏳ Cargando desde bóveda…');
           const registro = await bvCargar(id);
           if (!registro) { actualizarStatus('❌ Archivo no encontrado'); return; }
           archivosDescargados.length = 0;
           const zip      = await JSZip.loadAsync(registro.blob);
           const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
-          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            .filter(f => !f.dir)
+            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           for (const entrada of entradas) {
             const blob = await entrada.async('blob');
             archivosDescargados.push({ nombre: entrada.name, blob });
+          }
+          // Contexto para navegación entre mangas
+          if (todos && typeof item === 'object') {
+            _visorContexto = { tipo: 'mangas', galeria: item, galerias: todos };
+          } else {
+            _visorContexto = null;
           }
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
