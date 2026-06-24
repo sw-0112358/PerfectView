@@ -2334,7 +2334,7 @@
         galerias.forEach(gal => {
           const card = document.createElement('div');
           card.className = 'bv-cover-card';
-          card.onclick = () => htAbrirEnVisor(gal);
+          card.onclick = () => gal.zip_id ? htAbrirEnVisor(gal) : htDescargarGaleria(gal, card);
 
           const placeholder = document.createElement('div');
           placeholder.className = 'bv-cover-placeholder';
@@ -3064,13 +3064,11 @@
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado';
 
-          // 7. Cargar en visor
-          archivosDescargados.length = 0;
-          archivos.forEach(a => archivosDescargados.push(a));
-          _visorContexto = { tipo: 'samurai', coleccion, capNum: cap.num };
-          bvNavegar('pantalla1');
-          mostrarImagenesEnVisor();
-          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
+          // 7. Marcar como descargado — sin navegar automáticamente
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado — tap para abrir';
+          actualizarStatus('✅ Cap. ' + cap.num + ' listo — toca para ver');
 
         } catch(err) {
           chipEl.classList.remove('descargando');
