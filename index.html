@@ -2220,30 +2220,37 @@
         actualizarStatus('✅ ' + entradas.length + ' páginas');
       }
 
-      // — Descargar galería completa —
+      // — Descargar galería completa (paralelo, sin auto-navegar) —
       async function htDescargarGaleria(galeria, cardEl) {
-        const ph = cardEl?.querySelector('.bv-cover-placeholder');
-        if (ph) ph.textContent = '⏳';
+        const ph  = cardEl?.querySelector('.bv-cover-placeholder');
+        const img = cardEl?.querySelector('.bv-cover-img');
+        const setPh = t => { if (ph) ph.textContent = t; };
+        setPh('⏳');
         try {
           const archivos = await htDescargarPaginas(galeria, (p, t) => {
-            actualizarStatus('⏳ HT · ' + p + '/' + t);
+            setPh('⏳ ' + p + '/' + t);
           });
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
-          actualizarStatus('⏳ Creando ZIP…');
+          setPh('📦');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
           await htActualizarZip(galeria.id, zipId);
-          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-          archivosDescargados.length = 0;
-          archivos.forEach(a => archivosDescargados.push(a));
-          _visorContexto = null;
-          mostrarVisor(true);
-          mostrarImagenesEnVisor();
-          actualizarStatus('✅ ' + galeria.nombre + ' — ' + archivos.length + ' páginas');
+          galeria.zip_id = zipId;
+          if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          // Actualizar tarjeta sin navegar
+          if (cardEl) {
+            if (ph && img && archivos[0]) {
+              img.src = URL.createObjectURL(archivos[0].blob);
+              img.style.display = 'block';
+              ph.style.display  = 'none';
+            }
+            cardEl.onclick = () => htAbrirEnVisor(galeria);
+          }
+          actualizarStatus('✅ ' + galeria.nombre + ' listo — toca para ver');
         } catch(err) {
-          if (ph) ph.textContent = '⬇️';
+          setPh('⬇️');
           actualizarStatus('❌ HT: ' + err.message);
         }
       }
@@ -2368,9 +2375,9 @@
               try {
                 let gg;
                 try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
-                const lineas = gal.files.map((f, i) => {
+                const lineas = gal.files.map(f => {
                   const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
-                  return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
+                  return htConstruirUrl(f.hash, ext, gg);
                 });
                 const contenido = lineas.join('\n');
                 const blob      = new Blob([contenido], { type: 'text/plain' });
@@ -3057,19 +3064,19 @@
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado';
 
-          // 7. Cargar en visor
-          archivosDescargados.length = 0;
-          archivos.forEach(a => archivosDescargados.push(a));
-          _visorContexto = { tipo: 'samurai', coleccion, capNum: cap.num };
-          bvNavegar('pantalla1');
-          mostrarImagenesEnVisor();
-          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
+          // 7. Marcar como descargado — sin navegar automáticamente
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado — tap para abrir';
+          actualizarStatus('✅ Cap. ' + cap.num + ' listo — toca para ver');
 
         } catch(err) {
           chipEl.classList.remove('descargando');
           actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
         }
       }
+
+      // — Actualizar colección en IndexedDB —
 
       let _sjzOrdenDesc = true; // true = más reciente primero
 
@@ -3458,12 +3465,11 @@
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado';
-          archivosDescargados.length = 0;
-          archivos.forEach(a => archivosDescargados.push(a));
-          _visorContexto = { tipo: 'manhwa', coleccion, capNum: cap.num };
-          bvNavegar('pantalla1');
-          mostrarImagenesEnVisor();
-          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + archivos.length + ' imágenes');
+          // Marcar como descargado — sin navegar automáticamente
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado — tap para abrir';
+          actualizarStatus('✅ Cap. ' + cap.num + ' listo — toca para ver');
         } catch(err) {
           chipEl.classList.remove('descargando');
           actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
