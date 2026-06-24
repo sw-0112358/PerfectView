@@ -2229,6 +2229,7 @@
         try {
           const archivos = await htDescargarPaginas(galeria, (p, t) => {
             setPh('⏳ ' + p + '/' + t);
+            actualizarStatus('⏳ ' + galeria.nombre.slice(0, 20) + ' · ' + p + '/' + t);
           });
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
           setPh('📦');
@@ -3037,7 +3038,9 @@
           // 2. Descargar imágenes
           const archivos = [];
           for (let i = 0; i < imageUrls.length; i++) {
-            actualizarStatus('⏳ Cap.' + cap.num + ' · ' + (i + 1) + '/' + imageUrls.length);
+            const prog = (i + 1) + '/' + imageUrls.length;
+            actualizarStatus('⏳ Cap.' + cap.num + ' · ' + prog);
+            chipEl.textContent = prog;
             const imgUrl = imageUrls[i];
             const ext    = (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase();
             const nombre = String(i).padStart(3, '0') + '.' + ext;
@@ -3448,8 +3451,9 @@
         chipEl.classList.add('descargando');
         try {
           const archivos = await mwDescargarImagenes(coleccion.slug, cap.num, n => {
-            actualizarStatus('⏳ Cap.' + cap.num + ' · imagen ' + n);
-          });
+          actualizarStatus('⏳ Cap.' + cap.num + ' · imagen ' + n);
+          chipEl.textContent = n;
+        });        
           if (!archivos.length) throw new Error('Sin imágenes — verifica que el Worker tenga el endpoint /proxy-img');
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
