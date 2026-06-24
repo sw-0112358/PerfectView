@@ -3139,6 +3139,64 @@
 
       let _sjzOrdenDesc = true; // true = más reciente primero
 
+      // — Exportar colección completa como ZIP maestro —
+      async function sjzExportarZipCompleto(col) {
+        const descargados = await sjzListarDescargados(col.id);
+        const capsDesc    = Object.keys(descargados).map(Number).sort((a,b) => a-b);
+        if (!capsDesc.length) {
+          actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
+          return;
+        }
+        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + capsDesc.length + ' capítulo(s) descargado(s)?\n\nEsto puede tardar varios minutos según el tamaño.')) return;
+
+        actualizarStatus('⏳ Preparando exportación…');
+        try {
+          const masterZip = new JSZip();
+
+          // JSON de la colección
+          const metaJson = {
+            version:    1,
+            tipo:       'samurai',
+            nombre:     col.nombre,
+            base_url:   col.base_url,
+            fecha:      col.fecha,
+            total_caps: col.capitulos.length,
+            capitulos:  col.capitulos.map(c => ({
+              num:        c.num,
+              url:        c.url,
+              descargado: !!descargados[c.num],
+            })),
+          };
+          masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
+
+          // Agregar ZIPs de capítulos descargados
+          for (let i = 0; i < capsDesc.length; i++) {
+            const capNum = capsDesc[i];
+            const zipId  = descargados[capNum];
+            actualizarStatus('⏳ Empacando cap. ' + capNum + ' (' + (i+1) + '/' + capsDesc.length + ')…');
+            const reg = await bvCargar(zipId);
+            if (!reg) continue;
+            const nombre = 'cap_' + String(capNum).padStart(4, '0') + '.zip';
+            masterZip.file(nombre, reg.blob);
+          }
+
+          actualizarStatus('⏳ Generando ZIP maestro…');
+          const masterBlob = await masterZip.generateAsync({ type: 'blob' }, meta => {
+            actualizarStatus('⏳ Comprimiendo… ' + Math.round(meta.percent) + '%');
+          });
+
+          const url = URL.createObjectURL(masterBlob);
+          const a   = document.createElement('a');
+          a.href    = url;
+          a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          actualizarStatus('✅ Exportado: ' + capsDesc.length + ' capítulos');
+        } catch(err) {
+          actualizarStatus('❌ ' + err.message);
+        }
+      }
+
       // — Render Samurai —
       async function renderSamurai(contenedor) {
         contenedor.innerHTML = '';
@@ -3288,7 +3346,14 @@
             renderSamurai(contenedor);
           };
 
-          card.append(placeholder, img, footer, delBtn);
+          const dlBtn = document.createElement('button');
+          dlBtn.className = 'bv-menu-btn';
+          dlBtn.textContent = '📦';
+          dlBtn.style.cssText = 'top:6px;right:36px';
+          dlBtn.title = 'Exportar colección completa';
+          dlBtn.onclick = e => { e.stopPropagation(); sjzExportarZipCompleto(col); };
+
+          card.append(placeholder, img, footer, dlBtn, delBtn);
           grid.appendChild(card);
 
           // Cargar portada del capítulo 1
