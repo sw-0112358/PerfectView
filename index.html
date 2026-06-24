@@ -2032,16 +2032,6 @@
         }
       }
 
-      async function bvCopiarNombre(nombre) {
-        const texto = nombre.replace(/\.zip$/i, '');
-        try {
-          await navigator.clipboard.writeText(texto);
-          actualizarStatus('📋 Nombre copiado: ' + texto);
-        } catch {
-          prompt('Copia el nombre:', texto);
-        }
-      }
-
       // — Categorías —
       let categoriaActual = 'menu';
 
@@ -2701,6 +2691,42 @@
             renderNhentai(contenedor);
           };
 
+          if (gal.zip_id) {
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'bv-menu-btn';
+            dlBtn.textContent = '🔽';
+            dlBtn.style.cssText = 'top:6px;right:36px';
+            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            card.appendChild(dlBtn);
+          }
+
+          if (gal.zip_id) {
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'bv-menu-btn';
+            dlBtn.textContent = '🔽';
+            dlBtn.style.cssText = 'top:6px;right:36px';
+            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            card.appendChild(dlBtn);
+          }
+
+          if (gal.zip_id) {
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'bv-menu-btn';
+            dlBtn.textContent = '🔽';
+            dlBtn.style.cssText = 'top:6px;right:36px';
+            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            card.appendChild(dlBtn);
+          }
+
+          if (gal.zip_id) {
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'bv-menu-btn';
+            dlBtn.textContent = '🔽';
+            dlBtn.style.cssText = 'top:6px;right:36px';
+            dlBtn.onclick = e => { e.stopPropagation(); bovedaDescargar(gal.zip_id, gal.nombre + '.zip'); };
+            card.appendChild(dlBtn);
+          }
+
           card.append(placeholder, img, footer, delBtn);
           grid.appendChild(card);
 
@@ -2742,7 +2768,6 @@
         dd.className = 'bv-dropdown';
         const opciones = [
           { icon: '✏️', fn: () => bvRenombrar(item, footer) },
-          { icon: '📋', fn: () => bvCopiarNombre(item.nombre) },
           { icon: '🔽', fn: () => bovedaDescargar(item.id, item.nombre) },
           { icon: '🗑️', fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
         ];
@@ -3146,20 +3171,39 @@
             chip.title = yaDesc ? '✅ Cap. ' + cap.num : '⬇️ Cap. ' + cap.num;
             chip.onclick = () => sjzAbrirCapitulo(_sjzColeccionActual, cap, chip);
 
-            // Si tiene portada → crecer y mostrar imagen (igual que Manhwa)
-            if (yaDesc && zipId) {
-              bvCargarPortada(zipId).then(blob => {
-                if (!blob) return;
-                chip.textContent = '';
-                chip.classList.add('con-portada');
-                const img = document.createElement('img');
-                img.src   = URL.createObjectURL(blob);
-                const num = document.createElement('div');
-                num.className   = 'cap-num';
-                num.textContent = cap.num;
-                chip.append(img, num);
-              }).catch(() => {});
-            }
+            // Si tiene portada → crecer y mostrar imagen
+          if (yaDesc && zipId) {
+            bvCargarPortada(zipId).then(blob => {
+              if (!blob) return;
+              chip.textContent = '';
+              chip.classList.add('con-portada');
+              const img = document.createElement('img');
+              img.src = URL.createObjectURL(blob);
+              const num = document.createElement('div');
+              num.className = 'cap-num';
+              num.textContent = cap.num;
+              const dl = document.createElement('button');
+              dl.textContent = '🔽';
+              dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+              dl.onclick = async e => {
+                e.stopPropagation();
+                const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
+                if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
+              };
+              chip.append(img, num, dl);
+            }).catch(() => {});
+          } else if (yaDesc) {
+            // Chip simple descargado sin portada: agregar ícono descarga
+            const dl = document.createElement('span');
+            dl.textContent = ' 🔽';
+            dl.style.cssText = 'font-size:.6rem;cursor:pointer';
+            dl.onclick = async e => {
+              e.stopPropagation();
+              const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
+              if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
+            };
+            chip.appendChild(dl);
+          }
 
             grid.appendChild(chip);
           });
@@ -3594,11 +3638,19 @@
                 chip.textContent = '';
                 chip.classList.add('con-portada');
                 const img = document.createElement('img');
-                img.src   = URL.createObjectURL(blob);
+                img.src = URL.createObjectURL(blob);
                 const num = document.createElement('div');
-                num.className   = 'cap-num';
+                num.className = 'cap-num';
                 num.textContent = cap.num;
-                chip.append(img, num);
+                const dl = document.createElement('button');
+                dl.textContent = '🔽';
+                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+                dl.onclick = async e => {
+                  e.stopPropagation();
+                  const reg = await mwBuscarZipCapitulo(_mwColeccionActual.id, cap.num);
+                  if (reg) bovedaDescargar(reg.id, _mwColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
+                };
+                chip.append(img, num, dl);
               }).catch(() => {});
             }
 
