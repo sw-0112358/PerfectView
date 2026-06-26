@@ -4136,6 +4136,14 @@
             }
           } catch(e) {}
 
+          // Botón cambiar combinación
+          const btnCombo = document.createElement('button');
+          btnCombo.className   = 'btn-ghost btn-sm';
+          btnCombo.style.cssText = 'margin-bottom:12px;font-size:.78rem;color:var(--text-muted)';
+          btnCombo.textContent = '🔐 Cambiar combinación';
+          btnCombo.onclick     = bvCambiarCombo;
+          contenedor.appendChild(btnCombo);
+
           const folderGrid = document.createElement('div');
           folderGrid.className = 'bv-folder-grid';
 
