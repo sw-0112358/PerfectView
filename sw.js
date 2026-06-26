@@ -1,6 +1,6 @@
 // 🔧 Configuración: cambia solo estas dos constantes
 const PROJECT_NAME = "PerfectView"; // nombre del proyecto
-const VERSION = "16";                 // versión actual
+const VERSION = "17";                 // versión actual
 
 const CACHE_NAME = `${PROJECT_NAME}-cache-${VERSION}`;
 const FILES_TO_CACHE = [
