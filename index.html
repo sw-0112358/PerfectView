@@ -2225,6 +2225,17 @@
       // — Categorías —
       let categoriaActual = 'menu';
 
+      // IntersectionObserver para lazy load de portadas
+      const _bvObserver = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting && e.target._portadaLoader) {
+            e.target._portadaLoader();
+            e.target._portadaLoader = null;
+            _bvObserver.unobserve(e.target);
+          }
+        });
+      }, { rootMargin: '150px' }); // pre-carga 150px antes de entrar al viewport
+
       const BV_CARPETAS = [
         { id: 'mangas',   icon: '📚', label: 'Mangas'   },
         { id: 'samurai',  icon: '⚔️', label: 'Samurai'  },
@@ -4239,27 +4250,30 @@
 
           grid.appendChild(card);
 
-          // Cargar portada desde IndexedDB (sin abrir el ZIP)
+          // Lazy load: solo cargar portada cuando la tarjeta entre al viewport
           if (_bvPortadas[item.id]) {
             img.src = _bvPortadas[item.id];
             img.style.display = 'block';
             placeholder.style.display = 'none';
           } else {
-            bvCargarPortada(item.id).then(async blob => {
-              if (!blob) {
-                // No hay portada guardada — generarla desde el ZIP y persistirla
-                const reg = await bvCargar(item.id);
-                if (!reg) return;
-                blob = await bvExtraerPortada(reg.blob);
-                if (!blob) return;
-                bvGuardarPortada(item.id, blob).catch(() => {});
-              }
-              const url = URL.createObjectURL(blob);
-              _bvPortadas[item.id] = url;
-              img.src = url;
-              img.style.display = 'block';
-              placeholder.style.display = 'none';
-            }).catch(() => {});
+            card._portadaLoader = async () => {
+              try {
+                let blob = await bvCargarPortada(item.id);
+                if (!blob) {
+                  const reg = await bvCargar(item.id);
+                  if (!reg) return;
+                  blob = await bvExtraerPortada(reg.blob);
+                  if (!blob) return;
+                  bvGuardarPortada(item.id, blob).catch(() => {});
+                }
+                const url = URL.createObjectURL(blob);
+                _bvPortadas[item.id] = url;
+                img.src = url;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+              } catch(e) {}
+            };
+            _bvObserver.observe(card);
           }
         }
       }
