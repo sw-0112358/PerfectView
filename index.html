@@ -2381,9 +2381,10 @@
       }
 
       function bvAcceder() {
-        document.getElementById('bvEmojiOverlay').style.display = 'none';
+        _bvDesbloqueada      = true;
         _bvSeleccion        = [];
         _bvCeldaSeleccionada = null;
+        document.getElementById('bvEmojiOverlay').style.display = 'none';
         bvNavegar('pantalla3');
         renderBoveda();
       }
