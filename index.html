@@ -984,6 +984,49 @@
         padding: 60px 20px; font-size: 1rem; line-height: 2;
       }
 
+      /* ======= EMOJI BOARD ======= */
+      .bv-emoji-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.88);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column; padding: 20px;
+      }
+      .bv-emoji-tablero {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 8px; width: min(280px, 86vw);
+      }
+      .bv-emoji-cell {
+        aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+        font-size: 2rem; cursor: pointer; border-radius: 12px;
+        background: rgba(255,255,255,0.07);
+        transition: background .12s, transform .1s;
+        user-select: none; -webkit-user-select: none;
+      }
+      .bv-emoji-cell:active { transform: scale(.85); }
+      .bv-emoji-cell.bv-sel {
+        background: rgba(203,166,247,.35);
+        outline: 2.5px solid #cba6f7;
+      }
+      .bv-emoji-title {
+        color: #cdd6f4; font-size: 1.1rem; font-weight: 600;
+        margin-bottom: 18px; text-align: center;
+      }
+      .bv-emoji-hint {
+        color: #6c7086; font-size: .78rem;
+        margin-top: 14px; text-align: center; min-height: 1.2em;
+      }
+      @keyframes bvShake {
+        0%,100% { transform: translateX(0); }
+        20% { transform: translateX(-10px); }
+        40% { transform: translateX(10px); }
+        60% { transform: translateX(-7px); }
+        80% { transform: translateX(7px); }
+      }
+      .bv-emoji-shake { animation: bvShake .42s ease; }
+
 
     </style>
   </head>
@@ -1180,6 +1223,15 @@
       </div><!-- /pantalla3 -->
 
     </div><!-- /frameMain -->
+
+    <!-- ============================================================
+         EMOJI BOARD — Acceso a la Bóveda
+    ============================================================ -->
+    <div id="bvEmojiOverlay" class="bv-emoji-overlay" style="display:none">
+      <div class="bv-emoji-title" id="bvEmojiTitle">🔐 Bóveda</div>
+      <div class="bv-emoji-tablero" id="bvEmojiTablero"></div>
+      <div class="bv-emoji-hint"  id="bvEmojiHint">Toca 2 emojis en orden</div>
+    </div>
 
     <!-- ============================================================
          PANTALLA 2 — VISOR (fuera del frame)
@@ -2220,6 +2272,123 @@
         } catch(err) {
           actualizarStatus('❌ Error al renombrar: ' + err.message);
         }
+      }
+
+      /* =============================================
+         EMOJI BOARD — Acceso a bóveda
+      ============================================= */
+
+      const BV_EMOJI_POOL = [
+        '🍎','🚀','🌙','⭐','🎭','🎨','🎯','🦊',
+        '🐉','🌈','🔥','❄️','🌊','🌸','🍀','💎',
+        '🏆','🎲','🌴','🦋','🐬','🦁','🐺','🦅',
+        '🫯','🫆'  // ← emojis de la combinación maestra
+      ];
+      const BV_MASTER    = '🫯🫆';
+      const BV_COMBO_KEY = '_bv_combo';
+
+      let _bvSeleccion        = [];
+      let _bvCeldaSeleccionada = null;
+
+      function irABoveda() {
+        _bvSeleccion        = [];
+        _bvCeldaSeleccionada = null;
+        bvGenerarTablero();
+        const combo = localStorage.getItem(BV_COMBO_KEY);
+        const title = document.getElementById('bvEmojiTitle');
+        const hint  = document.getElementById('bvEmojiHint');
+        if (!combo) {
+          title.textContent = '🔐 Elige tu combinación de acceso';
+          hint.textContent  = 'Primera vez: los 2 emojis que elijas serán tu clave';
+        } else {
+          title.textContent = '🔐 Bóveda';
+          hint.textContent  = 'Toca tus 2 emojis en orden';
+        }
+        document.getElementById('bvEmojiOverlay').style.display = 'flex';
+      }
+
+      // Pool fijo de 16 — siempre el mismo orden, siempre incluye 🫯 y 🫆
+      const BV_TABLERO_FIJO = [
+        '🍎','🚀','🌙','⭐',
+        '🎨','🔥','🌸','💎',
+        '🏆','🦋','🐬','🦁',
+        '🫯','🔐','🌈','🫆'
+      ];
+
+      function bvGenerarTablero() {
+        const tablero = document.getElementById('bvEmojiTablero');
+        tablero.innerHTML = '';
+        tablero.classList.remove('bv-emoji-shake');
+        BV_TABLERO_FIJO.forEach(emoji => {
+          const cell = document.createElement('div');
+          cell.className   = 'bv-emoji-cell';
+          cell.textContent = emoji;
+          cell.onclick     = () => bvSeleccionarEmoji(emoji, cell);
+          tablero.appendChild(cell);
+        });
+      }
+
+      function bvSeleccionarEmoji(emoji, cell) {
+        if (_bvSeleccion.length >= 2) return;
+        if (_bvSeleccion.length === 0) {
+          if (_bvCeldaSeleccionada) _bvCeldaSeleccionada.classList.remove('bv-sel');
+          _bvCeldaSeleccionada = cell;
+          cell.classList.add('bv-sel');
+          _bvSeleccion = [emoji];
+          document.getElementById('bvEmojiHint').textContent = emoji + '  →  elige el segundo';
+        } else {
+          _bvSeleccion.push(emoji);
+          cell.classList.add('bv-sel');
+          bvVerificarCombo();
+        }
+      }
+
+      function bvVerificarCombo() {
+        const intento = _bvSeleccion.join('');
+        const combo   = localStorage.getItem(BV_COMBO_KEY);
+
+        // Combinación maestra — siempre abre
+        if (intento === BV_MASTER) { bvAcceder(); return; }
+
+        // Primera vez → guardar combo
+        if (!combo) {
+          localStorage.setItem(BV_COMBO_KEY, intento);
+          document.getElementById('bvEmojiHint').textContent =
+            '✅ Combinación guardada: ' + _bvSeleccion[0] + ' + ' + _bvSeleccion[1];
+          setTimeout(bvAcceder, 700);
+          return;
+        }
+
+        if (intento === combo) {
+          bvAcceder();
+        } else {
+          // Fallo → shake y regenerar
+          const tablero = document.getElementById('bvEmojiTablero');
+          tablero.classList.add('bv-emoji-shake');
+          document.getElementById('bvEmojiHint').textContent = '❌ Incorrecto — intenta de nuevo';
+          _bvSeleccion        = [];
+          _bvCeldaSeleccionada = null;
+          setTimeout(() => {
+            tablero.classList.remove('bv-emoji-shake');
+            bvGenerarTablero();
+            document.getElementById('bvEmojiHint').textContent = 'Toca tus 2 emojis en orden';
+          }, 500);
+        }
+      }
+
+      function bvAcceder() {
+        document.getElementById('bvEmojiOverlay').style.display = 'none';
+        _bvSeleccion        = [];
+        _bvCeldaSeleccionada = null;
+        bvNavegar('pantalla3');
+        renderBoveda();
+      }
+
+      // Llamar desde dentro de la bóveda para resetear la combinación
+      function bvCambiarCombo() {
+        if (!confirm('¿Borrar la combinación actual? La próxima vez que abras la bóveda elegirás una nueva.')) return;
+        localStorage.removeItem(BV_COMBO_KEY);
+        actualizarStatus('🔐 Combinación borrada — se pedirá una nueva al próximo acceso');
       }
 
       // — Categorías —
