@@ -1814,15 +1814,27 @@
       async function bvListar(categoria = 'mangas') {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
-          req.onsuccess = e => {
-            const todos = e.target.result;
-            resolve(todos.filter(r => {
-              const cat = r.categoria || 'boveda1';
-              // Registros viejos de boveda1 se muestran en Mangas
-              if (categoria === 'mangas') return cat === 'mangas' || cat === 'boveda1';
-              return cat === categoria;
-            }));
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAllKeys();
+          req.onsuccess = async e => {
+            const keys = e.target.result;
+            const metas = [];
+            for (const key of keys) {
+              const reqMeta = db.transaction('zips', 'readonly').objectStore('zips').get(key);
+              await new Promise(res => {
+                reqMeta.onsuccess = ev => {
+                  const r = ev.target.result;
+                  if (!r) { res(); return; }
+                  const cat = r.categoria || 'boveda1';
+                  const ok = categoria === 'mangas'
+                    ? (cat === 'mangas' || cat === 'boveda1')
+                    : cat === categoria;
+                  if (ok) metas.push({ id: r.id, nombre: r.nombre, fecha: r.fecha, tamaño: r.tamaño, categoria: r.categoria });
+                  res();
+                };
+                reqMeta.onerror = () => res();
+              });
+            }
+            resolve(metas);
           };
           req.onerror = e => reject(e.target.error);
         });
