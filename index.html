@@ -2287,10 +2287,14 @@
       const BV_MASTER    = '🫯🫆';
       const BV_COMBO_KEY = '_bv_combo';
 
-      let _bvSeleccion        = [];
+      let _bvSeleccion         = [];
       let _bvCeldaSeleccionada = null;
+      let _bvDesbloqueada      = false; // permanece true durante la sesión
 
       function irABoveda() {
+        // Si ya está desbloqueada en esta sesión, entrar directo
+        if (_bvDesbloqueada) { bvAcceder(); return; }
+
         _bvSeleccion        = [];
         _bvCeldaSeleccionada = null;
         bvGenerarTablero();
