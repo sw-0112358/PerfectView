@@ -66,7 +66,7 @@
         pointer-events: none;
         z-index: -1;
       }
-   
+
       .MenuFlotante {
         position: fixed;
         display: none;
@@ -91,17 +91,17 @@
         transition: opacity 0.2s ease, transform 0.2s ease;
         font-family: 'DM Sans', sans-serif;
       }
-           
+
       .MenuFlotante.visible {
         display: block;
         animation: menuIn 0.2s ease forwards;
       }
-      
+
       @keyframes menuIn {
         from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
         to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
       }
-           
+
       .MenuFlotante::-webkit-scrollbar {
         width: 4px;
       }
@@ -112,7 +112,7 @@
         background: rgba(91, 127, 255, 0.3);
         border-radius: 3px;
       }
-      
+
       /* =============================================
       PANTALLAS
       ============================================= */
@@ -871,7 +871,7 @@
         -webkit-tap-highlight-color: transparent;
       }
       .bv-cover-card:active { transform: scale(.96); }
-    
+
       .bv-cover-img {
         width: 100%; height: 100%;
         object-fit: cover;
@@ -1059,12 +1059,12 @@
               <span class="toggle-label">Descargar → Visor</span>
             </label>
           </div>
-          
+
           <div style="display:flex;gap:8px;margin-top:12px">
             <button class="btn-ghost btn-sm" onclick="cargarLinksLocal()">↺ Restaurar</button>
             <button class="btn-ghost btn-sm" onclick="guardarLinksLocal()">💾 Guardar</button>
           </div>
-     
+
         </div>
 
         <!-- Lista de links -->
@@ -1137,10 +1137,10 @@
             <button class="filter-chip active" data-val="colorMagenta"       onclick="selFiltro(this,'colorMagenta')"     >🩷 Magenta</button>
             <button class="filter-chip"        data-val="colorRosado"        onclick="selFiltro(this,'colorRosado')"      >🩷 Rosado</button>
           </div>
-        
 
-        <!-- Auto Scroll -->
-        
+
+          <!-- Auto Scroll -->
+
           <div class="card-title">🖱️ Auto Scroll</div>
           <div class="toggle-row">
             <label class="toggle">
@@ -1156,7 +1156,7 @@
           </div>
         </div>
 
-        
+
 
       </div>
 
@@ -1164,28 +1164,35 @@
            PANTALLA 3 — BÓVEDA (dentro del frame)
       ============================================================ -->
       <div id="pantalla3" style="display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
-      <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
+        <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
 
-        <div class="bv-header">
-          <div>
-            <div class="bv-titulo" style="cursor:pointer" onclick="solicitarPersistencia()">🏛️ Bóveda</div>
-            <div id="bvEspacio" style="font-size:.72rem;color:var(--text-muted);margin-top:3px;cursor:pointer" onclick="bvVerEspacio()">📦 calculando…</div>
+          <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
+            <div class="bv-titulo" style="cursor:pointer;margin-bottom:4px" onclick="solicitarPersistencia()">🏛️ Bóveda</div>
+            <div id="bvEspacio" style="font-size:.72rem;color:var(--text-muted);margin-bottom:12px;cursor:pointer" onclick="bvVerEspacio()">📦 calculando…</div>
+            <div class="action-grid">
+              <button class="action-btn" style="flex:1;min-width:140px" onclick="bvBloquear()">
+                <span class="icon">🔒</span> Bloquear
+              </button>
+              <button class="action-btn" style="flex:1;min-width:140px" onclick="bvLimpiarTemp()">
+                <span class="icon">✨</span> Limpiar caché
+              </button>
+              <button class="action-btn" style="flex:1;min-width:140px" id="btnFullscreen" onclick="toggleFullscreen()">
+                <span class="icon">⛶</span> Pantalla completa
+              </button>
+              <button class="action-btn" style="flex:1;min-width:140px" onclick="bvNavegar('pantalla1')">
+                <span class="icon">←</span> Volver
+              </button>
+            </div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn-ghost btn-sm" onclick="bvBloquear()">🔒 Bloquear</button>
-            <button class="btn-ghost btn-sm" onclick="bvLimpiarTemp()">✨</button>
-            <button class="btn-ghost btn-sm" onclick="bvNavegar('pantalla1')">← Volver</button>
+
+          <div id="bvToolbar" class="bv-toolbar" style="display:none">
+            <button class="action-btn" onclick="importarZipBoveda()">
+              <span class="icon">📂</span> Importar ZIP
+            </button>
           </div>
-        </div>
 
-        <div id="bvToolbar" class="bv-toolbar" style="display:none">
-          <button class="action-btn" onclick="importarZipBoveda()">
-            <span class="icon">📂</span> Importar ZIP
-          </button>
+          <div id="bvLista"></div>
         </div>
-
-        <div id="bvLista"></div>
-      </div>
       </div><!-- /pantalla3 -->
 
     </div><!-- /frameMain -->
@@ -1529,8 +1536,8 @@
             btn.style.cssText = 'width:100%;padding:14px;font-size:1rem;';
             const esGaleria = _visorContexto && (_visorContexto.tipo === 'hitomi' || _visorContexto.tipo === 'nhentai' || _visorContexto.tipo === 'mangas');
             const sigNombre = esGaleria
-              ? (sig.nombre || '').replace(/\.zip$/i, '').slice(0, 25)
-              : 'Cap. ' + sig.num;
+            ? (sig.nombre || '').replace(/\.zip$/i, '').slice(0, 25)
+            : 'Cap. ' + sig.num;
             btn.textContent = '▶️ Siguiente · ' + sigNombre;
             btn.onclick = visorCargarSiguiente;
             sentinel.appendChild(btn);
@@ -1656,7 +1663,6 @@
       ============================================= */
 
       function mostrarFrame() {
-        desactivarFullscreen();
         document.getElementById('frameMain').style.display = 'block';
         document.getElementById('pantalla2').style.display = 'none';
         const fab = document.getElementById('fabPantalla');
@@ -1676,6 +1682,22 @@
         }
       }
 
+      function toggleFullscreen() {
+        const btn = document.getElementById('btnFullscreen');
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+          if (btn) btn.textContent = '⛶';
+        } else {
+          document.documentElement.requestFullscreen().catch(() => {});
+          if (btn) btn.textContent = '✕⛶';
+        }
+      }
+
+      document.addEventListener('fullscreenchange', () => {
+        const btn = document.getElementById('btnFullscreen');
+        if (btn) btn.textContent = document.fullscreenElement ? '✕⛶' : '⛶';
+      });
+
       function mostrarVisor(reset = true) {
         document.getElementById('frameMain').style.display = 'none';
         document.getElementById('pantalla2').style.display = 'block';
@@ -1688,7 +1710,6 @@
         const fab = document.getElementById('fabPantalla');
         fab.textContent = '📖';
         fab.classList.add('fab-transparente');
-        activarFullscreen();
       }
 
       function traslape() {
@@ -1829,7 +1850,7 @@
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('descargas_temp', 'readonly')
-                        .objectStore('descargas_temp').get(slotId);
+          .objectStore('descargas_temp').get(slotId);
           req.onsuccess = e => resolve(e.target.result || null);
           req.onerror   = e => reject(e.target.error);
         });
@@ -1849,7 +1870,7 @@
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('descargas_temp', 'readonly')
-                        .objectStore('descargas_temp').getAll();
+          .objectStore('descargas_temp').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -1874,14 +1895,14 @@
           req.onsuccess = e => {
             const todos = e.target.result;
             resolve(todos
-              .filter(r => {
-                const cat = r.categoria || 'boveda1';
-                return categoria === 'mangas'
-                  ? (cat === 'mangas' || cat === 'boveda1')
-                  : cat === categoria;
-              })
-              .map(r => ({ id: r.id, nombre: r.nombre, fecha: r.fecha, tamaño: r.tamaño, categoria: r.categoria }))
-            );
+                    .filter(r => {
+              const cat = r.categoria || 'boveda1';
+              return categoria === 'mangas'
+                ? (cat === 'mangas' || cat === 'boveda1')
+              : cat === categoria;
+            })
+                    .map(r => ({ id: r.id, nombre: r.nombre, fecha: r.fecha, tamaño: r.tamaño, categoria: r.categoria }))
+                   );
           };
           req.onerror = e => reject(e.target.error);
         });
@@ -1928,7 +1949,7 @@
         actualizarStatus('✅ Bóveda limpiada completamente');
         renderBoveda();
       }
-      
+
       async function calcularTamañoStore(storeName) {
         try {
           const db   = await bvAbrirDB();
@@ -2012,7 +2033,6 @@
 
       // — Modal PIN —
       function bvMostrarModalPIN(callback) {
-        desactivarFullscreen();
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
 
@@ -2250,8 +2270,8 @@
 
         // Importar cada cap_XXXX.zip
         const archivosZip = Object.keys(zip.files)
-          .filter(n => /^cap_\d+\.zip$/i.test(n))
-          .sort();
+        .filter(n => /^cap_\d+\.zip$/i.test(n))
+        .sort();
 
         let ok = 0;
         for (let i = 0; i < archivosZip.length; i++) {
@@ -2267,8 +2287,8 @@
             // Portada desde primera imagen del cap
             JSZip.loadAsync(blob).then(capZip => {
               const imgs = Object.values(capZip.files)
-                .filter(f => !f.dir)
-                .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+              .filter(f => !f.dir)
+              .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
               if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
             }).catch(() => {});
             ok++;
@@ -2303,8 +2323,8 @@
         }
 
         const archivosZip = Object.keys(zip.files)
-          .filter(n => /^cap_\d+\.zip$/i.test(n))
-          .sort();
+        .filter(n => /^cap_\d+\.zip$/i.test(n))
+        .sort();
 
         let ok = 0;
         for (let i = 0; i < archivosZip.length; i++) {
@@ -2319,8 +2339,8 @@
             );
             JSZip.loadAsync(blob).then(capZip => {
               const imgs = Object.values(capZip.files)
-                .filter(f => !f.dir)
-                .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+              .filter(f => !f.dir)
+              .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
               if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
             }).catch(() => {});
             ok++;
@@ -2606,7 +2626,7 @@
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('ht_galerias', 'readonly')
-                        .objectStore('ht_galerias').getAll();
+          .objectStore('ht_galerias').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -2617,7 +2637,7 @@
         return new Promise((resolve, reject) => {
           const tx  = db.transaction('ht_galerias', 'readwrite');
           const req = tx.objectStore('ht_galerias')
-                        .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
+          .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
@@ -2722,16 +2742,16 @@
         const slot = await dtCargar(slotId);
         if (slot && slot.imagenes && slot.imagenes.length > 0) {
           return slot.imagenes.sort((a, b) =>
-            a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
-          );
+                                    a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
+                                   );
         }
         // Fallback — descomprimir ZIP y guardar en slot para próxima vez
         const reg = await bvCargar(zipId);
         if (!reg) return null;
         const zip      = await JSZip.loadAsync(reg.blob);
         const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
-          .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        .filter(f => !f.dir)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         const imagenes = [];
         for (const e of entradas) {
           const blob = await e.async('blob');
@@ -2775,51 +2795,51 @@
           actualizarStatus('⏳ Reanudando: ' + galeria.nombre + ' · ' + slotPrevio.imagenes.length + ' ya descargadas');
           try {
             // Regenerar entradas frescas — gg.js puede haber cambiado
-              let gg;
-              try { gg = await htFetchGG(); } catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
-              const referer      = 'https://hitomi.la/reader/' + galeria.ht_id + '.html';
-              const todasEntradas = galeria.files.map((file, i) => {
-                const ext = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
-                return { nombre: String(i + 1).padStart(3, '0') + '.' + ext, url: htConstruirUrl(file.hash, ext, gg) };
-              });
-              const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
-              const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
-              const nuevas = entradasPend.length > 0
-                ? await batchDescargar(entradasPend, {
-                    'Referer': referer,
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-                    'Accept-Language': 'es-ES,es;q=0.9',
-                  }, (n, t) => {
-                    setPh('⏳ ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
-                    actualizarStatus('⏳ ' + galeria.nombre.slice(0, 20) + ' · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
-                  }, false, slotId)
-                : [];
-              const archivos = [...slotPrevio.imagenes, ...nuevas]
-                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-              setPh('📦');
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
-              await htActualizarZip(galeria.id, zipId);
-              galeria.zip_id = zipId;
-              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-              await dtEliminar(slotId);
-              if (cardEl) {
-                if (ph && img && archivos[0]) {
-                  img.src = URL.createObjectURL(archivos[0].blob);
-                  img.style.display = 'block';
-                  ph.style.display  = 'none';
-                }
-                cardEl.onclick = () => htAbrirEnVisor(galeria);
+            let gg;
+            try { gg = await htFetchGG(); } catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
+            const referer      = 'https://hitomi.la/reader/' + galeria.ht_id + '.html';
+            const todasEntradas = galeria.files.map((file, i) => {
+              const ext = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
+              return { nombre: String(i + 1).padStart(3, '0') + '.' + ext, url: htConstruirUrl(file.hash, ext, gg) };
+            });
+            const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
+            const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+            const nuevas = entradasPend.length > 0
+            ? await batchDescargar(entradasPend, {
+              'Referer': referer,
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+              'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+              'Accept-Language': 'es-ES,es;q=0.9',
+            }, (n, t) => {
+              setPh('⏳ ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
+              actualizarStatus('⏳ ' + galeria.nombre.slice(0, 20) + ' · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
+            }, false, slotId)
+            : [];
+            const archivos = [...slotPrevio.imagenes, ...nuevas]
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            setPh('📦');
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
+            await htActualizarZip(galeria.id, zipId);
+            galeria.zip_id = zipId;
+            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            await dtEliminar(slotId);
+            if (cardEl) {
+              if (ph && img && archivos[0]) {
+                img.src = URL.createObjectURL(archivos[0].blob);
+                img.style.display = 'block';
+                ph.style.display  = 'none';
               }
-              actualizarStatus('✅ ' + galeria.nombre + ' completado — ' + archivos.length + ' imágenes');
-            } catch(err) {
-              setPh('⬇️');
-              actualizarStatus('❌ HT reanudación: ' + err.message);
+              cardEl.onclick = () => htAbrirEnVisor(galeria);
             }
-            return;
+            actualizarStatus('✅ ' + galeria.nombre + ' completado — ' + archivos.length + ' imágenes');
+          } catch(err) {
+            setPh('⬇️');
+            actualizarStatus('❌ HT reanudación: ' + err.message);
+          }
+          return;
         }
 
         try {
@@ -3010,14 +3030,14 @@
         panel.className = 'sjz-panel';
         panel.innerHTML =
           '<div class="sjz-panel-title">🌸 hitomi.la</div>'
-        + '<div class="sjz-row">'
-        +   '<input class="sjz-input" id="htUrl" placeholder="https://hitomi.la/.../ID.html" type="url">'
-        +   '<button class="sjz-btn sjz-btn-secondary" onclick="htBuscarInfo()">🔍</button>'
-        + '</div>'
-        + '<div class="sjz-info" id="htInfo"></div>'
-        + '<div id="htBtnDescargar" style="display:none;margin-top:8px">'
-        +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">➕ Agregar a biblioteca</button>'
-        + '</div>';
+          + '<div class="sjz-row">'
+          +   '<input class="sjz-input" id="htUrl" placeholder="https://hitomi.la/.../ID.html" type="url">'
+          +   '<button class="sjz-btn sjz-btn-secondary" onclick="htBuscarInfo()">🔍</button>'
+          + '</div>'
+          + '<div class="sjz-info" id="htInfo"></div>'
+          + '<div id="htBtnDescargar" style="display:none;margin-top:8px">'
+          +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">➕ Agregar a biblioteca</button>'
+          + '</div>';
         contenedor.appendChild(panel);
 
         let galerias;
@@ -3092,7 +3112,7 @@
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('nh_galerias', 'readonly')
-                        .objectStore('nh_galerias').getAll();
+          .objectStore('nh_galerias').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -3103,7 +3123,7 @@
         return new Promise((resolve, reject) => {
           const tx  = db.transaction('nh_galerias', 'readwrite');
           const req = tx.objectStore('nh_galerias')
-                        .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
+          .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
@@ -3149,7 +3169,7 @@
         // Extraer el JSON embebido: <script type="application/json" data-sveltekit-fetched ...>
         // Buscar el script tag que contiene la data de la galería (data-url con /api/v2/galleries/)
         const matches = [...html.matchAll(/<script type="application\/json" data-sveltekit-fetched[^>]*data-url="([^"]*)"[^>]*>([\s\S]*?)<\/script>/g)];
-        
+
         let data = null;
         for (const m of matches) {
           const dataUrl = m[1];
@@ -3182,8 +3202,8 @@
         const entradas = [];
         for (let i = 0; i < galeria.num_pages; i++) {
           const path = galeria.paths
-            ? galeria.paths[i]
-            : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
+          ? galeria.paths[i]
+          : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
           const ext = path.split('.').pop() || 'webp';
           entradas.push({
             nombre: String(i + 1).padStart(3, '0') + '.' + ext,
@@ -3239,14 +3259,14 @@
             const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
             const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
             const nuevas = entradasPend.length > 0
-              ? await nhDescargarPaginas(entradasPend, (n, t) => {
-                  const total = slotPrevio.imagenes.length + n;
-                  setPh('⏳ ' + total + '/' + todasEntradas.length);
-                  actualizarStatus('⏳ NH · ' + total + '/' + todasEntradas.length);
-                }, slotId)
-              : [];
+            ? await nhDescargarPaginas(entradasPend, (n, t) => {
+              const total = slotPrevio.imagenes.length + n;
+              setPh('⏳ ' + total + '/' + todasEntradas.length);
+              actualizarStatus('⏳ NH · ' + total + '/' + todasEntradas.length);
+            }, slotId)
+            : [];
             const archivos = [...slotPrevio.imagenes, ...nuevas]
-              .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
             if (archivos.length < todasEntradas.length) {
               actualizarStatus('⚠️ Solo ' + archivos.length + '/' + todasEntradas.length + ' — reintentando al reabrir');
               setPh('⬇️');
@@ -3402,14 +3422,14 @@
         panel.className = 'sjz-panel';
         panel.innerHTML =
           '<div class="sjz-panel-title">🪷 nhentai.net</div>'
-        + '<div class="sjz-row">'
-        +   '<input class="sjz-input" id="nhUrl" placeholder="https://nhentai.net/g/658697/" type="url">'
-        +   '<button class="sjz-btn sjz-btn-secondary" onclick="nhBuscarInfo()">🔍</button>'
-        + '</div>'
-        + '<div class="sjz-info" id="nhInfo"></div>'
-        + '<div id="nhBtnDescargar" style="display:none;margin-top:8px">'
-        +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="nhConfirmarDescarga()">⬇️ Descargar</button>'
-        + '</div>';
+          + '<div class="sjz-row">'
+          +   '<input class="sjz-input" id="nhUrl" placeholder="https://nhentai.net/g/658697/" type="url">'
+          +   '<button class="sjz-btn sjz-btn-secondary" onclick="nhBuscarInfo()">🔍</button>'
+          + '</div>'
+          + '<div class="sjz-info" id="nhInfo"></div>'
+          + '<div id="nhBtnDescargar" style="display:none;margin-top:8px">'
+          +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="nhConfirmarDescarga()">⬇️ Descargar</button>'
+          + '</div>';
         contenedor.appendChild(panel);
 
         let galerias;
@@ -3445,8 +3465,8 @@
                 const links = [];
                 for (let i = 0; i < gal.num_pages; i++) {
                   const path = gal.paths
-                    ? gal.paths[i]
-                    : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
+                  ? gal.paths[i]
+                  : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
                   links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
                 }
                 const blob = new Blob([links.join('\n')], { type: 'text/plain' });
@@ -3532,7 +3552,7 @@
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('sjz_colecciones', 'readonly')
-                        .objectStore('sjz_colecciones').getAll();
+          .objectStore('sjz_colecciones').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -3543,7 +3563,7 @@
         return new Promise((resolve, reject) => {
           const tx  = db.transaction('sjz_colecciones', 'readwrite');
           const req = tx.objectStore('sjz_colecciones')
-                        .add({ nombre, base_url, capitulos, fecha: new Date().toISOString() });
+          .add({ nombre, base_url, capitulos, fecha: new Date().toISOString() });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
@@ -3790,8 +3810,8 @@
           actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
           const zip      = await JSZip.loadAsync(existente.blob);
           const entradas = Object.values(zip.files)
-            .filter(f => !f.dir)
-            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .filter(f => !f.dir)
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           archivosDescargados.length = 0;
           for (const e of entradas) {
             archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
@@ -3813,56 +3833,56 @@
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
           chipEl.classList.add('descargando');
           actualizarStatus('⏳ Reanudando cap. ' + cap.num + ' · ' + slotPrevio.imagenes.length + ' ya descargadas…');
-            try {
-              const base     = CF_WORKER.replace(/\/$/, '');
-              const html     = await fetch(base + '/raw?target=' + encodeURIComponent(cap.url)).then(r => r.text());
-              const imageUrls = sjzExtraerImagenes(html);
-              if (!imageUrls.length) throw new Error('No se encontraron imágenes');
+          try {
+            const base     = CF_WORKER.replace(/\/$/, '');
+            const html     = await fetch(base + '/raw?target=' + encodeURIComponent(cap.url)).then(r => r.text());
+            const imageUrls = sjzExtraerImagenes(html);
+            if (!imageUrls.length) throw new Error('No se encontraron imágenes');
 
-              // Nombres ya descargados
-              const nombresYaDescargados = new Set(slotPrevio.imagenes.map(a => a.nombre));
+            // Nombres ya descargados
+            const nombresYaDescargados = new Set(slotPrevio.imagenes.map(a => a.nombre));
 
-              // Entradas pendientes — las que aún no están en el slot
-              const todasEntradas = imageUrls.map((imgUrl, i) => ({
-                nombre: String(i).padStart(3, '0') + '.' + (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase(),
-                url:    imgUrl
-              }));
-              const entradasPendientes = todasEntradas.filter(e => !nombresYaDescargados.has(e.nombre));
+            // Entradas pendientes — las que aún no están en el slot
+            const todasEntradas = imageUrls.map((imgUrl, i) => ({
+              nombre: String(i).padStart(3, '0') + '.' + (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase(),
+              url:    imgUrl
+            }));
+            const entradasPendientes = todasEntradas.filter(e => !nombresYaDescargados.has(e.nombre));
 
-              actualizarStatus('⏳ Cap.' + cap.num + ' · reanudando ' + entradasPendientes.length + ' restantes…');
+            actualizarStatus('⏳ Cap.' + cap.num + ' · reanudando ' + entradasPendientes.length + ' restantes…');
 
-              // Descargar solo las pendientes
-              const nuevas = entradasPendientes.length > 0
-                ? await batchDescargar(entradasPendientes, null, (n, t) => {
-                    const prog = (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length;
-                    actualizarStatus('⏳ Cap.' + cap.num + ' · ' + prog);
-                    chipEl.textContent = prog;
-                  }, false, slotId)
-                : [];
+            // Descargar solo las pendientes
+            const nuevas = entradasPendientes.length > 0
+            ? await batchDescargar(entradasPendientes, null, (n, t) => {
+              const prog = (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length;
+              actualizarStatus('⏳ Cap.' + cap.num + ' · ' + prog);
+              chipEl.textContent = prog;
+            }, false, slotId)
+            : [];
 
-              // Combinar previas + nuevas y ordenar por nombre
-              const archivos = [...slotPrevio.imagenes, ...nuevas]
-                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            // Combinar previas + nuevas y ordenar por nombre
+            const archivos = [...slotPrevio.imagenes, ...nuevas]
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
 
-              // Crear ZIP y guardar
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              const zipId   = await sjzGuardarCapitulo(
-                coleccion.nombre + ' - Cap ' + cap.num + '.zip',
-                zipBlob, coleccion.id, cap.num
-              );
-              if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-              await dtEliminar(slotId);
-              chipEl.classList.remove('descargando');
-              chipEl.classList.add('descargado');
-              chipEl.title = '✅ Descargado — tap para abrir';
-              actualizarStatus('✅ Cap. ' + cap.num + ' completado — ' + archivos.length + ' imágenes');
-            } catch(err) {
-              chipEl.classList.remove('descargando');
-              actualizarStatus('❌ Error al reanudar: ' + err.message);
-            }
-            return;
+            // Crear ZIP y guardar
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipId   = await sjzGuardarCapitulo(
+              coleccion.nombre + ' - Cap ' + cap.num + '.zip',
+              zipBlob, coleccion.id, cap.num
+            );
+            if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            await dtEliminar(slotId);
+            chipEl.classList.remove('descargando');
+            chipEl.classList.add('descargado');
+            chipEl.title = '✅ Descargado — tap para abrir';
+            actualizarStatus('✅ Cap. ' + cap.num + ' completado — ' + archivos.length + ' imágenes');
+          } catch(err) {
+            chipEl.classList.remove('descargando');
+            actualizarStatus('❌ Error al reanudar: ' + err.message);
+          }
+          return;
         }
 
         chipEl.classList.add('descargando');
@@ -4065,8 +4085,8 @@
           try { descargados = await sjzListarDescargados(_sjzColeccionActual.id); } catch(e) {}
 
           const capsOrdenadas = _sjzOrdenDesc
-            ? [..._sjzColeccionActual.capitulos].reverse()
-            : [..._sjzColeccionActual.capitulos];
+          ? [..._sjzColeccionActual.capitulos].reverse()
+          : [..._sjzColeccionActual.capitulos];
 
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
@@ -4080,38 +4100,38 @@
             chip.onclick = () => sjzAbrirCapitulo(_sjzColeccionActual, cap, chip);
 
             // Si tiene portada → crecer y mostrar imagen
-          if (yaDesc && zipId) {
-            bvCargarPortada(zipId).then(blob => {
-              if (!blob) return;
-              chip.textContent = '';
-              chip.classList.add('con-portada');
-              const img = document.createElement('img');
-              img.src = URL.createObjectURL(blob);
-              const num = document.createElement('div');
-              num.className = 'cap-num';
-              num.textContent = cap.num;
-              const dl = document.createElement('button');
-              dl.textContent = '🔽';
-              dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+            if (yaDesc && zipId) {
+              bvCargarPortada(zipId).then(blob => {
+                if (!blob) return;
+                chip.textContent = '';
+                chip.classList.add('con-portada');
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(blob);
+                const num = document.createElement('div');
+                num.className = 'cap-num';
+                num.textContent = cap.num;
+                const dl = document.createElement('button');
+                dl.textContent = '🔽';
+                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+                dl.onclick = async e => {
+                  e.stopPropagation();
+                  const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
+                  if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
+                };
+                chip.append(img, num, dl);
+              }).catch(() => {});
+            } else if (yaDesc) {
+              // Chip simple descargado sin portada: agregar ícono descarga
+              const dl = document.createElement('span');
+              dl.textContent = ' 🔽';
+              dl.style.cssText = 'font-size:.6rem;cursor:pointer';
               dl.onclick = async e => {
                 e.stopPropagation();
                 const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
                 if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
               };
-              chip.append(img, num, dl);
-            }).catch(() => {});
-          } else if (yaDesc) {
-            // Chip simple descargado sin portada: agregar ícono descarga
-            const dl = document.createElement('span');
-            dl.textContent = ' 🔽';
-            dl.style.cssText = 'font-size:.6rem;cursor:pointer';
-            dl.onclick = async e => {
-              e.stopPropagation();
-              const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
-              if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
-            };
-            chip.appendChild(dl);
-          }
+              chip.appendChild(dl);
+            }
 
             grid.appendChild(chip);
           });
@@ -4130,18 +4150,18 @@
         panel.className = 'sjz-panel';
         panel.innerHTML =
           '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
-        + '<div class="sjz-row">'
-        +   '<input class="sjz-input" id="sjzUrl" placeholder="https://samurai.j5z.xyz/son/manga-slug/" type="url">'
-        +   '<button class="sjz-btn sjz-btn-secondary" onclick="sjzVerEpisodios()">🔍 Ver</button>'
-        + '</div>'
-        + '<div class="sjz-info" id="sjzInfo"></div>'
-        + '<div class="sjz-row">'
-        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
-        +   '<input class="sjz-input sjz-input-sm" id="sjzInicio" type="number" min="1" placeholder="1">'
-        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
-        +   '<input class="sjz-input sjz-input-sm" id="sjzFinal" type="number" min="1" placeholder="872">'
-        +   '<button class="sjz-btn sjz-btn-primary" onclick="sjzCrearCarpeta()">📁 Crear</button>'
-        + '</div>';
+          + '<div class="sjz-row">'
+          +   '<input class="sjz-input" id="sjzUrl" placeholder="https://samurai.j5z.xyz/son/manga-slug/" type="url">'
+          +   '<button class="sjz-btn sjz-btn-secondary" onclick="sjzVerEpisodios()">🔍 Ver</button>'
+          + '</div>'
+          + '<div class="sjz-info" id="sjzInfo"></div>'
+          + '<div class="sjz-row">'
+          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+          +   '<input class="sjz-input sjz-input-sm" id="sjzInicio" type="number" min="1" placeholder="1">'
+          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+          +   '<input class="sjz-input sjz-input-sm" id="sjzFinal" type="number" min="1" placeholder="872">'
+          +   '<button class="sjz-btn sjz-btn-primary" onclick="sjzCrearCarpeta()">📁 Crear</button>'
+          + '</div>';
         contenedor.appendChild(panel);
 
         // Lista de colecciones guardadas
@@ -4222,7 +4242,7 @@
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('mw_colecciones', 'readonly')
-                        .objectStore('mw_colecciones').getAll();
+          .objectStore('mw_colecciones').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -4233,7 +4253,7 @@
         return new Promise((resolve, reject) => {
           const tx  = db.transaction('mw_colecciones', 'readwrite');
           const req = tx.objectStore('mw_colecciones')
-                        .add({ nombre, base_url, slug, capitulos, fecha: new Date().toISOString() });
+          .add({ nombre, base_url, slug, capitulos, fecha: new Date().toISOString() });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
@@ -4358,9 +4378,9 @@
           renderManhwa(document.getElementById('bvLista'));
         } catch(err) { info.textContent = '❌ ' + err.message; }
       }
-      
+
       // — Fetch genérico con Referer vía Worker —
-      
+
 
 
       function crearTarjeta(cfg) {
@@ -4397,7 +4417,7 @@
           delBtn.textContent = cfg.btnMenu || '🗑️';
           delBtn.onclick = cfg.btnMenu
             ? e => { e.stopPropagation(); cfg.onDelete(delBtn, card, footer); }
-            : async e => { e.stopPropagation(); if (!confirm('¿Eliminar "' + cfg.nombre + '"?')) return; await cfg.onDelete(); };
+          : async e => { e.stopPropagation(); if (!confirm('¿Eliminar "' + cfg.nombre + '"?')) return; await cfg.onDelete(); };
           card.appendChild(delBtn);
         }
 
@@ -4428,7 +4448,7 @@
       async function proxyImagen(url, referer) {
         if (!CF_WORKER) return null;
         const endpoint = CF_WORKER.replace(/\/$/, '') + '/proxy-img?target='
-          + encodeURIComponent(url) + '&referer=' + encodeURIComponent(referer);
+        + encodeURIComponent(url) + '&referer=' + encodeURIComponent(referer);
         try {
           const resp = await fetch(endpoint);
           if (!resp.ok) return null;
@@ -4446,7 +4466,7 @@
         for (const cdn of cdns) {
           for (const ext of exts) {
             const url  = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
-                       + '/chapter_' + capNum + '/ver_01/001.' + ext;
+            + '/chapter_' + capNum + '/ver_01/001.' + ext;
             const blob = await proxyImagen(url, 'https://manhwaweb.com/');
             if (blob) return { cdn, ext, primerBlob: blob };
           }
@@ -4462,7 +4482,7 @@
 
         const { cdn, ext } = desc;
         const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
-                      + '/chapter_' + capNum + '/ver_01/';
+        + '/chapter_' + capNum + '/ver_01/';
 
         // Pre-construir lista hasta 300 — el Worker detiene al fallar
         const entradas = [];
@@ -4480,7 +4500,7 @@
           'Accept-Language': 'es-ES,es;q=0.9',
         }, onProgreso, true, slotId);
       }
-      
+
 
       // — Abrir capítulo Manhwa —
       async function mwAbrirCapitulo(coleccion, cap, chipEl) {
@@ -4489,8 +4509,8 @@
           actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
           const zip      = await JSZip.loadAsync(existente.blob);
           const entradas = Object.values(zip.files)
-            .filter(f => !f.dir)
-            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .filter(f => !f.dir)
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           archivosDescargados.length = 0;
           for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
           _visorContexto = { tipo: 'manhwa', coleccion, capNum: cap.num };
@@ -4510,45 +4530,45 @@
           actualizarStatus('⏳ Reanudando cap. ' + cap.num + ' · ' + slotPrevio.imagenes.length + ' ya descargadas…');
           try {
             // Redescubrir CDN — puede haber cambiado
-              const desc = await mwDescubrirCDN(coleccion.slug, cap.num);
-              if (!desc) throw new Error('No se encontró CDN');
-              const { cdn, ext } = desc;
-              const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + coleccion.slug + '/chapter_' + cap.num + '/ver_01/';
-              const todasEntradas = [];
-              for (let i = 1; i <= 300; i++) {
-                todasEntradas.push({ nombre: String(i).padStart(3, '0') + '.' + ext, url: imgBase + String(i).padStart(3, '0') + '.' + ext });
-              }
-              const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
-              const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
-              const nuevas = entradasPend.length > 0
-                ? await batchDescargar(entradasPend, {
-                    'Referer': 'https://manhwaweb.com/',
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-                    'Accept-Language': 'es-ES,es;q=0.9',
-                  }, n => {
-                    actualizarStatus('⏳ Cap.' + cap.num + ' · ' + (slotPrevio.imagenes.length + n));
-                    chipEl.textContent = slotPrevio.imagenes.length + n;
-                  }, true, slotId)
-                : [];
-              const archivos = [...slotPrevio.imagenes, ...nuevas]
-                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-              actualizarStatus('⏳ Creando ZIP…');
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
-              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-              await dtEliminar(slotId);
-              chipEl.classList.remove('descargando');
-              chipEl.classList.add('descargado');
-              chipEl.title = '✅ Descargado — tap para abrir';
-              actualizarStatus('✅ Cap. ' + cap.num + ' completado — ' + archivos.length + ' imágenes');
-            } catch(err) {
-              chipEl.classList.remove('descargando');
-              actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
+            const desc = await mwDescubrirCDN(coleccion.slug, cap.num);
+            if (!desc) throw new Error('No se encontró CDN');
+            const { cdn, ext } = desc;
+            const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + coleccion.slug + '/chapter_' + cap.num + '/ver_01/';
+            const todasEntradas = [];
+            for (let i = 1; i <= 300; i++) {
+              todasEntradas.push({ nombre: String(i).padStart(3, '0') + '.' + ext, url: imgBase + String(i).padStart(3, '0') + '.' + ext });
             }
-            return;
+            const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
+            const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+            const nuevas = entradasPend.length > 0
+            ? await batchDescargar(entradasPend, {
+              'Referer': 'https://manhwaweb.com/',
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+              'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+              'Accept-Language': 'es-ES,es;q=0.9',
+            }, n => {
+              actualizarStatus('⏳ Cap.' + cap.num + ' · ' + (slotPrevio.imagenes.length + n));
+              chipEl.textContent = slotPrevio.imagenes.length + n;
+            }, true, slotId)
+            : [];
+            const archivos = [...slotPrevio.imagenes, ...nuevas]
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            actualizarStatus('⏳ Creando ZIP…');
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
+            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            await dtEliminar(slotId);
+            chipEl.classList.remove('descargando');
+            chipEl.classList.add('descargado');
+            chipEl.title = '✅ Descargado — tap para abrir';
+            actualizarStatus('✅ Cap. ' + cap.num + ' completado — ' + archivos.length + ' imágenes');
+          } catch(err) {
+            chipEl.classList.remove('descargando');
+            actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
+          }
+          return;
         }
 
         chipEl.classList.add('descargando');
@@ -4648,8 +4668,8 @@
           try { descargados = await mwListarDescargados(_mwColeccionActual.id); } catch(e) {}
 
           const capsOrdenadas = _mwOrdenDesc
-            ? [..._mwColeccionActual.capitulos].reverse()
-            : [..._mwColeccionActual.capitulos];
+          ? [..._mwColeccionActual.capitulos].reverse()
+          : [..._mwColeccionActual.capitulos];
 
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
@@ -4703,17 +4723,17 @@
         panel.className = 'sjz-panel';
         panel.innerHTML =
           '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
-        + '<div class="sjz-row">'
-        +   '<input class="sjz-input" id="mwUrl" placeholder="https://manhwaweb.com/manhwa/titulo_id" type="url">'
-        + '</div>'
-        + '<div class="sjz-info" id="mwInfo"></div>'
-        + '<div class="sjz-row">'
-        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
-        +   '<input class="sjz-input sjz-input-sm" id="mwInicio" type="number" min="1" placeholder="1">'
-        +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
-        +   '<input class="sjz-input sjz-input-sm" id="mwFinal" type="number" min="1" placeholder="30">'
-        +   '<button class="sjz-btn sjz-btn-primary" onclick="mwCrearCarpeta()">📁 Crear</button>'
-        + '</div>';
+          + '<div class="sjz-row">'
+          +   '<input class="sjz-input" id="mwUrl" placeholder="https://manhwaweb.com/manhwa/titulo_id" type="url">'
+          + '</div>'
+          + '<div class="sjz-info" id="mwInfo"></div>'
+          + '<div class="sjz-row">'
+          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+          +   '<input class="sjz-input sjz-input-sm" id="mwInicio" type="number" min="1" placeholder="1">'
+          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+          +   '<input class="sjz-input sjz-input-sm" id="mwFinal" type="number" min="1" placeholder="30">'
+          +   '<button class="sjz-btn sjz-btn-primary" onclick="mwCrearCarpeta()">📁 Crear</button>'
+          + '</div>';
         contenedor.appendChild(panel);
 
         let colecciones;
@@ -4778,7 +4798,7 @@
               const usado = (est.usage / 1048576).toFixed(1);
               const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
               const persiste = await navigator.storage.persisted();
-            if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? ' · 🔒 persistente' : ' · ⚠️ no persistente');
+              if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? ' · 🔒 persistente' : ' · ⚠️ no persistente');
             }
           } catch(e) {}
 
@@ -4927,8 +4947,8 @@
           archivosDescargados.length = 0;
           const zip      = await JSZip.loadAsync(registro.blob);
           const entradas = Object.values(zip.files)
-            .filter(f => !f.dir)
-            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .filter(f => !f.dir)
+          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           for (const entrada of entradas) {
             const blob = await entrada.async('blob');
             archivosDescargados.push({ nombre: entrada.name, blob });
@@ -4999,8 +5019,8 @@
       });
 
     </script>
-    
-    
-    
+
+
+
   </body>
 </html>
