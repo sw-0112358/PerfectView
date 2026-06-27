@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v41
+          PerfectView v42
         </div>
       </header>
 
@@ -1929,6 +1929,16 @@
         renderBoveda();
       }
 
+      async function bvActualizarEspacio() {
+        try {
+          const est   = await navigator.storage.estimate();
+          const usado = (est.usage  / 1048576).toFixed(1);
+          const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const el = document.getElementById('bvEspacio');
+          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
+        } catch(e) {}
+      }
+
       async function bvVerEspacio() {
         try {
           const est   = await navigator.storage.estimate();
@@ -1938,11 +1948,11 @@
           const el = document.getElementById('bvEspacio');
           if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
 
-          const limpiar = confirm(
-            `Almacenamiento del sitio\n\nUsado: ${usado} MB\nLibre: ${libre} MB\nTotal asignado: ${total} MB`
-            + '\n\n¿Limpiar toda la bóveda? (elimina todos los ZIPs, portadas y colecciones)'
+          const confirmTxt = prompt(
+            `Almacenamiento\nUsado: ${usado} MB · Libre: ${libre} MB\n\n⚠️ Esto eliminará TODOS los ZIPs, portadas y colecciones.\nEscribe "Si borrar" para confirmar:`
           );
-          if (limpiar) await bvLimpiarTodo();
+          if (confirmTxt === 'Si borrar') await bvLimpiarTodo();
+          else if (confirmTxt !== null) actualizarStatus('⚠️ Texto incorrecto — no se borró nada');
         } catch(err) {
           alert('No se pudo obtener el espacio: ' + err.message);
         }
@@ -4707,6 +4717,7 @@
 
       // — Render pantalla3 —
       async function renderBoveda() {
+        bvActualizarEspacio();
         const contenedor = document.getElementById('bvLista');
         const toolbar    = document.getElementById('bvToolbar');
         contenedor.innerHTML = '';
