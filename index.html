@@ -3239,12 +3239,16 @@
               await nhActualizarZip(galeria.id, zipId);
               if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
               await dtEliminar(slotId);
-              archivosDescargados.length = 0;
-              archivos.forEach(a => archivosDescargados.push(a));
-              _visorContexto = null;
-              mostrarVisor(true);
-              mostrarImagenesEnVisor();
-              actualizarStatus('✅ ' + galeria.nombre + ' completado — ' + archivos.length + ' páginas');
+              galeria.zip_id = zipId;
+              if (cardEl) {
+                if (img && archivos[0]) {
+                  img.src = URL.createObjectURL(archivos[0].blob);
+                  img.style.display = 'block';
+                  ph.style.display  = 'none';
+                }
+                cardEl.onclick = () => nhAbrirEnVisor(galeria);
+              }
+              actualizarStatus('✅ ' + galeria.nombre + ' completado — toca para ver');
             } catch(err) {
               if (ph) ph.textContent = '⬇️';
               actualizarStatus('❌ NH reanudación: ' + err.message);
@@ -3271,21 +3275,20 @@
           await nhActualizarZip(galeria.id, zipId);
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
           await dtEliminar(slotId);
-          if (cardEl && img && archivos[0]) {
-            img.src = URL.createObjectURL(archivos[0].blob);
-            img.style.display = 'block';
-            ph.style.display  = 'none';
+          await nhActualizarZip(galeria.id, zipId);
+          galeria.zip_id = zipId;
+          if (cardEl) {
+            if (img && archivos[0]) {
+              img.src = URL.createObjectURL(archivos[0].blob);
+              img.style.display = 'block';
+              ph.style.display  = 'none';
+            }
+            cardEl.onclick = () => nhAbrirEnVisor(galeria);
           }
-          archivosDescargados.length = 0;
-          archivos.forEach(a => archivosDescargados.push(a));
-          _visorContexto = null;
-          mostrarVisor(true);
-          mostrarImagenesEnVisor();
-          actualizarStatus('✅ ' + galeria.nombre + ' — ' + archivos.length + ' páginas');
+          actualizarStatus('✅ ' + galeria.nombre + ' listo — toca para ver');
         } catch(err) {
           setPh('⬇️');
           actualizarStatus('❌ NH: ' + err.message);
-                 
         }
       }
 
