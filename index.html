@@ -16,18 +16,6 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
     <style>
 
-      /*=============================================
-
-      Versiones # 
-      v4.2 -bug corregidos en el visor scrollTop reset después de traslape()
-      v4.3 -Bóveda agregada
-      v4.4 -mejoras de la v4.3
-      v4.5 -optimización de las portadas
-      v5   -soporta web de samurai y Manwha 
-      v6   -otra categoría soporta
-      v7   -multi descargar 
-      =============================================*/
-
       /* =============================================
       VARIABLES Y RESET
       ============================================= */
@@ -1022,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v34
+          PerfectView v35
         </div>
       </header>
 
@@ -2828,11 +2816,49 @@
         document.getElementById('htBtnDescargar').style.display = 'none';
         document.getElementById('htInfo').textContent = '⏳ Guardando…';
         try {
-          await htGuardar(_htInfoPendiente);
-          document.getElementById('htInfo').textContent = '✅ Agregado — toca la portada para descargar';
+          const id  = await htGuardar(_htInfoPendiente);
+          const gal = { ..._htInfoPendiente, id, zip_id: null };
           document.getElementById('htUrl').value = '';
           _htInfoPendiente = null;
-          renderHitomi(document.getElementById('bvLista'));
+          // Agregar solo la nueva tarjeta sin re-renderizar el grid
+          const grid = document.querySelector('#bvLista .bv-grid');
+          if (grid) {
+            const { card, ph, img } = crearTarjeta({
+              nombre:  gal.nombre,
+              phTexto: '⬇️',
+              onTap:   () => gal.zip_id ? htAbrirEnVisor(gal) : htDescargarGaleria(gal, card),
+              onDelete: async () => {
+                if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+                await htEliminarDB(gal.id);
+                card.remove();
+              },
+              btnSecundario: {
+                texto: '🔗', titulo: 'Copiar URLs al portapapeles',
+                onClick: async () => {
+                  actualizarStatus('⏳ Generando URLs…');
+                  try {
+                    let gg;
+                    try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
+                    const lineas = gal.files.map((f, i) => {
+                      const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
+                      return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
+                    });
+                    const blob = new Blob([lineas.join('\n')], { type: 'text/plain' });
+                    const a    = document.createElement('a');
+                    a.href     = URL.createObjectURL(blob);
+                    a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_links.txt';
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                    actualizarStatus('✅ ' + lineas.length + ' URLs descargadas como .txt');
+                  } catch(err) { actualizarStatus('❌ ' + err.message); }
+                }
+              }
+            });
+            grid.appendChild(card);
+          } else {
+            renderHitomi(document.getElementById('bvLista'));
+          }
+          document.getElementById('htInfo').textContent = '✅ Agregado — toca la portada para descargar';
         } catch(err) {
           document.getElementById('htInfo').textContent = '❌ ' + err.message;
         }
@@ -3255,10 +3281,45 @@
         }
         document.getElementById('nhBtnDescargar').style.display = 'none';
         document.getElementById('nhInfo').textContent = '⏳ Guardando…';
-        await nhGuardar(_nhInfoPendiente);
+        const id  = await nhGuardar(_nhInfoPendiente);
+        const gal = { ..._nhInfoPendiente, id, zip_id: null };
         _nhInfoPendiente = null;
         document.getElementById('nhUrl').value = '';
-        renderNhentai(document.getElementById('bvLista'));
+        // Agregar solo la nueva tarjeta sin re-renderizar el grid
+        const grid = document.querySelector('#bvLista .bv-grid');
+        if (grid) {
+          const { card, ph, img } = crearTarjeta({
+            nombre:  gal.nombre,
+            phTexto: '⬇️',
+            onTap:   () => nhAbrirEnVisor(gal, card),
+            onDelete: async () => {
+              if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+              await nhEliminarDB(gal.id);
+              card.remove();
+            },
+            btnSecundario: {
+              texto: '📎', titulo: 'Exportar links',
+              onClick: async () => {
+                const links = [];
+                for (let i = 0; i < gal.num_pages; i++) {
+                  const path = gal.paths ? gal.paths[i] : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
+                  links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
+                }
+                const blob = new Blob([links.join('\n')], { type: 'text/plain' });
+                const a    = document.createElement('a');
+                a.href     = URL.createObjectURL(blob);
+                a.download = gal.nombre.replace(/[\\/:*?"<>|]/g, '_') + '.txt';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                actualizarStatus('📎 ' + links.length + ' links exportados');
+              }
+            }
+          });
+          grid.appendChild(card);
+        } else {
+          renderNhentai(document.getElementById('bvLista'));
+        }
+        document.getElementById('nhInfo').textContent = '✅ Agregada — toca para descargar';
       }
 
       // — Render nhentai —
