@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v43
+          PerfectView v44
         </div>
       </header>
 
@@ -1928,14 +1928,40 @@
         actualizarStatus('✅ Bóveda limpiada completamente');
         renderBoveda();
       }
+      
+      async function calcularTamañoStore(storeName) {
+        try {
+          const db   = await bvAbrirDB();
+          const todos = await new Promise((resolve, reject) => {
+            const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+            req.onsuccess = e => resolve(e.target.result);
+            req.onerror   = e => reject(e.target.error);
+          });
+          let bytes = 0;
+          for (const r of todos) {
+            if (r.blob instanceof Blob) bytes += r.blob.size;
+            // descargas_temp tiene imagenes[]
+            if (Array.isArray(r.imagenes)) {
+              for (const img of r.imagenes) {
+                if (img.blob instanceof Blob) bytes += img.blob.size;
+              }
+            }
+          }
+          return bytes;
+        } catch(e) { return 0; }
+      }
 
       async function bvActualizarEspacio() {
         try {
-          const est   = await navigator.storage.estimate();
-          const usado = (est.usage  / 1048576).toFixed(1);
-          const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const est      = await navigator.storage.estimate();
+          const usado    = (est.usage / 1048576).toFixed(1);
+          const libre    = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const bytesZips = await calcularTamañoStore('zips');
+          const bytesTemp = await calcularTamañoStore('descargas_temp');
+          const mbZips   = (bytesZips / 1048576).toFixed(1);
+          const mbTemp   = (bytesTemp / 1048576).toFixed(1);
           const el = document.getElementById('bvEspacio');
-          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
+          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres · 🗜️ ${mbZips} MB · 🖼️ ${mbTemp} MB`;
         } catch(e) {}
       }
 
