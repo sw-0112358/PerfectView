@@ -3317,10 +3317,8 @@
       async function nhConfirmarDescarga() {
         if (!_nhInfoPendiente) return;
         document.getElementById('nhBtnDescargar').style.display = 'none';
-        document.getElementById('nhInfo').textContent = '⏳ Iniciando descarga…';
-        const id       = await nhGuardar(_nhInfoPendiente);
-        const galConId = { ..._nhInfoPendiente, id };
-        await nhDescargarGaleria(galConId, null);
+        document.getElementById('nhInfo').textContent = '⏳ Guardando…';
+        await nhGuardar(_nhInfoPendiente);
         _nhInfoPendiente = null;
         document.getElementById('nhUrl').value = '';
         renderNhentai(document.getElementById('bvLista'));
