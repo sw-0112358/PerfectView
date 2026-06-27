@@ -1212,7 +1212,6 @@
           <div style="display:flex;gap:8px">
             <button class="btn-ghost btn-sm" onclick="bvBloquear()">🔒 Bloquear</button>
             <button class="btn-ghost btn-sm" onclick="bvNavegar('pantalla1')">← Volver</button>
-            <button class="btn-ghost btn-sm" onclick="testBatch()">🧪 Test</button>
           </div>
         </div>
 
@@ -4346,32 +4345,8 @@
       }
       
       // — Fetch genérico con Referer vía Worker —
-      async function testBatch() {
-        const base = (CF_WORKER || '').replace(/\/$/, '');
-        actualizarStatus('🧪 Probando: ' + base);
-        // Test 1: GET simple
-        try {
-          const r1 = await fetch(base + '/kv-load?id=test123');
-          actualizarStatus('✅ GET ok HTTP ' + r1.status);
-        } catch(e) {
-          actualizarStatus('❌ GET falló: ' + e.message);
-          return;
-        }
-        // Test 2: POST batch text/plain con imagen real
-        try {
-          const r2 = await fetch(base + '/batch-download', {
-            method: 'POST',
-            body:   JSON.stringify({
-              urls: [{ nombre: 'test.png', url: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png' }],
-              headers: {}
-            })
-          });
-          const texto = await r2.text();
-          actualizarStatus('✅ POST batch HTTP ' + r2.status + ' — bytes: ' + texto.length);
-        } catch(e) {
-          actualizarStatus('❌ POST batch falló: ' + e.message);
-        }
-      }
+      
+
 
       async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null) {
         if (!CF_WORKER) throw new Error('Worker no configurado');
