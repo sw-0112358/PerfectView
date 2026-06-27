@@ -2976,88 +2976,46 @@
         grid.className = 'bv-grid';
 
         galerias.forEach(gal => {
-          const card = document.createElement('div');
-          card.className = 'bv-cover-card';
-          card.onclick = () => gal.zip_id ? htAbrirEnVisor(gal) : htDescargarGaleria(gal, card);
-
-          const placeholder = document.createElement('div');
-          placeholder.className = 'bv-cover-placeholder';
-          placeholder.textContent = gal.zip_id ? '📖' : '⬇️';
-          if (!gal.zip_id) {
-            placeholder.style.cssText = 'cursor:pointer;font-size:2rem';
-            placeholder.title = 'Tap para descargar';
-          }
-
-          const img = document.createElement('img');
-          img.className = 'bv-cover-img';
-
-          const footer = document.createElement('div');
-          footer.className = 'bv-cover-footer';
-          footer.textContent = gal.nombre;
-
-          const delBtn = document.createElement('button');
-          delBtn.className = 'bv-menu-btn';
-          delBtn.textContent = '🗑️';
-          delBtn.onclick = async e => {
-            e.stopPropagation();
-            if (!confirm('¿Eliminar "' + gal.nombre + '"?')) return;
-            if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
-            await htEliminarDB(gal.id);
-            renderHitomi(contenedor);
-          };
-
-          // Botón exportar (solo cuando hay ZIP)
-          if (gal.zip_id) {
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'bv-menu-btn';
-            dlBtn.textContent = '🔽';
-            dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); htExportarGaleria(gal); };
-            card.appendChild(dlBtn);
-          }
-
-          // Botón copiar links al portapapeles (solo cuando no hay ZIP)
-          if (!gal.zip_id) {
-            const linkBtn = document.createElement('button');
-            linkBtn.className = 'bv-menu-btn';
-            linkBtn.textContent = '🔗';
-            linkBtn.style.cssText = 'top:6px;right:36px';
-            linkBtn.title = 'Copiar URLs al portapapeles';
-            linkBtn.onclick = async e => {
-              e.stopPropagation();
-              actualizarStatus('⏳ Generando URLs…');
-              try {
-                let gg;
-                try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
-                const lineas = gal.files.map((f, i) => {
-                  const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
-                  return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
-                });
-                const contenido = lineas.join('\n');
-                const blob      = new Blob([contenido], { type: 'text/plain' });
-                const url       = URL.createObjectURL(blob);
-                const a         = document.createElement('a');
-                a.href          = url;
-                a.download      = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_links.txt';
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(url), 3000);
-                actualizarStatus('✅ ' + lineas.length + ' URLs descargadas como .txt');
-              } catch(err) {
-                actualizarStatus('❌ ' + err.message);
+          const { card, ph, img } = crearTarjeta({
+            nombre:   gal.nombre,
+            phTexto:  gal.zip_id ? '📖' : '⬇️',
+            onTap:    () => gal.zip_id ? htAbrirEnVisor(gal) : htDescargarGaleria(gal, card),
+            onDelete: async () => {
+              if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+              await htEliminarDB(gal.id);
+              renderHitomi(contenedor);
+            },
+            btnSecundario: gal.zip_id ? {
+              texto: '🔽', onClick: () => htExportarGaleria(gal)
+            } : {
+              texto: '🔗', titulo: 'Copiar URLs al portapapeles',
+              onClick: async () => {
+                actualizarStatus('⏳ Generando URLs…');
+                try {
+                  let gg;
+                  try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
+                  const lineas = gal.files.map((f, i) => {
+                    const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
+                    return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
+                  });
+                  const blob = new Blob([lineas.join('\n')], { type: 'text/plain' });
+                  const a    = document.createElement('a');
+                  a.href     = URL.createObjectURL(blob);
+                  a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_links.txt';
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                  actualizarStatus('✅ ' + lineas.length + ' URLs descargadas como .txt');
+                } catch(err) { actualizarStatus('❌ ' + err.message); }
               }
-            };
-            card.appendChild(linkBtn);
-          }
-
-          card.append(placeholder, img, footer, delBtn);
+            }
+          });
           grid.appendChild(card);
-
           if (gal.zip_id) {
             bvCargarPortada(gal.zip_id).then(blob => {
               if (!blob) return;
               img.src = URL.createObjectURL(blob);
               img.style.display = 'block';
-              placeholder.style.display = 'none';
+              ph.style.display  = 'none';
             }).catch(() => {});
           }
         });
@@ -3379,78 +3337,44 @@
         grid.className = 'bv-grid';
 
         galerias.forEach(gal => {
-          const card = document.createElement('div');
-          card.className = 'bv-cover-card';
-          card.onclick = () => nhAbrirEnVisor(gal, card);
-
-          const placeholder = document.createElement('div');
-          placeholder.className = 'bv-cover-placeholder';
-          placeholder.textContent = gal.zip_id ? '📖' : '⬇️';
-          if (!gal.zip_id) {
-            placeholder.style.cssText = 'cursor:pointer;font-size:2rem';
-            placeholder.title = 'Tap para descargar';
-          }
-
-          const img = document.createElement('img');
-          img.className = 'bv-cover-img';
-
-          const footer = document.createElement('div');
-          footer.className = 'bv-cover-footer';
-          footer.textContent = gal.nombre;
-
-          const delBtn = document.createElement('button');
-          delBtn.className = 'bv-menu-btn';
-          delBtn.textContent = '🗑️';
-          delBtn.onclick = async e => {
-            e.stopPropagation();
-            if (!confirm('¿Eliminar "' + gal.nombre + '"?')) return;
-            if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
-            await nhEliminarDB(gal.id);
-            renderNhentai(contenedor);
-          };
-
-          if (gal.zip_id) {
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'bv-menu-btn';
-            dlBtn.textContent = '🔽';
-            dlBtn.style.cssText = 'top:6px;right:36px';
-            dlBtn.onclick = e => { e.stopPropagation(); nhExportarGaleria(gal); };
-            card.appendChild(dlBtn);
-          } else {
-            const linkBtn = document.createElement('button');
-            linkBtn.className = 'bv-menu-btn';
-            linkBtn.textContent = '📎';
-            linkBtn.style.cssText = 'top:6px;right:36px';
-            linkBtn.title = 'Copiar links de imágenes';
-            linkBtn.onclick = async e => {
-              e.stopPropagation();
-              const links = [];
-              for (let i = 0; i < gal.num_pages; i++) {
-                const path = gal.paths
-                  ? gal.paths[i]
-                  : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
-                links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
+          const { card, ph, img } = crearTarjeta({
+            nombre:  gal.nombre,
+            phTexto: gal.zip_id ? '📖' : '⬇️',
+            onTap:   () => nhAbrirEnVisor(gal, card),
+            onDelete: async () => {
+              if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+              await nhEliminarDB(gal.id);
+              renderNhentai(contenedor);
+            },
+            btnSecundario: gal.zip_id ? {
+              texto: '🔽', onClick: () => nhExportarGaleria(gal)
+            } : {
+              texto: '📎', titulo: 'Exportar links',
+              onClick: async () => {
+                const links = [];
+                for (let i = 0; i < gal.num_pages; i++) {
+                  const path = gal.paths
+                    ? gal.paths[i]
+                    : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
+                  links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
+                }
+                const blob = new Blob([links.join('\n')], { type: 'text/plain' });
+                const a    = document.createElement('a');
+                a.href     = URL.createObjectURL(blob);
+                a.download = gal.nombre.replace(/[\\/:*?"<>|]/g, '_') + '.txt';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                actualizarStatus('📎 ' + links.length + ' links exportados');
               }
-              const blob = new Blob([links.join('\n')], { type: 'text/plain' });
-              const a    = document.createElement('a');
-              a.href     = URL.createObjectURL(blob);
-              a.download = gal.nombre.replace(/[\\/:*?"<>|]/g, '_') + '.txt';
-              a.click();
-              setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-              actualizarStatus('📎 ' + links.length + ' links exportados');
-            };
-            card.appendChild(linkBtn);
-          }
-
-          card.append(placeholder, img, footer, delBtn);
+            }
+          });
           grid.appendChild(card);
-
           if (gal.zip_id) {
             bvCargarPortada(gal.zip_id).then(blob => {
               if (!blob) return;
               img.src = URL.createObjectURL(blob);
               img.style.display = 'block';
-              placeholder.style.display = 'none';
+              ph.style.display  = 'none';
             }).catch(() => {});
           }
         });
@@ -4348,6 +4272,48 @@
       
 
 
+      function crearTarjeta(cfg) {
+        // cfg: { nombre, phTexto, onTap, onDelete, btnSecundario: { texto, titulo, style, onClick } }
+        const card = document.createElement('div');
+        card.className = 'bv-cover-card';
+        if (cfg.onTap) card.onclick = cfg.onTap;
+
+        const ph = document.createElement('div');
+        ph.className = 'bv-cover-placeholder';
+        ph.textContent = cfg.phTexto || '📖';
+
+        const img = document.createElement('img');
+        img.className = 'bv-cover-img';
+
+        const footer = document.createElement('div');
+        footer.className = 'bv-cover-footer';
+        footer.textContent = cfg.nombre || '';
+        if (cfg.onRenombrar) footer.addEventListener('click', e => { e.stopPropagation(); cfg.onRenombrar(footer); });
+
+        if (cfg.btnSecundario) {
+          const btn2 = document.createElement('button');
+          btn2.className = 'bv-menu-btn';
+          btn2.textContent = cfg.btnSecundario.texto;
+          btn2.style.cssText = 'top:6px;right:36px' + (cfg.btnSecundario.style ? ';' + cfg.btnSecundario.style : '');
+          if (cfg.btnSecundario.titulo) btn2.title = cfg.btnSecundario.titulo;
+          btn2.onclick = e => { e.stopPropagation(); cfg.btnSecundario.onClick(); };
+          card.appendChild(btn2);
+        }
+
+        if (cfg.onDelete) {
+          const delBtn = document.createElement('button');
+          delBtn.className = 'bv-menu-btn';
+          delBtn.textContent = cfg.btnMenu || '🗑️';
+          delBtn.onclick = cfg.btnMenu
+            ? e => { e.stopPropagation(); cfg.onDelete(delBtn, card, footer); }
+            : async e => { e.stopPropagation(); if (!confirm('¿Eliminar "' + cfg.nombre + '"?')) return; await cfg.onDelete(); };
+          card.appendChild(delBtn);
+        }
+
+        card.append(ph, img, footer);
+        return { card, ph, img, footer };
+      }
+
       async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null) {
         if (!CF_WORKER) throw new Error('Worker no configurado');
         const referer  = headers ? (headers['Referer'] || headers['referer'] || '') : '';
@@ -4675,42 +4641,21 @@
         grid.className = 'bv-grid';
 
         colecciones.forEach(col => {
-          const card = document.createElement('div');
-          card.className = 'bv-cover-card';
-          card.onclick = () => { _mwColeccionActual = col; renderManhwa(contenedor); };
-
-          const placeholder = document.createElement('div');
-          placeholder.className = 'bv-cover-placeholder';
-          placeholder.textContent = '📖';
-
-          const img = document.createElement('img');
-          img.className = 'bv-cover-img';
-
-          const footer = document.createElement('div');
-          footer.className = 'bv-cover-footer';
-          footer.textContent = col.nombre;
-
-          const delBtn = document.createElement('button');
-          delBtn.className = 'bv-menu-btn';
-          delBtn.textContent = '🗑️';
-          delBtn.onclick = async e => {
-            e.stopPropagation();
-            if (!confirm('¿Eliminar "' + col.nombre + '"?')) return;
-            await mwEliminarDB(col.id);
-            renderManhwa(contenedor);
-          };
-
-          const dlBtnMw = document.createElement('button');
-          dlBtnMw.className = 'bv-menu-btn';
-          dlBtnMw.textContent = '📦';
-          dlBtnMw.style.cssText = 'top:6px;right:36px';
-          dlBtnMw.title = 'Exportar colección completa';
-          dlBtnMw.onclick = e => { e.stopPropagation(); mwExportarZipCompleto(col); };
-
-          card.append(placeholder, img, footer, dlBtnMw, delBtn);
+          const { card, ph, img } = crearTarjeta({
+            nombre:  col.nombre,
+            phTexto: '📖',
+            onTap:   () => { _mwColeccionActual = col; renderManhwa(contenedor); },
+            onDelete: async () => {
+              await mwEliminarDB(col.id);
+              renderManhwa(contenedor);
+            },
+            btnSecundario: {
+              texto: '📦', titulo: 'Exportar colección completa',
+              onClick: () => mwExportarZipCompleto(col)
+            }
+          });
           grid.appendChild(card);
 
-          // Cargar portada del episodio 1
           mwBuscarZipCapitulo(col.id, 1).then(reg => {
             if (!reg) return;
             return bvCargarPortada(reg.id);
@@ -4718,7 +4663,7 @@
             if (!blob) return;
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
-            placeholder.style.display = 'none';
+            ph.style.display  = 'none';
           }).catch(() => {});
         });
         contenedor.appendChild(grid);
@@ -4838,30 +4783,14 @@
         items.sort((a,b) => b.fecha.localeCompare(a.fecha));
 
         for (const item of items) {
-          const card = document.createElement('div');
-          card.className = 'bv-cover-card';
+          const { card, ph: placeholder, img, footer } = crearTarjeta({
+            nombre:      item.nombre.replace(/\.zip$/i, ''),
+            phTexto:     '📖',
+            onRenombrar: (footerEl) => bvRenombrar(item, footerEl),
+            onDelete:    (btnEl, cardEl, footerEl) => bvAbrirDropdown(btnEl, item, cardEl, footerEl),
+            btnMenu:     '···',
+          });
 
-          // Placeholder mientras carga la portada
-          const placeholder = document.createElement('div');
-          placeholder.className = 'bv-cover-placeholder';
-          placeholder.textContent = '📖';
-
-          const img = document.createElement('img');
-          img.className = 'bv-cover-img';
-
-          const footer = document.createElement('div');
-          footer.className = 'bv-cover-footer';
-          footer.textContent = item.nombre.replace(/\.zip$/i, '');
-
-          const menuBtn = document.createElement('button');
-          menuBtn.className = 'bv-menu-btn';
-          menuBtn.textContent = '···';
-          menuBtn.onclick = e => { e.stopPropagation(); bvAbrirDropdown(menuBtn, item, card, footer); };
-
-          card.append(placeholder, img, footer, menuBtn);
-
-          // Tap en nombre → renombrar
-          footer.addEventListener('click', e => { e.stopPropagation(); bvRenombrar(item, footer); });
           // Tap en portada → abrir en visor
           card.addEventListener('click', () => bovedaAbrirEnVisor(item, items));
 
