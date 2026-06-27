@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v42
+          PerfectView v43
         </div>
       </header>
 
@@ -2691,24 +2691,47 @@
       }
 
       // — Abrir galería en visor —
-      async function htAbrirEnVisor(galeria) {
-        if (!galeria.zip_id) { htDescargarGaleria(galeria, null); return; }
-        actualizarStatus('⏳ Cargando…');
-        const reg = await bvCargar(galeria.zip_id);
-        if (!reg) { actualizarStatus('❌ ZIP no encontrado'); return; }
+      async function cargarDesdeSlotOZip(slotId, zipId) {
+        // Intentar desde descargas_temp primero — más rápido
+        const slot = await dtCargar(slotId);
+        if (slot && slot.imagenes && slot.imagenes.length > 0) {
+          return slot.imagenes.sort((a, b) =>
+            a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
+          );
+        }
+        // Fallback — descomprimir ZIP y guardar en slot para próxima vez
+        const reg = await bvCargar(zipId);
+        if (!reg) return null;
         const zip      = await JSZip.loadAsync(reg.blob);
         const entradas = Object.values(zip.files)
           .filter(f => !f.dir)
-          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        const imagenes = [];
+        for (const e of entradas) {
+          const blob = await e.async('blob');
+          imagenes.push({ nombre: e.name, blob });
+        }
+        // Guardar en descargas_temp para reutilizar
+        await dtCrear(slotId, { categoria: 'cache', nombre: slotId, total: imagenes.length });
+        for (const img of imagenes) {
+          await dtAgregarImagen(slotId, img);
+        }
+        return imagenes;
+      }
+
+      async function htAbrirEnVisor(galeria) {
+        if (!galeria.zip_id) { htDescargarGaleria(galeria, null); return; }
+        actualizarStatus('⏳ Cargando…');
+        const imagenes = await cargarDesdeSlotOZip('ht-' + galeria.id, galeria.zip_id);
+        if (!imagenes) { actualizarStatus('❌ ZIP no encontrado'); return; }
         archivosDescargados.length = 0;
-        for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
-        // Contexto con lista completa para navegación
+        imagenes.forEach(a => archivosDescargados.push(a));
         const todasHt = await htListar();
         todasHt.sort((a,b) => b.fecha.localeCompare(a.fecha));
         _visorContexto = { tipo: 'hitomi', galeria, galerias: todasHt };
         mostrarVisor(true);
         mostrarImagenesEnVisor();
-        actualizarStatus('✅ ' + entradas.length + ' páginas');
+        actualizarStatus('✅ ' + imagenes.length + ' páginas');
       }
 
       // — Descargar galería completa (paralelo, sin auto-navegar) —
@@ -3157,20 +3180,16 @@
       async function nhAbrirEnVisor(galeria, cardEl = null) {
         if (!galeria.zip_id) { nhDescargarGaleria(galeria, cardEl); return; }
         actualizarStatus('⏳ Cargando…');
-        const reg = await bvCargar(galeria.zip_id);
-        if (!reg) { actualizarStatus('❌ ZIP no encontrado'); return; }
-        const zip      = await JSZip.loadAsync(reg.blob);
-        const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
-          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        const imagenes = await cargarDesdeSlotOZip('nh-' + galeria.id, galeria.zip_id);
+        if (!imagenes) { actualizarStatus('❌ ZIP no encontrado'); return; }
         archivosDescargados.length = 0;
-        for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+        imagenes.forEach(a => archivosDescargados.push(a));
         const todasNh = await nhListar();
         todasNh.sort((a,b) => b.fecha.localeCompare(a.fecha));
         _visorContexto = { tipo: 'nhentai', galeria, galerias: todasNh };
         mostrarVisor(true);
         mostrarImagenesEnVisor();
-        actualizarStatus('✅ ' + entradas.length + ' páginas');
+        actualizarStatus('✅ ' + imagenes.length + ' páginas');
       }
 
       // — Descargar galería completa y guardar —
@@ -3253,7 +3272,7 @@
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-          await dtEliminar(slotId);
+          // No eliminar slot — se reutiliza en el visor
           galeria.zip_id = zipId;
           if (cardEl) {
             if (img && archivos[0]) {
