@@ -2750,16 +2750,9 @@
         // Verificar slot previo
         const slotPrevio = await dtCargar(slotId);
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
-          const continuar = confirm(
-            '⚠️ Descarga interrumpida: ' + galeria.nombre +
-            '\n' + slotPrevio.imagenes.length + ' de ' + (slotPrevio.total || '?') + ' imágenes guardadas.' +
-            '\n\n¿Continuar desde donde quedó?'
-          );
-          if (!continuar) {
-            await dtEliminar(slotId);
-          } else {
-            try {
-              // Regenerar entradas frescas — gg.js puede haber cambiado
+          actualizarStatus('⏳ Reanudando: ' + galeria.nombre + ' · ' + slotPrevio.imagenes.length + ' ya descargadas');
+          try {
+            // Regenerar entradas frescas — gg.js puede haber cambiado
               let gg;
               try { gg = await htFetchGG(); } catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
               const referer      = 'https://hitomi.la/reader/' + galeria.ht_id + '.html';
@@ -2805,7 +2798,6 @@
               actualizarStatus('❌ HT reanudación: ' + err.message);
             }
             return;
-          }
         }
 
         try {
@@ -3182,8 +3174,8 @@
       }
 
       // — Abrir galería descargada en visor —
-      async function nhAbrirEnVisor(galeria) {
-        if (!galeria.zip_id) { nhDescargarGaleria(galeria, null); return; }
+      async function nhAbrirEnVisor(galeria, cardEl = null) {
+        if (!galeria.zip_id) { nhDescargarGaleria(galeria, cardEl); return; }
         actualizarStatus('⏳ Cargando…');
         const reg = await bvCargar(galeria.zip_id);
         if (!reg) { actualizarStatus('❌ ZIP no encontrado'); return; }
@@ -3203,24 +3195,19 @@
 
       // — Descargar galería completa y guardar —
       async function nhDescargarGaleria(galeria, cardEl) {
-        const ph     = cardEl?.querySelector('.bv-cover-placeholder');
+        const ph    = cardEl?.querySelector('.bv-cover-placeholder');
+        const img   = cardEl?.querySelector('.bv-cover-img');
+        const setPh = t => { if (ph) ph.textContent = t; };
         const slotId = 'nh-' + galeria.id;
 
-        if (ph) ph.textContent = '⏳';
+        setPh('⏳');
 
         // Verificar slot previo
         const slotPrevio = await dtCargar(slotId);
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
-          const continuar = confirm(
-            '⚠️ Descarga interrumpida: ' + galeria.nombre +
-            '\n' + slotPrevio.imagenes.length + ' de ' + (slotPrevio.total || '?') + ' imágenes guardadas.' +
-            '\n\n¿Continuar desde donde quedó?'
-          );
-          if (!continuar) {
-            await dtEliminar(slotId);
-          } else {
-            try {
-              // Regenerar entradas frescas
+          actualizarStatus('⏳ Reanudando: ' + galeria.nombre + ' · ' + slotPrevio.imagenes.length + ' ya descargadas');
+          try {
+            // Regenerar entradas frescas
               const todasEntradas = [];
               for (let i = 0; i < galeria.num_pages; i++) {
                 const path = galeria.paths
@@ -3263,24 +3250,32 @@
               actualizarStatus('❌ NH reanudación: ' + err.message);
             }
             return;
-          }
         }
 
         try {
           await dtCrear(slotId, { categoria: 'nhentai', nombre: galeria.nombre, total: galeria.num_pages });
+          
+          
+          
           const archivos = await nhDescargarPaginas(galeria, (p, t) => {
+            setPh('⏳ ' + p + '/' + t);
             actualizarStatus('⏳ NH · ' + p + '/' + t);
-            if (ph) ph.textContent = '⏳ ' + p + '/' + t;
           }, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
+          setPh('📦');
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
-          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
           await dtEliminar(slotId);
+          if (cardEl && img && archivos[0]) {
+            img.src = URL.createObjectURL(archivos[0].blob);
+            img.style.display = 'block';
+            ph.style.display  = 'none';
+          }
           archivosDescargados.length = 0;
           archivos.forEach(a => archivosDescargados.push(a));
           _visorContexto = null;
@@ -3288,8 +3283,9 @@
           mostrarImagenesEnVisor();
           actualizarStatus('✅ ' + galeria.nombre + ' — ' + archivos.length + ' páginas');
         } catch(err) {
-          if (ph) ph.textContent = '⬇️';
+          setPh('⬇️');
           actualizarStatus('❌ NH: ' + err.message);
+                 
         }
       }
 
@@ -3367,7 +3363,7 @@
         galerias.forEach(gal => {
           const card = document.createElement('div');
           card.className = 'bv-cover-card';
-          card.onclick = () => nhAbrirEnVisor(gal);
+          card.onclick = () => nhAbrirEnVisor(gal, card);
 
           const placeholder = document.createElement('div');
           placeholder.className = 'bv-cover-placeholder';
@@ -3779,16 +3775,8 @@
         // Verificar si hay descarga previa interrumpida
         const slotPrevio = await dtCargar(slotId);
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
-          const continuar = confirm(
-            '⚠️ Descarga interrumpida del cap. ' + cap.num +
-            '\n' + slotPrevio.imagenes.length + ' de ' + (slotPrevio.total || '?') + ' imágenes guardadas.' +
-            '\n\n¿Continuar desde donde quedó?'
-          );
-          if (!continuar) {
-            await dtEliminar(slotId);
-          } else {
-            chipEl.classList.add('descargando');
-            actualizarStatus('⏳ Reanudando cap. ' + cap.num + '…');
+          chipEl.classList.add('descargando');
+          actualizarStatus('⏳ Reanudando cap. ' + cap.num + ' · ' + slotPrevio.imagenes.length + ' ya descargadas…');
             try {
               const base     = CF_WORKER.replace(/\/$/, '');
               const html     = await fetch(base + '/raw?target=' + encodeURIComponent(cap.url)).then(r => r.text());
@@ -3839,7 +3827,6 @@
               actualizarStatus('❌ Error al reanudar: ' + err.message);
             }
             return;
-          }
         }
 
         chipEl.classList.add('descargando');
@@ -4524,17 +4511,10 @@
         // Verificar slot previo
         const slotPrevio = await dtCargar(slotId);
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
-          const continuar = confirm(
-            '⚠️ Descarga interrumpida del cap. ' + cap.num +
-            '\n' + slotPrevio.imagenes.length + ' imágenes guardadas.' +
-            '\n\n¿Continuar desde donde quedó?'
-          );
-          if (!continuar) {
-            await dtEliminar(slotId);
-          } else {
-            chipEl.classList.add('descargando');
-            try {
-              // Redescubrir CDN — puede haber cambiado
+          chipEl.classList.add('descargando');
+          actualizarStatus('⏳ Reanudando cap. ' + cap.num + ' · ' + slotPrevio.imagenes.length + ' ya descargadas…');
+          try {
+            // Redescubrir CDN — puede haber cambiado
               const desc = await mwDescubrirCDN(coleccion.slug, cap.num);
               if (!desc) throw new Error('No se encontró CDN');
               const { cdn, ext } = desc;
@@ -4574,7 +4554,6 @@
               actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
             }
             return;
-          }
         }
 
         chipEl.classList.add('descargando');
