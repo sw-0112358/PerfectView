@@ -3178,7 +3178,7 @@
           'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
           'Accept-Language': 'es-ES,es;q=0.9',
-        }, onProgreso, false, slotId);
+        }, onProgreso, false, slotId, 1500);
       }
 
       // — Abrir galería descargada en visor —
@@ -4363,7 +4363,7 @@
 
       const BATCH_SIZE = 5;
 
-      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null) {
+      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null, delayMs = 0) {
         if (!CF_WORKER) throw new Error('Worker no configurado');
         const base     = CF_WORKER.replace(/\/$/, '');
         const archivos = [];
@@ -4371,6 +4371,7 @@
 
         for (let g = 0; g < entradas.length; g += BATCH_SIZE) {
           if (parar) break;
+          if (g > 0 && delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
           const grupo = entradas.slice(g, g + BATCH_SIZE);
 
           const resp = await fetch(base + '/batch-download', {
