@@ -2777,6 +2777,7 @@
         _visorContexto = { tipo: 'hitomi', galeria, galerias: todasHt };
         mostrarVisor(true);
         mostrarImagenesEnVisor();
+        archivosDescargados.length = 0; // liberar — imágenes ya en descargas_temp
         actualizarStatus('✅ ' + imagenes.length + ' páginas');
       }
 
