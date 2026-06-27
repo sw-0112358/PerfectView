@@ -906,7 +906,6 @@
         transition: transform .2s, box-shadow .2s, opacity .3s;
         touch-action: pan-y;
         -webkit-tap-highlight-color: transparent;
-        will-change: transform;
       }
       .bv-cover-card:active { transform: scale(.96); }
 
@@ -942,8 +941,7 @@
         top: 6px; right: 6px;
         width: 26px; height: 26px;
         border-radius: 50%;
-        background: rgba(0,0,0,0.45);
-        backdrop-filter: blur(4px);
+        background: rgba(0,0,0,0.6);
         border: none; color: #fff;
         font-size: 13px; font-weight: 700;
         display: flex; align-items: center; justify-content: center;
@@ -1202,7 +1200,7 @@
       <!-- ============================================================
            PANTALLA 3 — BÓVEDA (dentro del frame)
       ============================================================ -->
-      <div id="pantalla3" style="display:none">
+      <div id="pantalla3" style="display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
       <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
 
         <div class="bv-header">
