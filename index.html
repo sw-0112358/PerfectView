@@ -891,6 +891,7 @@
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 10px;
+        contain: layout style;
       }
 
       .bv-cover-card {
@@ -903,6 +904,9 @@
         cursor: pointer;
         aspect-ratio: 2 / 3;
         transition: transform .2s, box-shadow .2s, opacity .3s;
+        touch-action: pan-y;
+        -webkit-tap-highlight-color: transparent;
+        will-change: transform;
       }
       .bv-cover-card:active { transform: scale(.96); }
 
