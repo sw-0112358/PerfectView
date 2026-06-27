@@ -1849,7 +1849,48 @@
         });
       }
 
+      async function bvClearStore(storeName) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction(storeName, 'readwrite');
+          const req = tx.objectStore(storeName).clear();
+          req.onsuccess = () => resolve();
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function bvLimpiarTodo() {
+        const stores = ['zips', 'portadas', 'sjz_colecciones', 'mw_colecciones', 'nh_galerias', 'ht_galerias'];
+        for (const s of stores) {
+          try { await bvClearStore(s); } catch(e) {}
+        }
+        // Limpiar cache en memoria
+        for (const key in _bvPortadas) {
+          try { URL.revokeObjectURL(_bvPortadas[key]); } catch(e) {}
+          delete _bvPortadas[key];
+        }
+        actualizarStatus('✅ Bóveda limpiada completamente');
+        renderBoveda();
+      }
+
       async function bvVerEspacio() {
+        try {
+          const est   = await navigator.storage.estimate();
+          const usado = (est.usage  / 1048576).toFixed(1);
+          const total = (est.quota  / 1048576).toFixed(1);
+          const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const el = document.getElementById('bvEspacio');
+          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
+
+          const limpiar = confirm(
+            `Almacenamiento del sitio\n\nUsado: ${usado} MB\nLibre: ${libre} MB\nTotal asignado: ${total} MB`
+            + '\n\n¿Limpiar toda la bóveda? (elimina todos los ZIPs, portadas y colecciones)'
+          );
+          if (limpiar) await bvLimpiarTodo();
+        } catch(err) {
+          alert('No se pudo obtener el espacio: ' + err.message);
+        }
+      }
         try {
           const est   = await navigator.storage.estimate();
           const usado = (est.usage  / 1048576).toFixed(1);
