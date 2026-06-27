@@ -4096,12 +4096,14 @@
 
       const BATCH_SIZE = 5;
 
-      async function batchDescargar(entradas, headers, onProgreso) {
+      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false) {
         if (!CF_WORKER) throw new Error('Worker no configurado');
         const base     = CF_WORKER.replace(/\/$/, '');
         const archivos = [];
+        let   parar    = false;
 
         for (let g = 0; g < entradas.length; g += BATCH_SIZE) {
+          if (parar) break;
           const grupo = entradas.slice(g, g + BATCH_SIZE);
 
           const resp = await fetch(base + '/batch-download', {
@@ -4158,6 +4160,10 @@
 
               if (meta.fin) { rawBytes = new Uint8Array(0); break; }
               if (!meta.ok) {
+                if (stopOn404 && (meta.error === 404 || meta.error === 'no-imagen')) {
+                  parar = true;
+                  break;
+                }
                 actualizarStatus('⚠️ ' + meta.nombre + ': ' + meta.error);
                 continue;
               }
@@ -4221,7 +4227,7 @@
           'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
           'Accept-Language': 'es-ES,es;q=0.9',
-        }, onProgreso);
+        }, onProgreso, true); // stopOn404 = true
       }
       
 
