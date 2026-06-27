@@ -1796,7 +1796,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 6);
+          const req = indexedDB.open('PerfectViewBoveda', 7);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1818,8 +1818,76 @@
             if (!db.objectStoreNames.contains('ht_galerias')) {
               db.createObjectStore('ht_galerias', { keyPath: 'id', autoIncrement: true });
             }
+            if (!db.objectStoreNames.contains('descargas_temp')) {
+              db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
+            }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      // ── descargas_temp — persistencia de progreso ──
+      async function dtCrear(slotId, meta) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('descargas_temp', 'readwrite');
+          tx.objectStore('descargas_temp').put({
+            slotId,
+            categoria:  meta.categoria,
+            nombre:     meta.nombre,
+            total:      meta.total,
+            imagenes:   [],
+            fecha:      new Date().toISOString()
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function dtAgregarImagen(slotId, imagen) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx    = db.transaction('descargas_temp', 'readwrite');
+          const store = tx.objectStore('descargas_temp');
+          const req   = store.get(slotId);
+          req.onsuccess = e => {
+            const slot = e.target.result;
+            if (!slot) { resolve(); return; }
+            slot.imagenes.push(imagen);
+            store.put(slot);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function dtCargar(slotId) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('descargas_temp', 'readonly')
+                        .objectStore('descargas_temp').get(slotId);
+          req.onsuccess = e => resolve(e.target.result || null);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function dtEliminar(slotId) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('descargas_temp', 'readwrite');
+          tx.objectStore('descargas_temp').delete(slotId);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function dtListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('descargas_temp', 'readonly')
+                        .objectStore('descargas_temp').getAll();
+          req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
       }
@@ -2621,7 +2689,7 @@
       }
 
       // — Descargar todas las páginas usando gg.js —
-      async function htDescargarPaginas(galeria, onProgreso) {
+      async function htDescargarPaginas(galeria, onProgreso, slotId = null) {
         actualizarStatus('⏳ Obteniendo rutas de imagen…');
         if (!galeria.files || !galeria.files.length)
           throw new Error('Sin archivos — files: ' + JSON.stringify(galeria.files?.slice(0,1)));
@@ -2646,7 +2714,7 @@
           'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
           'Accept-Language': 'es-ES,es;q=0.9',
-        }, onProgreso);
+        }, onProgreso, false, slotId);
       }
 
       // — Abrir galería en visor —
@@ -2672,15 +2740,80 @@
 
       // — Descargar galería completa (paralelo, sin auto-navegar) —
       async function htDescargarGaleria(galeria, cardEl) {
-        const ph  = cardEl?.querySelector('.bv-cover-placeholder');
-        const img = cardEl?.querySelector('.bv-cover-img');
-        const setPh = t => { if (ph) ph.textContent = t; };
+        const ph     = cardEl?.querySelector('.bv-cover-placeholder');
+        const img    = cardEl?.querySelector('.bv-cover-img');
+        const setPh  = t => { if (ph) ph.textContent = t; };
+        const slotId = 'ht-' + galeria.id;
+
         setPh('⏳');
+
+        // Verificar slot previo
+        const slotPrevio = await dtCargar(slotId);
+        if (slotPrevio && slotPrevio.imagenes.length > 0) {
+          const continuar = confirm(
+            '⚠️ Descarga interrumpida: ' + galeria.nombre +
+            '\n' + slotPrevio.imagenes.length + ' de ' + (slotPrevio.total || '?') + ' imágenes guardadas.' +
+            '\n\n¿Continuar desde donde quedó?'
+          );
+          if (!continuar) {
+            await dtEliminar(slotId);
+          } else {
+            try {
+              // Regenerar entradas frescas — gg.js puede haber cambiado
+              let gg;
+              try { gg = await htFetchGG(); } catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
+              const referer      = 'https://hitomi.la/reader/' + galeria.ht_id + '.html';
+              const todasEntradas = galeria.files.map((file, i) => {
+                const ext = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
+                return { nombre: String(i + 1).padStart(3, '0') + '.' + ext, url: htConstruirUrl(file.hash, ext, gg) };
+              });
+              const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
+              const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+              const nuevas = entradasPend.length > 0
+                ? await batchDescargar(entradasPend, {
+                    'Referer': referer,
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                    'Accept-Language': 'es-ES,es;q=0.9',
+                  }, (n, t) => {
+                    setPh('⏳ ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
+                    actualizarStatus('⏳ ' + galeria.nombre.slice(0, 20) + ' · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
+                  }, false, slotId)
+                : [];
+              const archivos = [...slotPrevio.imagenes, ...nuevas]
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+              setPh('📦');
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
+              await htActualizarZip(galeria.id, zipId);
+              galeria.zip_id = zipId;
+              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+              await dtEliminar(slotId);
+              if (cardEl) {
+                if (ph && img && archivos[0]) {
+                  img.src = URL.createObjectURL(archivos[0].blob);
+                  img.style.display = 'block';
+                  ph.style.display  = 'none';
+                }
+                cardEl.onclick = () => htAbrirEnVisor(galeria);
+              }
+              actualizarStatus('✅ ' + galeria.nombre + ' completado — ' + archivos.length + ' imágenes');
+            } catch(err) {
+              setPh('⬇️');
+              actualizarStatus('❌ HT reanudación: ' + err.message);
+            }
+            return;
+          }
+        }
+
         try {
+          await dtCrear(slotId, { categoria: 'hitomi', nombre: galeria.nombre, total: galeria.files?.length || 0 });
           const archivos = await htDescargarPaginas(galeria, (p, t) => {
             setPh('⏳ ' + p + '/' + t);
             actualizarStatus('⏳ ' + galeria.nombre.slice(0, 20) + ' · ' + p + '/' + t);
-          });
+          }, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
           setPh('📦');
           const zip = new JSZip();
@@ -2690,7 +2823,7 @@
           await htActualizarZip(galeria.id, zipId);
           galeria.zip_id = zipId;
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-          // Actualizar tarjeta sin navegar
+          await dtEliminar(slotId);
           if (cardEl) {
             if (ph && img && archivos[0]) {
               img.src = URL.createObjectURL(archivos[0].blob);
@@ -3029,15 +3162,13 @@
       }
 
       // — Descargar todas las páginas usando paths exactos —
-      async function nhDescargarPaginas(galeria, onProgreso) {
-        // Construir entradas usando el primer CDN disponible
+      async function nhDescargarPaginas(galeria, onProgreso, slotId = null) {
         const entradas = [];
         for (let i = 0; i < galeria.num_pages; i++) {
           const path = galeria.paths
             ? galeria.paths[i]
             : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
           const ext  = path.split('.').pop() || 'webp';
-          // Usar primer CDN — el Worker reintentará si falla
           const url  = 'https://' + NH_CDN[0] + '.nhentai.net/' + path;
           entradas.push({ nombre: String(i + 1).padStart(3, '0') + '.' + ext, url });
         }
@@ -3047,7 +3178,7 @@
           'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
           'Accept-Language': 'es-ES,es;q=0.9',
-        }, onProgreso);
+        }, onProgreso, false, slotId);
       }
 
       // — Abrir galería descargada en visor —
@@ -3072,12 +3203,75 @@
 
       // — Descargar galería completa y guardar —
       async function nhDescargarGaleria(galeria, cardEl) {
-        const ph = cardEl?.querySelector('.bv-cover-placeholder');
+        const ph     = cardEl?.querySelector('.bv-cover-placeholder');
+        const slotId = 'nh-' + galeria.id;
+
         if (ph) ph.textContent = '⏳';
+
+        // Verificar slot previo
+        const slotPrevio = await dtCargar(slotId);
+        if (slotPrevio && slotPrevio.imagenes.length > 0) {
+          const continuar = confirm(
+            '⚠️ Descarga interrumpida: ' + galeria.nombre +
+            '\n' + slotPrevio.imagenes.length + ' de ' + (slotPrevio.total || '?') + ' imágenes guardadas.' +
+            '\n\n¿Continuar desde donde quedó?'
+          );
+          if (!continuar) {
+            await dtEliminar(slotId);
+          } else {
+            try {
+              // Regenerar entradas frescas
+              const todasEntradas = [];
+              for (let i = 0; i < galeria.num_pages; i++) {
+                const path = galeria.paths
+                  ? galeria.paths[i]
+                  : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
+                const ext = path.split('.').pop() || 'webp';
+                todasEntradas.push({ nombre: String(i + 1).padStart(3, '0') + '.' + ext, url: 'https://' + NH_CDN[0] + '.nhentai.net/' + path });
+              }
+              const nombresYa      = new Set(slotPrevio.imagenes.map(a => a.nombre));
+              const entradasPend   = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+              const nuevas = entradasPend.length > 0
+                ? await batchDescargar(entradasPend, {
+                    'Referer': 'https://nhentai.net/',
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                    'Accept-Language': 'es-ES,es;q=0.9',
+                  }, (n, t) => {
+                    actualizarStatus('⏳ NH · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
+                    if (ph) ph.textContent = '⏳ ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length;
+                  }, false, slotId)
+                : [];
+              const archivos = [...slotPrevio.imagenes, ...nuevas]
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+              actualizarStatus('⏳ Creando ZIP…');
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
+              await nhActualizarZip(galeria.id, zipId);
+              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+              await dtEliminar(slotId);
+              archivosDescargados.length = 0;
+              archivos.forEach(a => archivosDescargados.push(a));
+              _visorContexto = null;
+              mostrarVisor(true);
+              mostrarImagenesEnVisor();
+              actualizarStatus('✅ ' + galeria.nombre + ' completado — ' + archivos.length + ' páginas');
+            } catch(err) {
+              if (ph) ph.textContent = '⬇️';
+              actualizarStatus('❌ NH reanudación: ' + err.message);
+            }
+            return;
+          }
+        }
+
         try {
+          await dtCrear(slotId, { categoria: 'nhentai', nombre: galeria.nombre, total: galeria.num_pages });
           const archivos = await nhDescargarPaginas(galeria, (p, t) => {
             actualizarStatus('⏳ NH · ' + p + '/' + t);
-          });
+            if (ph) ph.textContent = '⏳ ' + p + '/' + t;
+          }, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
@@ -3086,6 +3280,7 @@
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
           if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          await dtEliminar(slotId);
           archivosDescargados.length = 0;
           archivos.forEach(a => archivosDescargados.push(a));
           _visorContexto = null;
@@ -3580,6 +3775,75 @@
 
         // No descargado → descargar
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+
+        const slotId = 'sjz-' + coleccion.id + '-' + cap.num;
+
+        // Verificar si hay descarga previa interrumpida
+        const slotPrevio = await dtCargar(slotId);
+        if (slotPrevio && slotPrevio.imagenes.length > 0) {
+          const continuar = confirm(
+            '⚠️ Descarga interrumpida del cap. ' + cap.num +
+            '\n' + slotPrevio.imagenes.length + ' de ' + (slotPrevio.total || '?') + ' imágenes guardadas.' +
+            '\n\n¿Continuar desde donde quedó?'
+          );
+          if (!continuar) {
+            await dtEliminar(slotId);
+          } else {
+            chipEl.classList.add('descargando');
+            actualizarStatus('⏳ Reanudando cap. ' + cap.num + '…');
+            try {
+              const base     = CF_WORKER.replace(/\/$/, '');
+              const html     = await fetch(base + '/raw?target=' + encodeURIComponent(cap.url)).then(r => r.text());
+              const imageUrls = sjzExtraerImagenes(html);
+              if (!imageUrls.length) throw new Error('No se encontraron imágenes');
+
+              // Nombres ya descargados
+              const nombresYaDescargados = new Set(slotPrevio.imagenes.map(a => a.nombre));
+
+              // Entradas pendientes — las que aún no están en el slot
+              const todasEntradas = imageUrls.map((imgUrl, i) => ({
+                nombre: String(i).padStart(3, '0') + '.' + (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase(),
+                url:    imgUrl
+              }));
+              const entradasPendientes = todasEntradas.filter(e => !nombresYaDescargados.has(e.nombre));
+
+              actualizarStatus('⏳ Cap.' + cap.num + ' · reanudando ' + entradasPendientes.length + ' restantes…');
+
+              // Descargar solo las pendientes
+              const nuevas = entradasPendientes.length > 0
+                ? await batchDescargar(entradasPendientes, null, (n, t) => {
+                    const prog = (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length;
+                    actualizarStatus('⏳ Cap.' + cap.num + ' · ' + prog);
+                    chipEl.textContent = prog;
+                  }, false, slotId)
+                : [];
+
+              // Combinar previas + nuevas y ordenar por nombre
+              const archivos = [...slotPrevio.imagenes, ...nuevas]
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+
+              // Crear ZIP y guardar
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const zipId   = await sjzGuardarCapitulo(
+                coleccion.nombre + ' - Cap ' + cap.num + '.zip',
+                zipBlob, coleccion.id, cap.num
+              );
+              if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+              await dtEliminar(slotId);
+              chipEl.classList.remove('descargando');
+              chipEl.classList.add('descargado');
+              chipEl.title = '✅ Descargado — tap para abrir';
+              actualizarStatus('✅ Cap. ' + cap.num + ' completado — ' + archivos.length + ' imágenes');
+            } catch(err) {
+              chipEl.classList.remove('descargando');
+              actualizarStatus('❌ Error al reanudar: ' + err.message);
+            }
+            return;
+          }
+        }
+
         chipEl.classList.add('descargando');
         actualizarStatus('⏳ Descargando cap. ' + cap.num + '…');
 
@@ -3591,16 +3855,19 @@
           const imageUrls = sjzExtraerImagenes(html);
           if (!imageUrls.length) throw new Error('No se encontraron imágenes');
 
-          // 2. Descargar imágenes via batch
+          // 2. Crear slot temporal
           const entradas = imageUrls.map((imgUrl, i) => ({
             nombre: String(i).padStart(3, '0') + '.' + (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase(),
             url:    imgUrl
           }));
+          await dtCrear(slotId, { categoria: 'samurai', nombre: coleccion.nombre + ' - Cap ' + cap.num, total: entradas.length });
+
+          // 3. Descargar imágenes via batch con persistencia
           const archivos = await batchDescargar(entradas, null, (n, t) => {
             const prog = n + '/' + t;
             actualizarStatus('⏳ Cap.' + cap.num + ' · ' + prog);
             chipEl.textContent = prog;
-          });
+          }, false, slotId);
 
           // 3. Crear ZIP
           const zip = new JSZip();
@@ -3622,6 +3889,7 @@
           chipEl.title = '✅ Descargado';
 
           // 7. Marcar como descargado — sin navegar automáticamente
+          await dtEliminar(slotId);
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado — tap para abrir';
@@ -3630,6 +3898,7 @@
         } catch(err) {
           chipEl.classList.remove('descargando');
           actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
+          // No eliminar slot — preservar progreso para reanudar
         }
       }
 
@@ -4096,7 +4365,7 @@
 
       const BATCH_SIZE = 5;
 
-      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false) {
+      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null) {
         if (!CF_WORKER) throw new Error('Worker no configurado');
         const base     = CF_WORKER.replace(/\/$/, '');
         const archivos = [];
@@ -4147,6 +4416,7 @@
                   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
                   const blob = new Blob([bytes], { type: metaPendiente.tipo });
                   archivos.push({ nombre: metaPendiente.nombre, blob });
+                  if (slotId) dtAgregarImagen(slotId, { nombre: metaPendiente.nombre, blob }).catch(() => {});
                   if (onProgreso) onProgreso(archivos.length, entradas.length);
                 } catch(e) {
                   actualizarStatus('⚠️ base64 inválido: ' + metaPendiente.nombre + ' — ' + e.message);
@@ -4204,7 +4474,7 @@
       }
 
       // — Descargar imágenes del CDN —
-      async function mwDescargarImagenes(slug, capNum, onProgreso) {
+      async function mwDescargarImagenes(slug, capNum, onProgreso, slotId = null) {
         actualizarStatus('🔍 Detectando CDN para cap. ' + capNum + '…');
         const desc = await mwDescubrirCDN(slug, capNum);
         if (!desc) throw new Error('No se encontró CDN — verifica el slug o el episodio');
@@ -4227,7 +4497,7 @@
           'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
           'Accept-Language': 'es-ES,es;q=0.9',
-        }, onProgreso, true); // stopOn404 = true
+        }, onProgreso, true, slotId);
       }
       
 
@@ -4249,26 +4519,80 @@
           return;
         }
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+
+        const slotId = 'mw-' + coleccion.id + '-' + cap.num;
+
+        // Verificar slot previo
+        const slotPrevio = await dtCargar(slotId);
+        if (slotPrevio && slotPrevio.imagenes.length > 0) {
+          const continuar = confirm(
+            '⚠️ Descarga interrumpida del cap. ' + cap.num +
+            '\n' + slotPrevio.imagenes.length + ' imágenes guardadas.' +
+            '\n\n¿Continuar desde donde quedó?'
+          );
+          if (!continuar) {
+            await dtEliminar(slotId);
+          } else {
+            chipEl.classList.add('descargando');
+            try {
+              // Redescubrir CDN — puede haber cambiado
+              const desc = await mwDescubrirCDN(coleccion.slug, cap.num);
+              if (!desc) throw new Error('No se encontró CDN');
+              const { cdn, ext } = desc;
+              const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + coleccion.slug + '/chapter_' + cap.num + '/ver_01/';
+              const todasEntradas = [];
+              for (let i = 1; i <= 300; i++) {
+                todasEntradas.push({ nombre: String(i).padStart(3, '0') + '.' + ext, url: imgBase + String(i).padStart(3, '0') + '.' + ext });
+              }
+              const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
+              const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+              const nuevas = entradasPend.length > 0
+                ? await batchDescargar(entradasPend, {
+                    'Referer': 'https://manhwaweb.com/',
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                    'Accept-Language': 'es-ES,es;q=0.9',
+                  }, n => {
+                    actualizarStatus('⏳ Cap.' + cap.num + ' · ' + (slotPrevio.imagenes.length + n));
+                    chipEl.textContent = slotPrevio.imagenes.length + n;
+                  }, true, slotId)
+                : [];
+              const archivos = [...slotPrevio.imagenes, ...nuevas]
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+              actualizarStatus('⏳ Creando ZIP…');
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
+              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+              await dtEliminar(slotId);
+              chipEl.classList.remove('descargando');
+              chipEl.classList.add('descargado');
+              chipEl.title = '✅ Descargado — tap para abrir';
+              actualizarStatus('✅ Cap. ' + cap.num + ' completado — ' + archivos.length + ' imágenes');
+            } catch(err) {
+              chipEl.classList.remove('descargando');
+              actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
+            }
+            return;
+          }
+        }
+
         chipEl.classList.add('descargando');
         try {
+          await dtCrear(slotId, { categoria: 'manhwa', nombre: coleccion.nombre + ' - Cap ' + cap.num, total: 0 });
           const archivos = await mwDescargarImagenes(coleccion.slug, cap.num, n => {
-          actualizarStatus('⏳ Cap.' + cap.num + ' · imagen ' + n);
-          chipEl.textContent = n;
-        });        
+            actualizarStatus('⏳ Cap.' + cap.num + ' · imagen ' + n);
+            chipEl.textContent = n;
+          }, slotId);
           if (!archivos.length) throw new Error('Sin imágenes — verifica que el Worker tenga el endpoint /proxy-img');
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
-          const zipId   = await mwGuardarCapitulo(
-            coleccion.nombre + ' - Cap ' + cap.num + '.zip',
-            zipBlob, coleccion.id, cap.num
-          );
+          const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
           if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-          chipEl.classList.remove('descargando');
-          chipEl.classList.add('descargado');
-          chipEl.title = '✅ Descargado';
-          // Marcar como descargado — sin navegar automáticamente
+          await dtEliminar(slotId);
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado — tap para abrir';
