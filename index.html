@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v37
+          PerfectView v40
         </div>
       </header>
 
@@ -2817,7 +2817,7 @@
         document.getElementById('htInfo').textContent = '⏳ Guardando…';
         try {
           const id  = await htGuardar(_htInfoPendiente);
-          const gal = { ..._htInfoPendiente, id, zip_id: null };
+          const gal = { ..._htInfoPendiente, id, zip_id: null, fecha: new Date().toISOString() };
           document.getElementById('htUrl').value = '';
           _htInfoPendiente = null;
           // Agregar solo la nueva tarjeta sin re-renderizar el grid
@@ -3282,7 +3282,7 @@
         document.getElementById('nhBtnDescargar').style.display = 'none';
         document.getElementById('nhInfo').textContent = '⏳ Guardando…';
         const id  = await nhGuardar(_nhInfoPendiente);
-        const gal = { ..._nhInfoPendiente, id, zip_id: null };
+        const gal = { ..._nhInfoPendiente, id, zip_id: null, fecha: new Date().toISOString() };
         _nhInfoPendiente = null;
         document.getElementById('nhUrl').value = '';
         // Agregar solo la nueva tarjeta sin re-renderizar el grid
