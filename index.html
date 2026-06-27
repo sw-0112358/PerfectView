@@ -1851,13 +1851,39 @@
 
       async function bvVerEspacio() {
         try {
-          const est = await navigator.storage.estimate();
-          const usado = (est.usage / 1048576).toFixed(1);
-          const total = (est.quota / 1048576).toFixed(1);
+          const est   = await navigator.storage.estimate();
+          const usado = (est.usage  / 1048576).toFixed(1);
+          const total = (est.quota  / 1048576).toFixed(1);
           const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
           const el = document.getElementById('bvEspacio');
           if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
-          alert(`Almacenamiento del sitio\n\nUsado: ${usado} MB\nLibre: ${libre} MB\nTotal asignado: ${total} MB`);
+
+          const enCarpeta = categoriaActual !== 'menu';
+          const items     = enCarpeta ? await bvListar(categoriaActual) : [];
+          const linCarpeta = enCarpeta && items.length
+            ? `\n\nEsta carpeta tiene ${items.length} archivo(s).`
+            : '';
+
+          const limpiar = confirm(
+            `Almacenamiento del sitio\n\nUsado: ${usado} MB\nLibre: ${libre} MB\nTotal asignado: ${total} MB`
+            + linCarpeta
+            + (enCarpeta && items.length ? '\n\n¿Limpiar esta carpeta?' : '')
+          );
+
+          if (limpiar && enCarpeta && items.length) {
+            actualizarStatus('🗑️ Eliminando ' + items.length + ' archivos…');
+            let ok = 0;
+            for (const item of items) {
+              try {
+                await bvEliminarDB(item.id);
+                bvEliminarPortada(item.id).catch(() => {});
+                delete _bvPortadas[item.id];
+                ok++;
+              } catch(e) {}
+            }
+            actualizarStatus('✅ ' + ok + ' archivos eliminados');
+            renderBoveda();
+          }
         } catch(err) {
           alert('No se pudo obtener el espacio: ' + err.message);
         }
@@ -4520,6 +4546,24 @@
       }
 
       // — Eliminar de bóveda —
+      async function bvLimpiarTodo() {
+        const items = await bvListar(categoriaActual);
+        if (!items.length) { actualizarStatus('⚠️ La carpeta ya está vacía'); return; }
+        if (!confirm('¿Eliminar los ' + items.length + ' ZIPs de esta carpeta? No se puede deshacer.')) return;
+        actualizarStatus('🗑️ Eliminando ' + items.length + ' archivos…');
+        let ok = 0;
+        for (const item of items) {
+          try {
+            await bvEliminarDB(item.id);
+            bvEliminarPortada(item.id).catch(() => {});
+            delete _bvPortadas[item.id];
+            ok++;
+          } catch(e) {}
+        }
+        actualizarStatus('✅ ' + ok + ' archivos eliminados');
+        renderBoveda();
+      }
+
       async function bvEliminar(id, cardEl) {
         if (!confirm('¿Eliminar este ZIP de la Bóveda? No se puede deshacer.')) return;
         try {
