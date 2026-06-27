@@ -4373,84 +4373,22 @@
         }
       }
 
-      const BATCH_SIZE = 5;
-
-      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null, delayMs = 0) {
+      async function batchDescargar(entradas, headers, onProgreso, stopOn404 = false, slotId = null) {
         if (!CF_WORKER) throw new Error('Worker no configurado');
-        const base     = CF_WORKER.replace(/\/$/, '');
+        const referer  = headers ? (headers['Referer'] || headers['referer'] || '') : '';
         const archivos = [];
-        let   parar    = false;
 
-        for (let g = 0; g < entradas.length; g += BATCH_SIZE) {
-          if (parar) break;
-          if (g > 0 && delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
-          const grupo = entradas.slice(g, g + BATCH_SIZE);
-
-          const resp = await fetch(base + '/batch-download', {
-            method: 'POST',
-            body:   JSON.stringify({ urls: grupo, headers })
-          });
-          if (!resp.ok) throw new Error('batch-download HTTP ' + resp.status);
-
-          const reader  = resp.body.getReader();
-          const decoder = new TextDecoder('utf-8', { fatal: false });
-          let   rawBytes   = new Uint8Array(0);
-          let   metaPendiente = null;
-          const SEP = 0x1e; // \x1e en byte
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            // Acumular bytes crudos
-            const nuevo = new Uint8Array(rawBytes.length + value.length);
-            nuevo.set(rawBytes);
-            nuevo.set(value, rawBytes.length);
-            rawBytes = nuevo;
-
-            // Dividir por 0x1e
-            while (true) {
-              const idx = rawBytes.indexOf(SEP);
-              if (idx === -1) break;
-
-              const parteBytes = rawBytes.slice(0, idx);
-              rawBytes = rawBytes.slice(idx + 1);
-
-              const parte = decoder.decode(parteBytes).trim();
-              if (!parte) continue;
-
-              if (metaPendiente) {
-                // Esta parte es el base64 — está limpio porque viene de bytes ASCII
-                try {
-                  const bin   = atob(parte.replace(/[\r\n\s]/g, ''));
-                  const bytes = new Uint8Array(bin.length);
-                  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                  const blob = new Blob([bytes], { type: metaPendiente.tipo });
-                  archivos.push({ nombre: metaPendiente.nombre, blob });
-                  if (slotId) dtAgregarImagen(slotId, { nombre: metaPendiente.nombre, blob }).catch(() => {});
-                  if (onProgreso) onProgreso(archivos.length, entradas.length);
-                } catch(e) {
-                  actualizarStatus('⚠️ base64 inválido: ' + metaPendiente.nombre + ' — ' + e.message);
-                }
-                metaPendiente = null;
-                continue;
-              }
-
-              let meta;
-              try { meta = JSON.parse(parte); } catch(e) { continue; }
-
-              if (meta.fin) { rawBytes = new Uint8Array(0); break; }
-              if (!meta.ok) {
-                if (stopOn404 && (meta.error === 404 || meta.error === 'no-imagen')) {
-                  parar = true;
-                  break;
-                }
-                actualizarStatus('⚠️ ' + meta.nombre + ': ' + meta.error);
-                continue;
-              }
-              metaPendiente = meta;
-            }
+        for (let i = 0; i < entradas.length; i++) {
+          const { nombre, url } = entradas[i];
+          const blob = await proxyImagen(url, referer);
+          if (!blob) {
+            if (stopOn404) break;
+            actualizarStatus('⚠️ ' + nombre + ': no disponible');
+            continue;
           }
+          archivos.push({ nombre, blob });
+          if (slotId) dtAgregarImagen(slotId, { nombre, blob }).catch(() => {});
+          if (onProgreso) onProgreso(archivos.length, entradas.length);
         }
         return archivos;
       }
