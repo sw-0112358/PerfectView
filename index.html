@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v40
+          PerfectView v41
         </div>
       </header>
 
@@ -1173,6 +1173,7 @@
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn-ghost btn-sm" onclick="bvBloquear()">🔒 Bloquear</button>
+            <button class="btn-ghost btn-sm" onclick="bvLimpiarTemp()">✨</button>
             <button class="btn-ghost btn-sm" onclick="bvNavegar('pantalla1')">← Volver</button>
           </div>
         </div>
@@ -1903,6 +1904,15 @@
           req.onsuccess = () => resolve();
           req.onerror   = e => reject(e.target.error);
         });
+      }
+
+      async function bvLimpiarTemp() {
+        const slots = await dtListar();
+        if (!slots.length) { actualizarStatus('✨ No hay imágenes temporales'); return; }
+        const totalImg = slots.reduce((acc, s) => acc + (s.imagenes?.length || 0), 0);
+        if (!confirm('Liberar ' + totalImg + ' imágenes temporales de ' + slots.length + ' descargas incompletas?\n\nLos .zip guardados no se tocarán.')) return;
+        for (const slot of slots) await dtEliminar(slot.slotId);
+        actualizarStatus('✨ ' + totalImg + ' imágenes temporales liberadas');
       }
 
       async function bvLimpiarTodo() {
