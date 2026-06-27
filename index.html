@@ -3161,23 +3161,28 @@
       }
 
       // — Descargar todas las páginas usando paths exactos —
-      async function nhDescargarPaginas(galeria, onProgreso, slotId = null) {
+      function nhConstruirEntradas(galeria) {
         const entradas = [];
         for (let i = 0; i < galeria.num_pages; i++) {
           const path = galeria.paths
             ? galeria.paths[i]
             : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
-          const ext  = path.split('.').pop() || 'webp';
-          const url  = 'https://' + NH_CDN[0] + '.nhentai.net/' + path;
-          entradas.push({ nombre: String(i + 1).padStart(3, '0') + '.' + ext, url });
+          const ext = path.split('.').pop() || 'webp';
+          entradas.push({
+            nombre: String(i + 1).padStart(3, '0') + '.' + ext,
+            url:    'https://' + NH_CDN[0] + '.nhentai.net/' + path
+          });
         }
+        return entradas;
+      }
 
+      async function nhDescargarPaginas(entradas, onProgreso, slotId = null) {
         return await batchDescargar(entradas, {
           'Referer':         'https://nhentai.net/',
           'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
           'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
           'Accept-Language': 'es-ES,es;q=0.9',
-        }, onProgreso, false, slotId, 500);
+        }, onProgreso, false, slotId, 1500);
       }
 
       // — Abrir galería descargada en visor —
@@ -3201,80 +3206,74 @@
       }
 
       // — Descargar galería completa y guardar —
+      // — Descargar galería completa y guardar —
       async function nhDescargarGaleria(galeria, cardEl) {
-        const ph    = cardEl?.querySelector('.bv-cover-placeholder');
-        const img   = cardEl?.querySelector('.bv-cover-img');
-        const setPh = t => { if (ph) ph.textContent = t; };
+        const ph     = cardEl?.querySelector('.bv-cover-placeholder');
+        const img    = cardEl?.querySelector('.bv-cover-img');
+        const setPh  = t => { if (ph) ph.textContent = t; };
         const slotId = 'nh-' + galeria.id;
 
         setPh('⏳');
 
+        // Construir entradas UNA sola vez desde los paths guardados
+        const todasEntradas = nhConstruirEntradas(galeria);
+
         // Verificar slot previo
         const slotPrevio = await dtCargar(slotId);
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
-          actualizarStatus('⏳ Reanudando: ' + galeria.nombre + ' · ' + slotPrevio.imagenes.length + ' ya descargadas');
+          actualizarStatus('⏳ Reanudando: ' + galeria.nombre + ' · ' + slotPrevio.imagenes.length + '/' + todasEntradas.length);
           try {
-            // Regenerar entradas frescas
-              const todasEntradas = [];
-              for (let i = 0; i < galeria.num_pages; i++) {
-                const path = galeria.paths
-                  ? galeria.paths[i]
-                  : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
-                const ext = path.split('.').pop() || 'webp';
-                todasEntradas.push({ nombre: String(i + 1).padStart(3, '0') + '.' + ext, url: 'https://' + NH_CDN[0] + '.nhentai.net/' + path });
-              }
-              const nombresYa      = new Set(slotPrevio.imagenes.map(a => a.nombre));
-              const entradasPend   = todasEntradas.filter(e => !nombresYa.has(e.nombre));
-              const nuevas = entradasPend.length > 0
-                ? await batchDescargar(entradasPend, {
-                    'Referer': 'https://nhentai.net/',
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-                    'Accept-Language': 'es-ES,es;q=0.9',
-                  }, (n, t) => {
-                    actualizarStatus('⏳ NH · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
-                    if (ph) ph.textContent = '⏳ ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length;
-                  }, false, slotId)
-                : [];
-              const archivos = [...slotPrevio.imagenes, ...nuevas]
-                .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-              actualizarStatus('⏳ Creando ZIP…');
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
-              await nhActualizarZip(galeria.id, zipId);
-              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-              await dtEliminar(slotId);
-              galeria.zip_id = zipId;
-              if (cardEl) {
-                if (img && archivos[0]) {
-                  img.src = URL.createObjectURL(archivos[0].blob);
-                  img.style.display = 'block';
-                  ph.style.display  = 'none';
-                }
-                cardEl.onclick = () => nhAbrirEnVisor(galeria);
-              }
-              actualizarStatus('✅ ' + galeria.nombre + ' completado — toca para ver');
-            } catch(err) {
-              if (ph) ph.textContent = '⬇️';
-              actualizarStatus('❌ NH reanudación: ' + err.message);
+            const nombresYa    = new Set(slotPrevio.imagenes.map(a => a.nombre));
+            const entradasPend = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+            const nuevas = entradasPend.length > 0
+              ? await nhDescargarPaginas(entradasPend, (n, t) => {
+                  const total = slotPrevio.imagenes.length + n;
+                  setPh('⏳ ' + total + '/' + todasEntradas.length);
+                  actualizarStatus('⏳ NH · ' + total + '/' + todasEntradas.length);
+                }, slotId)
+              : [];
+            const archivos = [...slotPrevio.imagenes, ...nuevas]
+              .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            if (archivos.length < todasEntradas.length) {
+              actualizarStatus('⚠️ Solo ' + archivos.length + '/' + todasEntradas.length + ' — reintentando al reabrir');
+              setPh('⬇️');
+              return;
             }
-            return;
+            setPh('📦');
+            actualizarStatus('⏳ Creando ZIP…');
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
+            await nhActualizarZip(galeria.id, zipId);
+            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            await dtEliminar(slotId);
+            galeria.zip_id = zipId;
+            if (cardEl) {
+              if (img && archivos[0]) {
+                img.src = URL.createObjectURL(archivos[0].blob);
+                img.style.display = 'block';
+                ph.style.display  = 'none';
+              }
+              cardEl.onclick = () => nhAbrirEnVisor(galeria);
+            }
+            actualizarStatus('✅ ' + galeria.nombre + ' completado — toca para ver');
+          } catch(err) {
+            setPh('⬇️');
+            actualizarStatus('❌ NH reanudación: ' + err.message);
+          }
+          return;
         }
 
         try {
-          await dtCrear(slotId, { categoria: 'nhentai', nombre: galeria.nombre, total: galeria.num_pages });
-          
-          
-          
-          const archivos = await nhDescargarPaginas(galeria, (p, t) => {
+          await dtCrear(slotId, { categoria: 'nhentai', nombre: galeria.nombre, total: todasEntradas.length });
+          const archivos = await nhDescargarPaginas(todasEntradas, (p, t) => {
             setPh('⏳ ' + p + '/' + t);
             actualizarStatus('⏳ NH · ' + p + '/' + t);
           }, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
-          if (archivos.length < galeria.num_pages) {
-            actualizarStatus('⚠️ Solo ' + archivos.length + '/' + galeria.num_pages + ' — reintentando al reabrir');
+          if (archivos.length < todasEntradas.length) {
+            actualizarStatus('⚠️ Solo ' + archivos.length + '/' + todasEntradas.length + ' — reintentando al reabrir');
             setPh('⬇️');
             return;
           }
@@ -3287,7 +3286,6 @@
           await nhActualizarZip(galeria.id, zipId);
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
           await dtEliminar(slotId);
-          await nhActualizarZip(galeria.id, zipId);
           galeria.zip_id = zipId;
           if (cardEl) {
             if (img && archivos[0]) {
