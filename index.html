@@ -3266,6 +3266,11 @@
             actualizarStatus('⏳ NH · ' + p + '/' + t);
           }, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
+          if (archivos.length < galeria.num_pages) {
+            actualizarStatus('⚠️ Solo ' + archivos.length + '/' + galeria.num_pages + ' — reintentando al reabrir');
+            setPh('⬇️');
+            return;
+          }
           setPh('📦');
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
@@ -3315,6 +3320,12 @@
 
       async function nhConfirmarDescarga() {
         if (!_nhInfoPendiente) return;
+        const existentes = await nhListar();
+        const yaExiste   = existentes.find(g => g.nh_id === _nhInfoPendiente.nh_id);
+        if (yaExiste) {
+          document.getElementById('nhInfo').textContent = '⚠️ Esta galería ya está en la bóveda';
+          return;
+        }
         document.getElementById('nhBtnDescargar').style.display = 'none';
         document.getElementById('nhInfo').textContent = '⏳ Guardando…';
         await nhGuardar(_nhInfoPendiente);
