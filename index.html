@@ -1211,6 +1211,7 @@
           <div style="display:flex;gap:8px">
             <button class="btn-ghost btn-sm" onclick="bvBloquear()">🔒 Bloquear</button>
             <button class="btn-ghost btn-sm" onclick="bvNavegar('pantalla1')">← Volver</button>
+            <button class="btn-ghost btn-sm" onclick="testBatch()">🧪 Test</button>
           </div>
         </div>
 
@@ -1497,19 +1498,41 @@
 
       async function StartdnList() {
         const items = document.querySelectorAll("#listContainer .item");
-        const urls = Array.from(items).map(i => i.innerText.trim());
-        if (urls.length === 0) { actualizarStatus("No hay ítems."); return; }
-        let count = 0;
-        for (const url of urls) {
-          if (!url) continue;
-          await downloadFile(url);
-          count++;
-          actualizarStatus("⬇️ " + count + "/" + urls.length + " — " + url.split("/").pop());
-          if (!trabajandoDn) { actualizarStatus("⏹ Detenido. Quedan " + (urls.length - count)); return; }
+        const urls  = Array.from(items).map(i => i.innerText.trim()).filter(Boolean);
+        if (!urls.length) { actualizarStatus("No hay ítems."); return; }
+
+        const entradas = urls.map(url => ({
+          nombre: getNombreRef(url) + "/" + url.split("/").pop(),
+          url
+        }));
+
+        try {
+          const archivos = await batchDescargar(entradas, null, (n, t) => {
+            actualizarStatus("⬇️ " + n + "/" + t + " — " + entradas[n - 1].nombre.split("/").pop());
+            if (!trabajandoDn) throw new Error('detenido');
+          });
+          archivos.forEach(a => {
+            archivosDescargados.push(a);
+            const chk = document.getElementById("chkAutoVisor");
+            if (chk && chk.checked) {
+              const visor = document.getElementById("visor");
+              const img   = document.createElement("img");
+              img.src = URL.createObjectURL(a.blob);
+              img.classList.add("mangaImg");
+              img.style.maxWidth = "100%";
+              img.style.margin   = "0";
+              if (filtroActivo) img.classList.add(filtroActivo);
+              visor.appendChild(img);
+            }
+            removerCelda(a.nombre.split("/").pop());
+          });
+          eliminarLinksLocal();
+          await GuardarZip();
+          actualizarStatus("✅ Completado: " + archivos.length + " archivos");
+        } catch(err) {
+          if (err.message === 'detenido') actualizarStatus("⏹ Proceso detenido.");
+          else actualizarStatus("❌ " + err.message);
         }
-        eliminarLinksLocal();
-        await GuardarZip();
-        actualizarStatus("✅ Completado: " + count + " archivos");
         trabajandoDn = false;
       }
 
@@ -2600,31 +2623,30 @@
       // — Descargar todas las páginas usando gg.js —
       async function htDescargarPaginas(galeria, onProgreso) {
         actualizarStatus('⏳ Obteniendo rutas de imagen…');
-        if (!galeria.files || !galeria.files.length) {
+        if (!galeria.files || !galeria.files.length)
           throw new Error('Sin archivos — files: ' + JSON.stringify(galeria.files?.slice(0,1)));
-        }
+
         let gg;
         try { gg = await htFetchGG(); }
         catch(e) { throw new Error('No se pudo cargar gg.js: ' + e.message); }
 
         const referer  = 'https://hitomi.la/reader/' + galeria.ht_id + '.html';
-        const archivos = [];
-        for (let i = 0; i < galeria.files.length; i++) {
-          const file    = galeria.files[i];
-          const pageNum = i + 1;
-          const ext     = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
-          const url     = htConstruirUrl(file.hash, ext, gg);
 
-          // Intentar directo con cookies del browser primero
-          let blob = await htFetchDirecto(url);
-          // Fallback al Worker si falla
-          if (!blob) blob = await proxyImagen(url, referer);
+        // Construir lista de entradas con URLs ya resueltas
+        const entradas = galeria.files.map((file, i) => {
+          const ext = file.hasavif ? 'avif' : (file.haswebp ? 'webp' : (file.name.split('.').pop() || 'webp'));
+          return {
+            nombre: String(i + 1).padStart(3, '0') + '.' + ext,
+            url:    htConstruirUrl(file.hash, ext, gg)
+          };
+        });
 
-          if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible'); continue; }
-          archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
-          if (onProgreso) onProgreso(pageNum, galeria.files.length);
-        }
-        return archivos;
+        return await batchDescargar(entradas, {
+          'Referer':         referer,
+          'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+          'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'es-ES,es;q=0.9',
+        }, onProgreso);
       }
 
       // — Abrir galería en visor —
@@ -3008,24 +3030,24 @@
 
       // — Descargar todas las páginas usando paths exactos —
       async function nhDescargarPaginas(galeria, onProgreso) {
-        const archivos = [];
+        // Construir entradas usando el primer CDN disponible
+        const entradas = [];
         for (let i = 0; i < galeria.num_pages; i++) {
-          const pageNum = i + 1;
-          const path    = galeria.paths
+          const path = galeria.paths
             ? galeria.paths[i]
-            : 'galleries/' + galeria.media_id + '/' + pageNum + '.webp';
+            : 'galleries/' + galeria.media_id + '/' + (i + 1) + '.webp';
           const ext  = path.split('.').pop() || 'webp';
-          let   blob = null;
-          for (const cdn of NH_CDN) {
-            const url = 'https://' + cdn + '.nhentai.net/' + path;
-            blob = await proxyImagen(url, 'https://nhentai.net/');
-            if (blob) break;
-          }
-          if (!blob) { actualizarStatus('⚠️ Pág.' + pageNum + ' no disponible'); continue; }
-          archivos.push({ nombre: String(pageNum).padStart(3, '0') + '.' + ext, blob });
-          if (onProgreso) onProgreso(pageNum, galeria.num_pages);
+          // Usar primer CDN — el Worker reintentará si falla
+          const url  = 'https://' + NH_CDN[0] + '.nhentai.net/' + path;
+          entradas.push({ nombre: String(i + 1).padStart(3, '0') + '.' + ext, url });
         }
-        return archivos;
+
+        return await batchDescargar(entradas, {
+          'Referer':         'https://nhentai.net/',
+          'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+          'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'es-ES,es;q=0.9',
+        }, onProgreso);
       }
 
       // — Abrir galería descargada en visor —
@@ -3187,6 +3209,30 @@
             dlBtn.style.cssText = 'top:6px;right:36px';
             dlBtn.onclick = e => { e.stopPropagation(); nhExportarGaleria(gal); };
             card.appendChild(dlBtn);
+          } else {
+            const linkBtn = document.createElement('button');
+            linkBtn.className = 'bv-menu-btn';
+            linkBtn.textContent = '📎';
+            linkBtn.style.cssText = 'top:6px;right:36px';
+            linkBtn.title = 'Copiar links de imágenes';
+            linkBtn.onclick = async e => {
+              e.stopPropagation();
+              const links = [];
+              for (let i = 0; i < gal.num_pages; i++) {
+                const path = gal.paths
+                  ? gal.paths[i]
+                  : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
+                links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
+              }
+              const blob = new Blob([links.join('\n')], { type: 'text/plain' });
+              const a    = document.createElement('a');
+              a.href     = URL.createObjectURL(blob);
+              a.download = gal.nombre.replace(/[\\/:*?"<>|]/g, '_') + '.txt';
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+              actualizarStatus('📎 ' + links.length + ' links exportados');
+            };
+            card.appendChild(linkBtn);
           }
 
           card.append(placeholder, img, footer, delBtn);
@@ -3545,18 +3591,16 @@
           const imageUrls = sjzExtraerImagenes(html);
           if (!imageUrls.length) throw new Error('No se encontraron imágenes');
 
-          // 2. Descargar imágenes
-          const archivos = [];
-          for (let i = 0; i < imageUrls.length; i++) {
-            const prog = (i + 1) + '/' + imageUrls.length;
+          // 2. Descargar imágenes via batch
+          const entradas = imageUrls.map((imgUrl, i) => ({
+            nombre: String(i).padStart(3, '0') + '.' + (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase(),
+            url:    imgUrl
+          }));
+          const archivos = await batchDescargar(entradas, null, (n, t) => {
+            const prog = n + '/' + t;
             actualizarStatus('⏳ Cap.' + cap.num + ' · ' + prog);
             chipEl.textContent = prog;
-            const imgUrl = imageUrls[i];
-            const ext    = (imgUrl.split('.').pop().split('?')[0] || 'jpg').toLowerCase();
-            const nombre = String(i).padStart(3, '0') + '.' + ext;
-            const blob   = await fetch(base + '/download?target=' + encodeURIComponent(imgUrl)).then(r => r.blob());
-            archivos.push({ nombre, blob });
-          }
+          });
 
           // 3. Crear ZIP
           const zip = new JSZip();
@@ -4023,6 +4067,107 @@
       }
       
       // — Fetch genérico con Referer vía Worker —
+      async function testBatch() {
+        const base = (CF_WORKER || '').replace(/\/$/, '');
+        actualizarStatus('🧪 Probando: ' + base);
+        // Test 1: GET simple
+        try {
+          const r1 = await fetch(base + '/kv-load?id=test123');
+          actualizarStatus('✅ GET ok HTTP ' + r1.status);
+        } catch(e) {
+          actualizarStatus('❌ GET falló: ' + e.message);
+          return;
+        }
+        // Test 2: POST batch text/plain con imagen real
+        try {
+          const r2 = await fetch(base + '/batch-download', {
+            method: 'POST',
+            body:   JSON.stringify({
+              urls: [{ nombre: 'test.png', url: 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png' }],
+              headers: {}
+            })
+          });
+          const texto = await r2.text();
+          actualizarStatus('✅ POST batch HTTP ' + r2.status + ' — bytes: ' + texto.length);
+        } catch(e) {
+          actualizarStatus('❌ POST batch falló: ' + e.message);
+        }
+      }
+
+      const BATCH_SIZE = 5;
+
+      async function batchDescargar(entradas, headers, onProgreso) {
+        if (!CF_WORKER) throw new Error('Worker no configurado');
+        const base     = CF_WORKER.replace(/\/$/, '');
+        const archivos = [];
+
+        for (let g = 0; g < entradas.length; g += BATCH_SIZE) {
+          const grupo = entradas.slice(g, g + BATCH_SIZE);
+
+          const resp = await fetch(base + '/batch-download', {
+            method: 'POST',
+            body:   JSON.stringify({ urls: grupo, headers })
+          });
+          if (!resp.ok) throw new Error('batch-download HTTP ' + resp.status);
+
+          const reader  = resp.body.getReader();
+          const decoder = new TextDecoder('utf-8', { fatal: false });
+          let   rawBytes   = new Uint8Array(0);
+          let   metaPendiente = null;
+          const SEP = 0x1e; // \x1e en byte
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Acumular bytes crudos
+            const nuevo = new Uint8Array(rawBytes.length + value.length);
+            nuevo.set(rawBytes);
+            nuevo.set(value, rawBytes.length);
+            rawBytes = nuevo;
+
+            // Dividir por 0x1e
+            while (true) {
+              const idx = rawBytes.indexOf(SEP);
+              if (idx === -1) break;
+
+              const parteBytes = rawBytes.slice(0, idx);
+              rawBytes = rawBytes.slice(idx + 1);
+
+              const parte = decoder.decode(parteBytes).trim();
+              if (!parte) continue;
+
+              if (metaPendiente) {
+                // Esta parte es el base64 — está limpio porque viene de bytes ASCII
+                try {
+                  const bin   = atob(parte.replace(/[\r\n\s]/g, ''));
+                  const bytes = new Uint8Array(bin.length);
+                  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                  const blob = new Blob([bytes], { type: metaPendiente.tipo });
+                  archivos.push({ nombre: metaPendiente.nombre, blob });
+                  if (onProgreso) onProgreso(archivos.length, entradas.length);
+                } catch(e) {
+                  actualizarStatus('⚠️ base64 inválido: ' + metaPendiente.nombre + ' — ' + e.message);
+                }
+                metaPendiente = null;
+                continue;
+              }
+
+              let meta;
+              try { meta = JSON.parse(parte); } catch(e) { continue; }
+
+              if (meta.fin) { rawBytes = new Uint8Array(0); break; }
+              if (!meta.ok) {
+                actualizarStatus('⚠️ ' + meta.nombre + ': ' + meta.error);
+                continue;
+              }
+              metaPendiente = meta;
+            }
+          }
+        }
+        return archivos;
+      }
+
       async function proxyImagen(url, referer) {
         if (!CF_WORKER) return null;
         const endpoint = CF_WORKER.replace(/\/$/, '') + '/proxy-img?target='
@@ -4058,23 +4203,25 @@
         const desc = await mwDescubrirCDN(slug, capNum);
         if (!desc) throw new Error('No se encontró CDN — verifica el slug o el episodio');
 
-        const { cdn, ext, primerBlob } = desc;
+        const { cdn, ext } = desc;
         const imgBase = 'https://img' + cdn + 'mw.xyz/manhwas/' + slug
                       + '/chapter_' + capNum + '/ver_01/';
 
-        const archivos = [{ nombre: '001.' + ext, blob: primerBlob }];
-        if (onProgreso) onProgreso(1);
-
-        for (let i = 2; i <= 300; i++) {
-          const nombre = String(i).padStart(3, '0') + '.' + ext;
-          const blob   = await proxyImagen(imgBase + nombre, 'https://manhwaweb.com/');
-          if (!blob) break;
-          // Solo romper si el tipo es explícitamente no-imagen (ignorar tipo vacío)
-          if (blob.type && !blob.type.startsWith('image/')) break;
-          archivos.push({ nombre, blob });
-          if (onProgreso) onProgreso(i);
+        // Pre-construir lista hasta 300 — el Worker detiene al fallar
+        const entradas = [];
+        for (let i = 1; i <= 300; i++) {
+          entradas.push({
+            nombre: String(i).padStart(3, '0') + '.' + ext,
+            url:    imgBase + String(i).padStart(3, '0') + '.' + ext
+          });
         }
-        return archivos;
+
+        return await batchDescargar(entradas, {
+          'Referer':         'https://manhwaweb.com/',
+          'User-Agent':      'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+          'Accept':          'image/webp,image/apng,image/*,*/*;q=0.8',
+          'Accept-Language': 'es-ES,es;q=0.9',
+        }, onProgreso);
       }
       
 
