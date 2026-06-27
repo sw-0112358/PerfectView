@@ -2854,6 +2854,12 @@
 
       async function htConfirmarDescarga() {
         if (!_htInfoPendiente) return;
+        const existentes = await htListar();
+        const yaExiste   = existentes.find(g => g.ht_id === _htInfoPendiente.ht_id);
+        if (yaExiste) {
+          document.getElementById('htInfo').textContent = '⚠️ Esta galería ya está en la bóveda';
+          return;
+        }
         document.getElementById('htBtnDescargar').style.display = 'none';
         document.getElementById('htInfo').textContent = '⏳ Guardando…';
         try {
@@ -3608,6 +3614,9 @@
         }
 
         try {
+          const existentes = await sjzListar();
+          const yaExiste   = existentes.find(c => c.base_url === base);
+          if (yaExiste) { info.textContent = '⚠️ Esta colección ya existe en la bóveda'; return; }
           await sjzGuardar(nombre, base, capitulos);
           info.textContent = '✅ Carpeta "' + nombre + '" creada con ' + capitulos.length + ' capítulos';
           document.getElementById('sjzUrl').value   = '';
@@ -4325,6 +4334,9 @@
         const caps   = [];
         for (let i = inicio; i <= final; i++) caps.push({ num: i });
         try {
+          const existentes = await mwListar();
+          const yaExiste   = existentes.find(c => c.base_url === url);
+          if (yaExiste) { info.textContent = '⚠️ Esta colección ya existe en la bóveda'; return; }
           await mwGuardar(nombre, url, slug, caps);
           info.textContent = '✅ "' + nombre + '" creado con ' + caps.length + ' episodios';
           document.getElementById('mwUrl').value    = '';
