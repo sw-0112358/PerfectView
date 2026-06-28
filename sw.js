@@ -1,43 +1,36 @@
-// 🔧 Configuración: cambia solo estas dos constantes
 const PROJECT_NAME = "PerfectView"; // nombre del proyecto
-const VERSION = "49";                 // versión actual
+const VERSION = "49";
 
-const CACHE_NAME = `${PROJECT_NAME}-cache-${VERSION}`;
-const FILES_TO_CACHE = [
-  `/${PROJECT_NAME}/`,          // index
-  `/${PROJECT_NAME}/icono.jpg`, // ícono
-  `/${PROJECT_NAME}/manifest.json`
-];
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", () => self.clients.claim());
 
-// Instalación: guarda archivos
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(FILES_TO_CACHE))
-  );
-  self.skipWaiting(); // activa inmediatamente
-});
-
-// Activación: limpia cachés viejas
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.map(key => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      )
-    )
-  );
-  self.clients.claim(); // toma control de las páginas abiertas
-});
-
-// Fetch: responde desde caché o red
 self.addEventListener("fetch", event => {
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
-  );
+  const url = event.request.url;
+
+  // Interceptar peticiones a /nc-proxy?url=...
+  if (url.includes('/nc-proxy?')) {
+    const target = new URL(url).searchParams.get('url');
+    if (target) {
+      event.respondWith(
+        fetch(target, {
+          credentials: 'include',
+          headers: {
+            'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'es-ES,es;q=0.9',
+            'Referer':         'https://es.novelcool.com/',
+          }
+        }).then(resp => new Response(resp.body, {
+          status:  resp.status,
+          headers: {
+            'Content-Type':                resp.headers.get('content-type') || 'text/html',
+            'Access-Control-Allow-Origin': '*',
+          }
+        })).catch(err => new Response('Error: ' + err.message, { status: 500 }))
+      );
+      return;
+    }
+  }
+
+  // Todo lo demás — pasar directo sin caché
+  event.respondWith(fetch(event.request));
 });
