@@ -1779,7 +1779,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 7);
+          const req = indexedDB.open('PerfectViewBoveda', 8);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1803,6 +1803,9 @@
             }
             if (!db.objectStoreNames.contains('descargas_temp')) {
               db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
+            }
+            if (!db.objectStoreNames.contains('zs_colecciones')) {
+              db.createObjectStore('zs_colecciones', { keyPath: 'id', autoIncrement: true });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -2562,12 +2565,275 @@
       }, { rootMargin: '150px' }); // pre-carga 150px antes de entrar al viewport
 
       const BV_CARPETAS = [
-        { id: 'mangas',   icon: '📚', label: 'Mangas'   },
-        { id: 'samurai',  icon: '⚔️', label: 'Samurai'  },
-        { id: 'manhwa',   icon: '📖', label: 'Manhwa'   },
-        { id: 'nhentai',  icon: '🪷', label: 'nhentai'  },
-        { id: 'hitomi',   icon: '🌸', label: 'Hitomi'   },
+        { id: 'mangas',    icon: '📚', label: 'Mangas'    },
+        { id: 'samurai',   icon: '⚔️', label: 'Samurai'   },
+        { id: 'manhwa',    icon: '📖', label: 'Manhwa'    },
+        { id: 'nhentai',   icon: '🪷', label: 'nhentai'   },
+        { id: 'hitomi',    icon: '🌸', label: 'Hitomi'    },
+        { id: 'zonascans', icon: '📡', label: 'ZonaScans' },
       ];
+
+      /* =============================================
+         ZONASCANS / ARCHIVIUMBAR
+      ============================================= */
+
+      async function zsListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zs_colecciones','readonly').objectStore('zs_colecciones').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function zsGuardar(info) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('zs_colecciones','readwrite');
+          const req = tx.objectStore('zs_colecciones').add({ ...info, fecha: new Date().toISOString() });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function zsEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('zs_colecciones','readwrite');
+          tx.objectStore('zs_colecciones').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      function zsExtraerCapitulos(html) {
+        const parser = new DOMParser();
+        const doc    = parser.parseFromString(html, 'text/html');
+        const caps   = [];
+        // Página del manga: a.ch-link con href del mismo manga
+        doc.querySelectorAll('a.ch-link[href]').forEach(a => {
+          const url    = a.getAttribute('href');
+          const titulo = a.querySelector('.chapter-name, .text-chapter') 
+                        ?.textContent.trim() 
+                        || a.textContent.trim().split('\n')[0].trim();
+          if (url && titulo) caps.push({ titulo, url });
+        });
+        // Invertir — el HTML pone el más reciente primero
+        return caps.reverse();
+      }
+
+      function zsExtraerNombre(html) {
+        const m = html.match(/<h1[^>]*class="[^"]*post-title[^"]*"[^>]*>\s*<span[^>]*>([^<]+)<\/span>/);
+        if (m) return m[1].trim();
+        const m2 = html.match(/<title>([^<|]+)/);
+        return m2 ? m2[1].trim() : 'ZonaScans';
+      }
+
+      function zsExtraerImagenes(html) {
+        const parser = new DOMParser();
+        const doc    = parser.parseFromString(html, 'text/html');
+        const urls   = [];
+        doc.querySelectorAll('.page-break img').forEach(img => {
+          const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-lazy-src');
+          if (src && src.startsWith('http')) urls.push(src.trim());
+        });
+        return urls;
+      }
+
+      async function zsObtenerImagenesCapitulo(chapUrl) {
+        const base = CF_WORKER.replace(/\/$/, '');
+        const html = await fetch(base + '/fetch-html?target=' + encodeURIComponent(chapUrl)
+          + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
+        return zsExtraerImagenes(html);
+      }
+
+      let _zsInfoPendiente = null;
+
+      async function zsBuscarInfo() {
+        const input = document.getElementById('zsUrl');
+        if (!input) return;
+        const url = input.value.trim();
+        if (!url) return;
+        const info = document.getElementById('zsInfo');
+        const btn  = document.getElementById('zsBtnDescargar');
+        info.textContent = '⏳ Buscando capítulos…';
+        btn.style.display = 'none';
+        _zsInfoPendiente  = null;
+        try {
+          if (!CF_WORKER) throw new Error('Configura el Worker primero');
+          const base = CF_WORKER.replace(/\/$/, '');
+          const html = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url)
+            + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
+          const caps  = zsExtraerCapitulos(html);
+          if (!caps.length) throw new Error('No se encontraron capítulos — verifica la URL');
+          const nombre = zsExtraerNombre(html) || url.split('/').filter(Boolean).pop();
+          _zsInfoPendiente = { nombre, url, caps };
+          info.textContent = '✅ ' + nombre + ' — ' + caps.length + ' capítulos';
+          btn.style.display = '';
+        } catch(err) {
+          info.textContent = '❌ ' + err.message;
+        }
+      }
+
+      async function zsConfirmarDescarga() {
+        if (!_zsInfoPendiente) return;
+        const existentes = await zsListar();
+        const yaExiste   = existentes.find(c => c.url === _zsInfoPendiente.url);
+        if (yaExiste) {
+          document.getElementById('zsInfo').textContent = '⚠️ Esta serie ya está en la bóveda';
+          return;
+        }
+        document.getElementById('zsBtnDescargar').style.display = 'none';
+        document.getElementById('zsInfo').textContent = '⏳ Guardando…';
+        const id  = await zsGuardar(_zsInfoPendiente);
+        const col = { ..._zsInfoPendiente, id };
+        _zsInfoPendiente = null;
+        document.getElementById('zsUrl').value = '';
+        const grid = document.querySelector('#bvLista .bv-grid');
+        if (grid) {
+          const { card } = crearTarjeta({
+            nombre:  col.nombre,
+            phTexto: '📖',
+            onTap:   () => { _zsColeccionActual = col; renderZonaScans(document.getElementById('bvLista')); },
+            onDelete: async () => { await zsEliminarDB(col.id); card.remove(); }
+          });
+          grid.prepend(card);
+        } else {
+          renderZonaScans(document.getElementById('bvLista'));
+        }
+        document.getElementById('zsInfo').textContent = '✅ Agregada — toca para ver capítulos';
+      }
+
+      let _zsColeccionActual = null;
+
+      async function zsAbrirCapitulo(col, cap, chipEl) {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        const slotId = 'zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-');
+
+        // Verificar slot previo
+        const slotPrevio = await dtCargar(slotId);
+        if (slotPrevio && slotPrevio.imagenes.length > 0) {
+          chipEl.classList.add('descargando');
+          actualizarStatus('⏳ Reanudando ' + cap.titulo + ' · ' + slotPrevio.imagenes.length + ' ya descargadas…');
+          try {
+            const imageUrls     = await zsObtenerImagenesCapitulo(cap.url);
+            const todasEntradas = imageUrls.map((url, i) => ({ nombre: String(i).padStart(3,'0') + '.jpg', url }));
+            const nombresYa     = new Set(slotPrevio.imagenes.map(a => a.nombre));
+            const pendientes    = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+            const nuevas = pendientes.length > 0
+              ? await batchDescargar(pendientes, { 'Referer': 'https://archiviumbar.com/' }, (n, t) => {
+                  const total = slotPrevio.imagenes.length + n;
+                  actualizarStatus('⏳ ' + cap.titulo + ' · ' + total + '/' + todasEntradas.length);
+                  chipEl.textContent = total + '/' + todasEntradas.length;
+                }, false, slotId)
+              : [];
+            const archivos = [...slotPrevio.imagenes, ...nuevas]
+              .sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipId   = await bvGuardar(col.nombre + ' - ' + cap.titulo + '.zip', zipBlob, 'zonascans');
+            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            chipEl.classList.remove('descargando');
+            chipEl.classList.add('descargado');
+            chipEl.title = '✅ Descargado — tap para abrir';
+            actualizarStatus('✅ ' + cap.titulo + ' completado — ' + archivos.length + ' imágenes');
+          } catch(err) {
+            chipEl.classList.remove('descargando');
+            actualizarStatus('❌ ' + cap.titulo + ': ' + err.message);
+          }
+          return;
+        }
+
+        chipEl.classList.add('descargando');
+        actualizarStatus('⏳ Descargando ' + cap.titulo + '…');
+        try {
+          const imageUrls = await zsObtenerImagenesCapitulo(cap.url);
+          if (!imageUrls.length) throw new Error('No se encontraron imágenes');
+          const entradas = imageUrls.map((url, i) => ({
+            nombre: String(i).padStart(3,'0') + '.jpg', url
+          }));
+          await dtCrear(slotId, { categoria: 'zonascans', nombre: col.nombre + ' - ' + cap.titulo, total: entradas.length });
+          const archivos = await batchDescargar(entradas, { 'Referer': 'https://archiviumbar.com/' }, (n, t) => {
+            actualizarStatus('⏳ ' + cap.titulo + ' · ' + n + '/' + t);
+            chipEl.textContent = n + '/' + t;
+          }, false, slotId);
+          if (!archivos.length) throw new Error('No se descargó ninguna imagen');
+          const zip = new JSZip();
+          archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const zipId   = await bvGuardar(col.nombre + ' - ' + cap.titulo + '.zip', zipBlob, 'zonascans');
+          if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado — tap para abrir';
+          actualizarStatus('✅ ' + cap.titulo + ' listo — ' + archivos.length + ' imágenes');
+        } catch(err) {
+          chipEl.classList.remove('descargando');
+          actualizarStatus('❌ ' + cap.titulo + ': ' + err.message);
+        }
+      }
+
+      async function renderZonaScans(contenedor) {
+        contenedor.innerHTML = '';
+
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+
+        if (_zsColeccionActual) {
+          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_zsColeccionActual=null;renderBoveda()">← Menú</button>'
+            + '<span class="bv-breadcrumb-sep">/</span>'
+            + '<span class="bv-breadcrumb-label">📡 ZonaScans</span>'
+            + '<span class="bv-breadcrumb-sep">/</span>'
+            + '<span class="bv-breadcrumb-label">' + _zsColeccionActual.nombre + '</span>';
+          contenedor.appendChild(bc);
+          const grid = document.createElement('div');
+          grid.className = 'sjz-cap-grid';
+          _zsColeccionActual.caps.forEach(cap => {
+            const chip = document.createElement('button');
+            chip.className = 'sjz-cap-chip';
+            chip.textContent = cap.titulo;
+            chip.onclick = () => zsAbrirCapitulo(_zsColeccionActual, cap, chip);
+            grid.appendChild(chip);
+          });
+          contenedor.appendChild(grid);
+          return;
+        }
+
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">📡 ZonaScans</span>';
+        contenedor.appendChild(bc);
+
+        const panel = document.createElement('div');
+        panel.className = 'sjz-panel';
+        panel.innerHTML = `
+          <div class="sjz-panel-title">📡 ZONASCANS / ARCHIVIUMBAR</div>
+          <div class="sjz-row">
+            <input id="zsUrl" class="sjz-input" placeholder="https://archiviumbar.com/manga/slug/" style="flex:1">
+            <button class="sjz-btn" onclick="zsBuscarInfo()">🔍</button>
+          </div>
+          <div id="zsInfo" class="sjz-info"></div>
+          <button id="zsBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none" onclick="zsConfirmarDescarga()">➕ Agregar a biblioteca</button>
+        `;
+        contenedor.appendChild(panel);
+
+        const colecciones = await zsListar();
+        colecciones.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        const grid = document.createElement('div');
+        grid.className = 'bv-grid';
+        contenedor.appendChild(grid);
+
+        colecciones.forEach(col => {
+          const { card, ph, img } = crearTarjeta({
+            nombre:  col.nombre,
+            phTexto: '📖',
+            onTap:   () => { _zsColeccionActual = col; renderZonaScans(contenedor); },
+            onDelete: async () => { await zsEliminarDB(col.id); card.remove(); }
+          });
+          grid.appendChild(card);
+        });
+      }
 
       /* =============================================
          HITOMI.LA
@@ -4853,6 +5119,13 @@
         // hitomi tiene su propio render
         if (categoriaActual === 'hitomi') {
           renderHitomi(contenedor);
+          return;
+        }
+
+        // zonascans tiene su propio render
+        if (categoriaActual === 'zonascans') {
+          _zsColeccionActual = null;
+          renderZonaScans(contenedor);
           return;
         }
 
