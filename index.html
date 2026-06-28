@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v49
+          PerfectView v50
         </div>
       </header>
 
@@ -2685,29 +2685,24 @@
 
       // Obtener todas las URLs de imágenes de un capítulo (paginado)
       async function ncObtenerImagenesCapitulo(chapUrl) {
-        const base     = CF_WORKER.replace(/\/$/, '');
-        const novelBase = new URL(chapUrl).origin;
-
         // Construir URL con imágenes directas: chapterId-10-1.html
-        const chapId  = chapUrl.match(/\/(\d+)\/?$/)?.[1];
+        const chapId = chapUrl.match(/\/(\d+)\/?$/)?.[1];
         if (!chapId) throw new Error('No se pudo extraer chapterId de ' + chapUrl);
         const baseChap = chapUrl.replace(/\/(\d+)\/?$/, '/' + chapId);
         const url1     = baseChap + '-10-1.html';
 
-        // Fetch página 1
-        const html1 = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url1)
-          + '&referer=' + encodeURIComponent(novelBase + '/')).then(r => r.text());
+        // Usar SW como proxy — fetch con credenciales del navegador
+        const html1 = await fetch('/nc-proxy?url=' + encodeURIComponent(url1)).then(r => r.text());
         const urls  = ncExtraerImagenes(html1);
 
-        // Extraer total de páginas del select sl-page
+        // Extraer total de páginas
         const mPags = html1.match(/class="sl-page"[^>]*>([\s\S]*?)<\/select>/);
         const total = mPags ? (mPags[1].match(/<option/g) || []).length : 1;
 
         // Páginas adicionales
         for (let p = 2; p <= total; p++) {
           const urlP  = baseChap + '-10-' + p + '.html';
-          const htmlP = await fetch(base + '/fetch-html?target=' + encodeURIComponent(urlP)
-            + '&referer=' + encodeURIComponent(url1)).then(r => r.text());
+          const htmlP = await fetch('/nc-proxy?url=' + encodeURIComponent(urlP)).then(r => r.text());
           ncExtraerImagenes(htmlP).forEach(u => urls.push(u));
         }
         return urls;
