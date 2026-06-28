@@ -1234,8 +1234,7 @@
 
 
       function abrirConfigWorker() {
-        const actual = localStorage.getItem('_cf_worker_url') 
-        || 'https://shiny-bread-e818.gx0112358.workers.dev';
+        const actual = localStorage.getItem('_cf_worker_url');       
         const nueva = prompt('☁️ Cloudflare Worker URL:', actual);
         if (nueva === null) return; // canceló
         if (!nueva.trim()) { actualizarStatus("⚠️ URL vacía, no se guardó."); return; }
