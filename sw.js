@@ -1,5 +1,5 @@
 const PROJECT_NAME = "PerfectView"; // nombre del proyecto
-const VERSION = "49";
+const VERSION = "50";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", () => self.clients.claim());
