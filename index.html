@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v51
+          PerfectView🪷v51❄️
         </div>
       </header>
 
@@ -2693,6 +2693,7 @@
 
         // Usar SW como proxy — fetch con credenciales del navegador
         const html1 = await fetch('/nc-proxy?url=' + encodeURIComponent(url1)).then(r => r.text());
+        actualizarStatus('🔍 SW html: ' + html1.length + ' chars · manga_pic: ' + (html1.match(/manga_pic/g)||[]).length + ' · Source: ' + (html1.match(/Source/g)||[]).length);
         const urls  = ncExtraerImagenes(html1);
 
         // Extraer total de páginas
