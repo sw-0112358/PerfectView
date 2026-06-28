@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v48
+          PerfectView v49
         </div>
       </header>
 
@@ -1779,7 +1779,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 7);
+          const req = indexedDB.open('PerfectViewBoveda', 8);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
@@ -1803,6 +1803,9 @@
             }
             if (!db.objectStoreNames.contains('descargas_temp')) {
               db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
+            }
+            if (!db.objectStoreNames.contains('nc_colecciones')) {
+              db.createObjectStore('nc_colecciones', { keyPath: 'id', autoIncrement: true });
             }
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
@@ -2562,12 +2565,348 @@
       }, { rootMargin: '150px' }); // pre-carga 150px antes de entrar al viewport
 
       const BV_CARPETAS = [
-        { id: 'mangas',   icon: '📚', label: 'Mangas'   },
-        { id: 'samurai',  icon: '⚔️', label: 'Samurai'  },
-        { id: 'manhwa',   icon: '📖', label: 'Manhwa'   },
-        { id: 'nhentai',  icon: '🪷', label: 'nhentai'  },
-        { id: 'hitomi',   icon: '🌸', label: 'Hitomi'   },
+        { id: 'mangas',    icon: '📚', label: 'Mangas'    },
+        { id: 'samurai',   icon: '⚔️', label: 'Samurai'   },
+        { id: 'manhwa',    icon: '📖', label: 'Manhwa'    },
+        { id: 'nhentai',   icon: '🪷', label: 'nhentai'   },
+        { id: 'hitomi',    icon: '🌸', label: 'Hitomi'    },
+        { id: 'novelcool', icon: '❄️', label: 'NovelCool' },
       ];
+
+      /* =============================================
+         NOVELCOOL
+      ============================================= */
+
+      async function ncListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('nc_colecciones','readonly').objectStore('nc_colecciones').getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function ncGuardar(info) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('nc_colecciones','readwrite');
+          const req = tx.objectStore('nc_colecciones').add({ ...info, fecha: new Date().toISOString() });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function ncEliminarDB(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('nc_colecciones','readwrite');
+          tx.objectStore('nc_colecciones').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function ncActualizarZip(id, zip_id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx    = db.transaction('nc_colecciones','readwrite');
+          const store = tx.objectStore('nc_colecciones');
+          const req   = store.get(id);
+          req.onsuccess = e => {
+            const r = e.target.result;
+            if (r) { r.zip_id = zip_id; store.put(r); }
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // Extraer imágenes de un capítulo — una sola petición al Worker
+      function ncExtraerImagenes(html) {
+        const parser = new DOMParser();
+        const doc    = parser.parseFromString(html, 'text/html');
+        const urls   = [];
+        doc.querySelectorAll('img.manga_pic').forEach(img => {
+          const src = img.getAttribute('src');
+          if (src && src.startsWith('http')) urls.push(src);
+        });
+        return urls;
+      }
+
+      // Extraer total de páginas del select change_pic_page
+      function ncExtraerTotalPaginas(html) {
+        const m = html.match(/class="change_pic_page"[^>]*>([\s\S]*?)<\/select>/);
+        if (!m) return 1;
+        const opts = m[1].match(/<option/g);
+        return opts ? opts.length : 1;
+      }
+
+      // Extraer capítulos del índice de la novela
+      function ncExtraerCapitulos(html) {
+        const parser = new DOMParser();
+        const doc    = parser.parseFromString(html, 'text/html');
+        const caps   = [];
+        // Formato índice: div.chp-item > a[href]
+        doc.querySelectorAll('.chp-item a[href]').forEach(a => {
+          const url   = a.href || a.getAttribute('href');
+          const titulo = (a.querySelector('.chapter-item-headtitle') || a).textContent.trim();
+          if (!url || !titulo) return;
+          caps.push({ titulo, url });
+        });
+        // Fallback: select option con /chapter/ (formato visor)
+        if (!caps.length) {
+          doc.querySelectorAll('select option[value*="/chapter/"]').forEach(opt => {
+            const v = opt.value.trim();
+            const t = opt.textContent.trim();
+            if (!v) return;
+            const url = v.startsWith('http') ? v : 'https://es.novelcool.com' + v;
+            caps.push({ titulo: t, url });
+          });
+        }
+        return caps;
+      }
+
+      // Extraer nombre de la novela del índice
+      function ncExtraerNombre(html) {
+        const m = html.match(/<h[12][^>]*>([^<]+)<\/h[12]>/);
+        return m ? m[1].trim() : 'NovelCool';
+      }
+
+      // Convertir URL de NovelCool al visor real de financemasterpro
+      function ncResolverUrlVisor(html, chapUrl) {
+        // Buscar /c/esnovelcool/ID/ en el HTML
+        const m = html.match(/href=["']https?:\/\/www\.financemasterpro\.com(\/c\/esnovelcool\/\d+\/)["']/);
+        if (m) return 'https://www.financemasterpro.com' + m[1];
+        // Buscar en links del select del visor
+        const m2 = html.match(/value=["'](\/c\/esnovelcool\/\d+\/)["']\s+selected/);
+        if (m2) return 'https://www.financemasterpro.com' + m2[1];
+        return null;
+      }
+
+      // Obtener todas las URLs de imágenes de un capítulo (paginado)
+      async function ncObtenerImagenesCapitulo(chapUrl) {
+        const base     = CF_WORKER.replace(/\/$/, '');
+        const novelBase = new URL(chapUrl).origin;
+
+        // Construir URL con imágenes directas: chapterId-10-1.html
+        const chapId  = chapUrl.match(/\/(\d+)\/?$/)?.[1];
+        if (!chapId) throw new Error('No se pudo extraer chapterId de ' + chapUrl);
+        const baseChap = chapUrl.replace(/\/(\d+)\/?$/, '/' + chapId);
+        const url1     = baseChap + '-10-1.html';
+
+        // Fetch página 1
+        const html1 = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url1)
+          + '&referer=' + encodeURIComponent(novelBase + '/')).then(r => r.text());
+        const urls  = ncExtraerImagenes(html1);
+
+        // Extraer total de páginas del select sl-page
+        const mPags = html1.match(/class="sl-page"[^>]*>([\s\S]*?)<\/select>/);
+        const total = mPags ? (mPags[1].match(/<option/g) || []).length : 1;
+
+        // Páginas adicionales
+        for (let p = 2; p <= total; p++) {
+          const urlP  = baseChap + '-10-' + p + '.html';
+          const htmlP = await fetch(base + '/fetch-html?target=' + encodeURIComponent(urlP)
+            + '&referer=' + encodeURIComponent(url1)).then(r => r.text());
+          ncExtraerImagenes(htmlP).forEach(u => urls.push(u));
+        }
+        return urls;
+      }
+
+      let _ncInfoPendiente = null;
+
+      async function ncBuscarInfo() {
+        const input = document.getElementById('ncUrl');
+        if (!input) return;
+        const url = input.value.trim();
+        if (!url) return;
+        const info  = document.getElementById('ncInfo');
+        const btn   = document.getElementById('ncBtnDescargar');
+        info.textContent = '⏳ Buscando…';
+        btn.style.display = 'none';
+        _ncInfoPendiente  = null;
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const html = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url)).then(r => r.text());
+          const caps  = ncExtraerCapitulos(html);
+          const nombre = ncExtraerNombre(html);
+          if (!caps.length) throw new Error('No se encontraron capítulos');
+          _ncInfoPendiente = { nombre, url, caps };
+          info.textContent = '✅ ' + nombre + ' — ' + caps.length + ' capítulos';
+          btn.style.display = '';
+        } catch(err) {
+          info.textContent = '❌ ' + err.message;
+        }
+      }
+
+      async function ncConfirmarDescarga() {
+        if (!_ncInfoPendiente) return;
+        const existentes = await ncListar();
+        const yaExiste   = existentes.find(c => c.url === _ncInfoPendiente.url);
+        if (yaExiste) {
+          document.getElementById('ncInfo').textContent = '⚠️ Esta novela ya está en la bóveda';
+          return;
+        }
+        document.getElementById('ncBtnDescargar').style.display = 'none';
+        document.getElementById('ncInfo').textContent = '⏳ Guardando…';
+        const id  = await ncGuardar(_ncInfoPendiente);
+        const col = { ..._ncInfoPendiente, id };
+        _ncInfoPendiente = null;
+        document.getElementById('ncUrl').value = '';
+        const grid = document.querySelector('#bvLista .bv-grid');
+        if (grid) {
+          const { card } = crearTarjeta({
+            nombre:  col.nombre,
+            phTexto: '📖',
+            onTap:   () => { _ncColeccionActual = col; renderNovelCool(document.getElementById('bvLista')); },
+            onDelete: async () => { await ncEliminarDB(col.id); card.remove(); }
+          });
+          grid.prepend(card);
+        } else {
+          renderBoveda();
+        }
+        document.getElementById('ncInfo').textContent = '✅ Agregada — toca para ver capítulos';
+      }
+
+      let _ncColeccionActual = null;
+
+      async function ncDescargarCapitulo(col, cap, chipEl) {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        const slotId = 'nc-' + col.id + '-' + cap.titulo.replace(/\s+/g,'-');
+        const slotPrevio = await dtCargar(slotId);
+        if (slotPrevio && slotPrevio.imagenes.length > 0) {
+          chipEl.classList.add('descargando');
+          actualizarStatus('⏳ Reanudando ' + cap.titulo + ' · ' + slotPrevio.imagenes.length + ' ya descargadas…');
+          try {
+            const todasUrls   = await ncObtenerImagenesCapitulo(cap.url);
+            const todasEntradas = todasUrls.map((url, i) => ({ nombre: String(i).padStart(3,'0') + '.webp', url }));
+            const nombresYa   = new Set(slotPrevio.imagenes.map(a => a.nombre));
+            const pendientes  = todasEntradas.filter(e => !nombresYa.has(e.nombre));
+            const nuevas = pendientes.length > 0
+              ? await batchDescargar(pendientes, { 'Referer': 'https://es.novelcool.com/' }, n => {
+                  actualizarStatus('⏳ ' + cap.titulo + ' · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
+                  chipEl.textContent = slotPrevio.imagenes.length + n + '/' + todasEntradas.length;
+                }, false, slotId)
+              : [];
+            const archivos = [...slotPrevio.imagenes, ...nuevas]
+              .sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipId   = await bvGuardar(col.nombre + ' - ' + cap.titulo + '.zip', zipBlob, 'novelcool');
+            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            chipEl.classList.remove('descargando');
+            chipEl.classList.add('descargado');
+            chipEl.title = '✅ Descargado — tap para abrir';
+            actualizarStatus('✅ ' + cap.titulo + ' completado — ' + archivos.length + ' imágenes');
+          } catch(err) {
+            chipEl.classList.remove('descargando');
+            actualizarStatus('❌ ' + cap.titulo + ': ' + err.message);
+          }
+          return;
+        }
+
+        chipEl.classList.add('descargando');
+        actualizarStatus('⏳ Obteniendo imágenes de ' + cap.titulo + '…');
+        try {
+          await dtCrear(slotId, { categoria: 'novelcool', nombre: col.nombre + ' - ' + cap.titulo, total: 0 });
+          const imageUrls = await ncObtenerImagenesCapitulo(cap.url);
+          if (!imageUrls.length) throw new Error('No se encontraron imágenes');
+          const entradas  = imageUrls.map((url, i) => ({ nombre: String(i).padStart(3,'0') + '.webp', url }));
+          const archivos  = await batchDescargar(entradas, { 'Referer': 'https://es.novelcool.com/' }, (n, t) => {
+            actualizarStatus('⏳ ' + cap.titulo + ' · ' + n + '/' + t);
+            chipEl.textContent = n + '/' + t;
+          }, false, slotId);
+          if (!archivos.length) throw new Error('No se descargó ninguna imagen');
+          const zip = new JSZip();
+          archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const zipId   = await bvGuardar(col.nombre + ' - ' + cap.titulo + '.zip', zipBlob, 'novelcool');
+          if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          chipEl.classList.remove('descargando');
+          chipEl.classList.add('descargado');
+          chipEl.title = '✅ Descargado — tap para abrir';
+          actualizarStatus('✅ ' + cap.titulo + ' listo — ' + archivos.length + ' imágenes');
+        } catch(err) {
+          chipEl.classList.remove('descargando');
+          actualizarStatus('❌ ' + cap.titulo + ': ' + err.message);
+        }
+      }
+
+      async function renderNovelCool(contenedor) {
+        contenedor.innerHTML = '';
+        const base = CF_WORKER.replace(/\/$/, '');
+
+        // ── Breadcrumb ──
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+        if (_ncColeccionActual) {
+          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_ncColeccionActual=null;renderBoveda()">← Menú</button>'
+            + '<span class="bv-breadcrumb-sep">/</span>'
+            + '<span class="bv-breadcrumb-label">❄️ NovelCool</span>'
+            + '<span class="bv-breadcrumb-sep">/</span>'
+            + '<span class="bv-breadcrumb-label">' + _ncColeccionActual.nombre + '</span>';
+          contenedor.appendChild(bc);
+
+          // ── Chips de capítulos ──
+          const grid = document.createElement('div');
+          grid.className = 'sjz-cap-grid';
+          _ncColeccionActual.caps.forEach(cap => {
+            const chip = document.createElement('button');
+            chip.className = 'sjz-cap-chip';
+            chip.textContent = cap.titulo;
+            chip.onclick = () => ncDescargarCapitulo(_ncColeccionActual, cap, chip);
+            grid.appendChild(chip);
+          });
+          contenedor.appendChild(grid);
+          return;
+        }
+
+        // ── Panel de búsqueda ──
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">❄️ NovelCool</span>';
+        contenedor.appendChild(bc);
+
+        const panel = document.createElement('div');
+        panel.className = 'sjz-panel';
+        panel.innerHTML = `
+          <div class="sjz-panel-title">❄️ NOVELCOOL</div>
+          <div class="sjz-row">
+            <input id="ncUrl" class="sjz-input" placeholder="https://es.novelcool.com/novel/..." style="flex:1">
+            <button class="sjz-btn" onclick="ncBuscarInfo()">🔍</button>
+          </div>
+          <div id="ncInfo" class="sjz-info"></div>
+          <button id="ncBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none" onclick="ncConfirmarDescarga()">➕ Agregar a biblioteca</button>
+        `;
+        contenedor.appendChild(panel);
+
+        // ── Grid de colecciones ──
+        const colecciones = await ncListar();
+        colecciones.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        const grid = document.createElement('div');
+        grid.className = 'bv-grid';
+        contenedor.appendChild(grid);
+
+        colecciones.forEach(col => {
+          const { card, ph, img } = crearTarjeta({
+            nombre:  col.nombre,
+            phTexto: '📖',
+            onTap:   () => { _ncColeccionActual = col; renderNovelCool(contenedor); },
+            onDelete: async () => { await ncEliminarDB(col.id); card.remove(); }
+          });
+          grid.appendChild(card);
+          // Portada del primer capítulo si hay ZIP
+          if (col.id) {
+            bvCargarPortada(col.id).then(blob => {
+              if (!blob) return;
+              img.src = URL.createObjectURL(blob);
+              img.style.display = 'block';
+              ph.style.display  = 'none';
+            }).catch(() => {});
+          }
+        });
+      }
 
       /* =============================================
          HITOMI.LA
@@ -4853,6 +5192,13 @@
         // hitomi tiene su propio render
         if (categoriaActual === 'hitomi') {
           renderHitomi(contenedor);
+          return;
+        }
+
+        // novelcool tiene su propio render
+        if (categoriaActual === 'novelcool') {
+          _ncColeccionActual = null;
+          renderNovelCool(contenedor);
           return;
         }
 
