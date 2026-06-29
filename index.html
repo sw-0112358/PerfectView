@@ -1225,13 +1225,16 @@
                 <div style="display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px">
                   <button class="action-btn" style="flex:1" onclick="bvBloquear()"><span class="icon">🔒</span> Bloquear</button>
                   <button class="action-btn" style="flex:1" onclick="bvLimpiarTemp()"><span class="icon">✨</span> Limpiar caché</button>
-                  <button class="action-btn" style="flex:1" id="btnFullscreen" onclick="toggleFullscreen()"><span class="icon">⛶</span> Pantalla completa</button>
-                  <button class="action-btn" style="flex:1" onclick="bvNavegar('pantalla1')"><span class="icon">←</span> Volver</button>
+                 
                 </div>
               </div>
             </div>
-
-
+            
+            <div style="display:flex;gap:8px;margin-top:4px;margin-bottom:8px">
+              <button class="btn-ghost btn-sm" style="flex:1;gap:6px" id="btnFullscreen" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
+              <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="bvNavegar('pantalla1')">← Volver</button>
+            </div>
+                  
             <div id="bvToolbar" class="bv-toolbar" style="display:none">
               <button class="action-btn" onclick="importarZipBoveda()">
                 <span class="icon">📂</span> Importar ZIP
@@ -5082,7 +5085,7 @@
             // Botón cambiar combinación
             const btnCombo = document.createElement('button');
             btnCombo.className   = 'btn-ghost btn-sm';
-            btnCombo.style.cssText = 'margin-bottom:12px;font-size:.78rem;color:var(--text-muted)';
+            btnCombo.style.cssText = 'margin-bottom:12px;font-size:.78rem;color:var(--text-muted);width:100%';
             btnCombo.textContent = '🔐 Cambiar combinación';
             btnCombo.onclick     = bvCambiarCombo;
             contenedor.appendChild(btnCombo);
