@@ -1010,7 +1010,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView v48
+          PerfectView v50
         </div>
       </header>
 
@@ -2685,23 +2685,10 @@
         }
         document.getElementById('zsBtnDescargar').style.display = 'none';
         document.getElementById('zsInfo').textContent = '⏳ Guardando…';
-        const id  = await zsGuardar(_zsInfoPendiente);
-        const col = { ..._zsInfoPendiente, id };
+        await zsGuardar(_zsInfoPendiente);
         _zsInfoPendiente = null;
         document.getElementById('zsUrl').value = '';
-        const grid = document.querySelector('#bvLista .bv-grid');
-        if (grid) {
-          const { card } = crearTarjeta({
-            nombre:  col.nombre,
-            phTexto: '📖',
-            onTap:   () => { _zsColeccionActual = col; renderZonaScans(document.getElementById('bvLista')); },
-            onDelete: async () => { await zsEliminarDB(col.id); card.remove(); }
-          });
-          grid.prepend(card);
-        } else {
-          renderZonaScans(document.getElementById('bvLista'));
-        }
-        document.getElementById('zsInfo').textContent = '✅ Agregada — toca para ver capítulos';
+        renderZonaScans(document.getElementById('bvLista'));
       }
 
       let _zsColeccionActual = null;
@@ -2822,6 +2809,7 @@
         colecciones.sort((a,b) => b.fecha.localeCompare(a.fecha));
         const grid = document.createElement('div');
         grid.className = 'bv-grid';
+        grid.id = 'zsGrid';
         contenedor.appendChild(grid);
 
         colecciones.forEach(col => {
@@ -3176,7 +3164,7 @@
           document.getElementById('htUrl').value = '';
           _htInfoPendiente = null;
           // Agregar solo la nueva tarjeta sin re-renderizar el grid
-          const grid = document.querySelector('#bvLista .bv-grid');
+          const grid = document.getElementById('zsGrid');
           if (grid) {
             const { card, ph, img } = crearTarjeta({
               nombre:  gal.nombre,
@@ -3637,7 +3625,7 @@
         _nhInfoPendiente = null;
         document.getElementById('nhUrl').value = '';
         // Agregar solo la nueva tarjeta sin re-renderizar el grid
-        const grid = document.querySelector('#bvLista .bv-grid');
+        const grid = document.getElementById('zsGrid');
         if (grid) {
           const { card, ph, img } = crearTarjeta({
             nombre:  gal.nombre,
