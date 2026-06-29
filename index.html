@@ -957,9 +957,9 @@
         padding: 5px 12px 5px 8px;
         margin-bottom: 10px;
         border-radius: 999px;
-        background: linear-gradient(135deg, rgba(91,127,255,0.10) 0%, rgba(124,95,255,0.08) 100%);
-        border: 1px solid rgba(91,127,255,0.22);
-        box-shadow: 0 1px 4px rgba(91,127,255,0.10), inset 0 1px 0 rgba(255,255,255,0.55);
+        background: transparent;
+        border: none;
+        box-shadow: none;
         cursor: pointer;
         transition: background .18s, box-shadow .18s, transform .15s;
         user-select: none;
@@ -980,9 +980,8 @@
         font-weight: 600;
         color: var(--accent2);
         letter-spacing: .01em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: normal;
+        line-height: 1.4;
       }
 
       /* ======= EMOJI BOARD ======= */
@@ -1204,9 +1203,10 @@
 
           <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
             <div class="bv-titulo" style="cursor:pointer;margin-bottom:4px" onclick="solicitarPersistencia()">🏛️ Bóveda</div>
-
-
-            <div id = "PanelAdmi" class="card">
+            
+            
+            <!-- Visible solo cuando se ingresaconnla combinación maestra  -->
+            <div id="PanelAdmi" class="card" style="display:none">
               <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
                 <span>🪷💠</span>
               </div>
@@ -2269,6 +2269,7 @@
         function bvBloquear() {
           bovedaDesbloqueada = false;
           _bvMaestra = false;
+          document.getElementById('PanelAdmi').style.display = 'none';
           bvActualizarIcono();
           bvNavegar('pantalla1');
           actualizarStatus('🔒 Bóveda bloqueada');
@@ -2665,6 +2666,7 @@
           _bvSeleccion        = [];
           _bvCeldaSeleccionada = null;
           document.getElementById('bvEmojiOverlay').style.display = 'none';
+          document.getElementById('PanelAdmi').style.display = _bvMaestra ? '' : 'none';
           bvNavegar('pantalla3');
           renderBoveda();
         }
