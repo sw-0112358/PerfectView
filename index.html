@@ -1669,18 +1669,6 @@
         fab.classList.remove('fab-transparente');
       }
 
-      function activarFullscreen() {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
-      }
-
-      function desactivarFullscreen() {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        }
-      }
-
       function toggleFullscreen() {
         const btn = document.getElementById('btnFullscreen');
         if (document.fullscreenElement) {
@@ -3123,7 +3111,7 @@
         return dbGuardar('ht_galerias', { ...info, zip_id: null });
       }
 
-      // — Fetch info desde galleries/{id}.js —
+       // — Fetch info desde galleries/{id}.js —
       async function htFetchInfo(htId) {
         if (!CF_WORKER) throw new Error('Configura el Worker primero');
         const jsUrl = 'https://ltn.gold-usergeneratedcontent.net/galleries/' + htId + '.js';
@@ -3145,20 +3133,6 @@
             hasavif: f.hasavif  || 0,
           })),
         };
-      }
-
-      // — Descargar todas las páginas usando gg.js —
-      // — Fetch directo desde el browser (usa cookies del usuario) —
-      async function htFetchDirecto(url) {
-        try {
-          const resp = await fetch(url, {
-            credentials: 'include',
-            headers: { 'Referer': 'https://hitomi.la/' }
-          });
-          if (!resp.ok) return null;
-          const blob = await resp.blob();
-          return blob.size > 500 ? blob : null;
-        } catch(e) { return null; }
       }
 
       // — Descargar todas las páginas usando gg.js —
