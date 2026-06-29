@@ -3964,11 +3964,13 @@
 
         function bvAbrirCarpeta(id) {
           categoriaActual = id;
+          document.getElementById('PanelAdmi').style.display = 'none';
           renderBoveda();
         }
 
         function bvVolverMenu() {
           categoriaActual = 'menu';
+          document.getElementById('PanelAdmi').style.display = _bvMaestra ? '' : 'none';
           renderBoveda();
         }
 
