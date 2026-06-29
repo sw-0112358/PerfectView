@@ -1782,7 +1782,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 8);
+          const req = indexedDB.open('PerfectViewBoveda', 9);
           req.onupgradeneeded = e => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('zips')) {
