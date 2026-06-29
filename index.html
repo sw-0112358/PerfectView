@@ -2935,6 +2935,9 @@
             .sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const urlsMap = {};
+            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zsNombre = 'zs-' + col.id + '-' + cap.titulo + '.zip';
             const zipId   = await bvGuardar(zsNombre, zipBlob, 'zonascans');
@@ -2966,6 +2969,9 @@
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const urlsMap = {};
+          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zsNombre = 'zs-' + col.id + '-' + cap.titulo + '.zip';
           const zipId   = await bvGuardar(zsNombre, zipBlob, 'zonascans');
@@ -3313,6 +3319,9 @@
             setPh('📦');
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const urlsMap = {};
+            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
             await htActualizarZip(galeria.id, zipId);
@@ -3345,6 +3354,9 @@
           setPh('📦');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const urlsMap = {};
+          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
           await htActualizarZip(galeria.id, zipId);
@@ -3730,6 +3742,9 @@
             actualizarStatus('⏳ Creando ZIP…');
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const urlsMap = {};
+            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
             await nhActualizarZip(galeria.id, zipId);
@@ -3768,6 +3783,9 @@
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const urlsMap = {};
+          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
@@ -4247,6 +4265,9 @@
             // Crear ZIP y guardar
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const urlsMap = {};
+            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await sjzGuardarCapitulo(
               coleccion.nombre + ' - Cap ' + cap.num + '.zip',
@@ -4292,6 +4313,9 @@
           // 3. Crear ZIP
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const urlsMap = {};
+          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
 
           // 4. Guardar en IndexedDB
@@ -4801,8 +4825,8 @@
             actualizarStatus('⚠️ ' + nombre + ': no disponible');
             continue;
           }
-          archivos.push({ nombre, blob });
-          if (slotId) dtAgregarImagen(slotId, { nombre, blob }).catch(() => {});
+          archivos.push({ nombre, blob, url });
+          if (slotId) dtAgregarImagen(slotId, { nombre, blob, url }).catch(() => {});
           if (onProgreso) onProgreso(archivos.length, entradas.length);
         }
         return archivos;
@@ -4918,6 +4942,9 @@
             actualizarStatus('⏳ Creando ZIP…');
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const urlsMap = {};
+            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
@@ -4943,6 +4970,9 @@
           actualizarStatus('⏳ Creando ZIP…');
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
+          const urlsMap = {};
+          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
           if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
