@@ -2589,33 +2589,64 @@
          ZONASCANS / ARCHIVIUMBAR
       ============================================= */
 
-      async function zsListar() {
+      /* =============================================
+         CRUD GENÉRICO IndexedDB
+         dbListar(store)            → getAll
+         dbGuardar(store, datos)    → add  (inyecta fecha)
+         dbEliminar(store, id)      → delete
+         dbActualizarCampo(store, id, campo, valor) → get→put
+      ============================================= */
+
+      async function dbListar(store) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('zs_colecciones','readonly').objectStore('zs_colecciones').getAll();
+          const req = db.transaction(store, 'readonly').objectStore(store).getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
       }
 
-      async function zsGuardar(info) {
+      async function dbGuardar(store, datos) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx  = db.transaction('zs_colecciones','readwrite');
-          const req = tx.objectStore('zs_colecciones').add({ ...info, fecha: new Date().toISOString() });
+          const tx  = db.transaction(store, 'readwrite');
+          const req = tx.objectStore(store).add({ ...datos, fecha: new Date().toISOString() });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
       }
 
-      async function zsEliminarDB(id) {
+      async function dbEliminar(store, id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx = db.transaction('zs_colecciones','readwrite');
-          tx.objectStore('zs_colecciones').delete(id);
+          const tx = db.transaction(store, 'readwrite');
+          tx.objectStore(store).delete(id);
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
+      }
+
+      async function dbActualizarCampo(store, id, campo, valor) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction(store, 'readwrite');
+          const req = tx.objectStore(store).get(id);
+          req.onsuccess = e => {
+            const reg = e.target.result;
+            if (!reg) { reject(new Error('No encontrado')); return; }
+            reg[campo] = valor;
+            tx.objectStore(store).put(reg);
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — ZonaScans aliases —
+      const zsListar      = ()         => dbListar('zs_colecciones');
+      const zsEliminarDB  = id         => dbEliminar('zs_colecciones', id);
+      async function zsGuardar(info) {
+        return dbGuardar('zs_colecciones', info);
       }
 
       function zsExtraerCapitulos(html) {
@@ -3031,52 +3062,12 @@
         return { b, defaultO, caseO, caseSet: new Set(nums) };
       }
 
-      // — CRUD IndexedDB —
-      async function htListar() {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('ht_galerias', 'readonly')
-          .objectStore('ht_galerias').getAll();
-          req.onsuccess = e => resolve(e.target.result);
-          req.onerror   = e => reject(e.target.error);
-        });
-      }
-
+      // — Hitomi aliases —
+      const htListar     = ()              => dbListar('ht_galerias');
+      const htEliminarDB = id              => dbEliminar('ht_galerias', id);
+      const htActualizarZip = (id, zip_id) => dbActualizarCampo('ht_galerias', id, 'zip_id', zip_id);
       async function htGuardar(info) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('ht_galerias', 'readwrite');
-          const req = tx.objectStore('ht_galerias')
-          .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
-      async function htEliminarDB(id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('ht_galerias', 'readwrite');
-          tx.objectStore('ht_galerias').delete(id);
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
-      async function htActualizarZip(id, zip_id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('ht_galerias', 'readwrite');
-          const req = tx.objectStore('ht_galerias').get(id);
-          req.onsuccess = e => {
-            const reg = e.target.result;
-            if (!reg) { reject(new Error('No encontrado')); return; }
-            reg.zip_id = zip_id;
-            tx.objectStore('ht_galerias').put(reg);
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
+        return dbGuardar('ht_galerias', { ...info, zip_id: null });
       }
 
       // — Fetch info desde galleries/{id}.js —
@@ -3519,51 +3510,12 @@
 
       const NH_CDN = ['i3', 'i1', 'i2'];
 
-      async function nhListar() {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('nh_galerias', 'readonly')
-          .objectStore('nh_galerias').getAll();
-          req.onsuccess = e => resolve(e.target.result);
-          req.onerror   = e => reject(e.target.error);
-        });
-      }
-
+      // — nhentai aliases —
+      const nhListar        = ()              => dbListar('nh_galerias');
+      const nhEliminarDB    = id              => dbEliminar('nh_galerias', id);
+      const nhActualizarZip = (id, zip_id)    => dbActualizarCampo('nh_galerias', id, 'zip_id', zip_id);
       async function nhGuardar(info) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('nh_galerias', 'readwrite');
-          const req = tx.objectStore('nh_galerias')
-          .add({ ...info, fecha: new Date().toISOString(), zip_id: null });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
-      async function nhEliminarDB(id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('nh_galerias', 'readwrite');
-          tx.objectStore('nh_galerias').delete(id);
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
-      async function nhActualizarZip(id, zip_id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('nh_galerias', 'readwrite');
-          const req = tx.objectStore('nh_galerias').get(id);
-          req.onsuccess = e => {
-            const reg = e.target.result;
-            if (!reg) { reject(new Error('No encontrado')); return; }
-            reg.zip_id = zip_id;
-            tx.objectStore('nh_galerias').put(reg);
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
+        return dbGuardar('nh_galerias', { ...info, zip_id: null });
       }
 
       // — Fetch info desde la página del lector (JSON embebido por SvelteKit) —
@@ -3959,16 +3911,11 @@
       let _sjzColeccionActual = null; // null = lista de mangas, object = capítulos
 
       // — CRUD IndexedDB —
-      async function sjzListar() {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('sjz_colecciones', 'readonly')
-          .objectStore('sjz_colecciones').getAll();
-          req.onsuccess = e => resolve(e.target.result);
-          req.onerror   = e => reject(e.target.error);
-        });
-      }
-
+      
+     // — Samurai aliases —
+      const sjzListar     = ()  => dbListar('sjz_colecciones');
+      const sjzEliminarDB = id  => dbEliminar('sjz_colecciones', id);
+      
       async function sjzGuardar(nombre, base_url, capitulos) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -3976,16 +3923,6 @@
           const req = tx.objectStore('sjz_colecciones')
           .add({ nombre, base_url, capitulos, fecha: new Date().toISOString() });
           tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
-      async function sjzEliminarDB(id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('sjz_colecciones', 'readwrite');
-          tx.objectStore('sjz_colecciones').delete(id);
-          tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
       }
@@ -4073,21 +4010,7 @@
       }
 
       // — Actualizar colección en IndexedDB —
-      async function sjzActualizarColeccion(id, capitulos) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('sjz_colecciones', 'readwrite');
-          const req = tx.objectStore('sjz_colecciones').get(id);
-          req.onsuccess = e => {
-            const reg = e.target.result;
-            if (!reg) { reject(new Error('No encontrado')); return; }
-            reg.capitulos = capitulos;
-            tx.objectStore('sjz_colecciones').put(reg);
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
+      const sjzActualizarColeccion = (id, caps) => dbActualizarCampo('sjz_colecciones', id, 'capitulos', caps);
 
       // — Buscar nuevos episodios —
       async function sjzBuscarNuevos() {
@@ -4648,54 +4571,14 @@
       let _mwColeccionActual = null;
       let _mwOrdenDesc       = true;
 
-      // — CRUD IndexedDB —
-      async function mwListar() {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('mw_colecciones', 'readonly')
-          .objectStore('mw_colecciones').getAll();
-          req.onsuccess = e => resolve(e.target.result);
-          req.onerror   = e => reject(e.target.error);
-        });
-      }
-
+      // — Manhwa aliases —
+      const mwListar              = ()         => dbListar('mw_colecciones');
+      const mwEliminarDB          = id         => dbEliminar('mw_colecciones', id);
+      const mwActualizarColeccion = (id, caps) => dbActualizarCampo('mw_colecciones', id, 'capitulos', caps);
       async function mwGuardar(nombre, base_url, slug, capitulos) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('mw_colecciones', 'readwrite');
-          const req = tx.objectStore('mw_colecciones')
-          .add({ nombre, base_url, slug, capitulos, fecha: new Date().toISOString() });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-        });
+        return dbGuardar('mw_colecciones', { nombre, base_url, slug, capitulos });
       }
-
-      async function mwEliminarDB(id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx = db.transaction('mw_colecciones', 'readwrite');
-          tx.objectStore('mw_colecciones').delete(id);
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
-      async function mwActualizarColeccion(id, capitulos) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('mw_colecciones', 'readwrite');
-          const req = tx.objectStore('mw_colecciones').get(id);
-          req.onsuccess = e => {
-            const reg = e.target.result;
-            if (!reg) { reject(new Error('No encontrado')); return; }
-            reg.capitulos = capitulos;
-            tx.objectStore('mw_colecciones').put(reg);
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
-        });
-      }
-
+      
       // — ZIP de capítulo Manhwa en store zips —
       async function mwGuardarCapitulo(nombre, blob, coleccion_id, cap_num) {
         const db = await bvAbrirDB();
