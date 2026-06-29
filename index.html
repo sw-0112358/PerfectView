@@ -1182,9 +1182,6 @@
               <button class="action-btn" style="flex:1;min-width:140px" onclick="bvNavegar('pantalla1')">
                 <span class="icon">←</span> Volver
               </button>
-              <button class="action-btn" style="flex:1;min-width:140px" onclick="(async()=>{if(_bvDB){_bvDB.close();_bvDB=null;}await bvAbrirDB();actualizarStatus('DB v'+_bvDB.version+' · '+Array.from(_bvDB.objectStoreNames).join(', '));})()">
-                <span class="icon">🔄</span> DB
-              </button>
             </div>
           </div>
 
@@ -1781,16 +1778,7 @@
 
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
-          if (_bvDB) {
-            // Verificar que el store zs_colecciones existe
-            if (!_bvDB.objectStoreNames.contains('zs_colecciones')) {
-              _bvDB.close();
-              _bvDB = null;
-            } else {
-              resolve(_bvDB);
-              return;
-            }
-          }
+          if (_bvDB) { resolve(_bvDB); return; }
           const req = indexedDB.open('PerfectViewBoveda', 8);
           req.onupgradeneeded = e => {
             const db = e.target.result;
