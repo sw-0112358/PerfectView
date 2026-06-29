@@ -4569,27 +4569,6 @@
         return dbGuardar('mw_colecciones', { nombre, base_url, slug, capitulos });
       }
       
-      // — Detectar episodios desde la página del manhwa —
-      async function mwVerEpisodios() {
-        const url  = document.getElementById('mwUrl').value.trim();
-        const info = document.getElementById('mwInfo');
-        if (!url || !/^https?:\/\//i.test(url)) { info.textContent = '⚠️ URL inválida'; return; }
-        if (!CF_WORKER) { info.textContent = '⚠️ Configura el Worker primero'; return; }
-        info.textContent = '⏳ Buscando episodios…';
-        try {
-          const slug = url.replace(/\/$/, '').split('/').pop();
-          const base = CF_WORKER.replace(/\/$/, '');
-          const html = await fetch(base + '/raw?target=' + encodeURIComponent(url)).then(r => r.text());
-          const esc  = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const nums = [...html.matchAll(new RegExp(esc + '-(\\d+)_', 'gi'))].map(m => parseInt(m[1]));
-          if (!nums.length) { info.textContent = '⚠️ No detectado — ingresa el total manualmente'; return; }
-          const maxCap = Math.max(...nums);
-          document.getElementById('mwFinal').value  = maxCap;
-          if (!document.getElementById('mwInicio').value) document.getElementById('mwInicio').value = 1;
-          info.textContent = '✅ Episodios detectados: ' + maxCap;
-        } catch(err) { info.textContent = '❌ ' + err.message; }
-      }
-
       // — Crear carpeta Manhwa —
       async function mwCrearCarpeta() {
         const url    = document.getElementById('mwUrl').value.trim();
@@ -4830,33 +4809,7 @@
           actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
         }
       }
-
-      // — Buscar nuevos episodios Manhwa —
-      async function mwBuscarNuevos() {
-        if (!_mwColeccionActual || !CF_WORKER) return;
-        actualizarStatus('🔄 Buscando nuevos episodios…');
-        try {
-          const base = CF_WORKER.replace(/\/$/, '');
-          const html = await fetch(base + '/raw?target=' + encodeURIComponent(_mwColeccionActual.base_url)).then(r => r.text());
-          const slug = _mwColeccionActual.slug;
-          const esc  = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const nums = [...html.matchAll(new RegExp(esc + '-(\\d+)_', 'gi'))].map(m => parseInt(m[1]));
-          if (!nums.length) { actualizarStatus('⚠️ No se pudo detectar el total'); return; }
-          const maxSitio = Math.max(...nums);
-          const caps     = _mwColeccionActual.capitulos;
-          const maxLocal = Math.max(...caps.map(c => c.num));
-          if (maxSitio <= maxLocal) { actualizarStatus('✅ Todo al día — último: ' + maxLocal); return; }
-          const nuevos = [];
-          for (let i = maxLocal + 1; i <= maxSitio; i++) nuevos.push(i);
-          if (!confirm('🆕 ' + nuevos.length + ' episodio(s) nuevo(s) (del ' + nuevos[0] + ' al ' + nuevos[nuevos.length-1] + ').\n¿Agregar?')) return;
-          const nuevasCaps = [...caps, ...nuevos.map(n => ({ num: n }))];
-          await mwActualizarColeccion(_mwColeccionActual.id, nuevasCaps);
-          _mwColeccionActual.capitulos = nuevasCaps;
-          actualizarStatus('✅ ' + nuevos.length + ' episodios agregados');
-          renderBoveda();
-        } catch(err) { actualizarStatus('❌ ' + err.message); }
-      }
-
+     
       // — Agregar episodios manualmente —
       async function mwAgregarEpisodios() {
         if (!_mwColeccionActual) return;
