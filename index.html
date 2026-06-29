@@ -4461,14 +4461,34 @@
 
         const bc = document.createElement('div');
         bc.className = 'bv-breadcrumb';
-        bc.innerHTML =
-          '<button class="bv-breadcrumb-back" onclick="(' + cfg.onVolver.toString() + ')()">'
-          + '← ' + cfg.onVolverLabel + '</button>'
-          + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">' + cfg.iconoCategoria + ' ' + cfg.coleccion.nombre + '</span>'
-          + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="(' + cfg.onBuscarNuevos.toString() + ')()" title="Buscar nuevos episodios">🔄</button>'
-          + '<button class="bv-breadcrumb-back" onclick="(' + cfg.onToggleOrden.toString() + ')()" title="Invertir orden">'
-          + (cfg.ordenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
+
+        const btnVolver = document.createElement('button');
+        btnVolver.className = 'bv-breadcrumb-back';
+        btnVolver.textContent = '← ' + cfg.onVolverLabel;
+        btnVolver.addEventListener('click', cfg.onVolver);
+
+        const sep1 = document.createElement('span');
+        sep1.className = 'bv-breadcrumb-sep';
+        sep1.textContent = '/';
+
+        const lblColeccion = document.createElement('span');
+        lblColeccion.className = 'bv-breadcrumb-label';
+        lblColeccion.textContent = cfg.iconoCategoria + ' ' + cfg.coleccion.nombre;
+
+        const btnNuevos = document.createElement('button');
+        btnNuevos.className = 'bv-breadcrumb-back';
+        btnNuevos.style.marginLeft = 'auto';
+        btnNuevos.title = 'Buscar nuevos episodios';
+        btnNuevos.textContent = '🔄';
+        btnNuevos.addEventListener('click', cfg.onBuscarNuevos);
+
+        const btnOrden = document.createElement('button');
+        btnOrden.className = 'bv-breadcrumb-back';
+        btnOrden.title = 'Invertir orden';
+        btnOrden.textContent = cfg.ordenDesc ? '🔼 Asc' : '🔽 Desc';
+        btnOrden.addEventListener('click', cfg.onToggleOrden);
+
+        bc.append(btnVolver, sep1, lblColeccion, btnNuevos, btnOrden);
         contenedor.appendChild(bc);
 
         if (cfg.metaLinea) {
