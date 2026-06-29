@@ -4461,13 +4461,20 @@
           return;
         }
 
-        if (!confirm('⬇️ Descargar ' + pendientes.length + ' episodios pendientes de 3 en 3?\n\nToca ⏸ Pausar para detener.')) return;
+        const respLote = prompt(
+          '⬇️ ' + pendientes.length + ' episodios pendientes\n\n' +
+          '¿Cuántas descargas simultáneas? (1–5)\n' +
+          'Recomendado: 3',
+          '3'
+        );
+        if (respLote === null) return;
+        const LOTE = Math.min(5, Math.max(1, parseInt(respLote) || 3));
+
+        if (!confirm('⬇️ Descargar ' + pendientes.length + ' episodios de ' + LOTE + ' en ' + LOTE + '?\n\nToca ⏸ Pausar para detener.')) return;
 
         _autoDescargaActiva = true;
         _modoAutoDescarga   = true;
         if (btnAuto) btnAuto.textContent = '⏸ Pausar';
-
-        const LOTE = 3;
         let completados = 0;
         let errores     = 0;
 
