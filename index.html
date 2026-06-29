@@ -1907,8 +1907,8 @@
         });
       }
 
-      const sjzBuscarZipCapitulo = (cid, cn) => capBuscarZip('sjz', cid, cn);
-      const mwBuscarZipCapitulo  = (cid, cn) => capBuscarZip('mw',  cid, cn);
+      const sjzBuscarZipCapitulo = (cid, cn) => capBuscarZip('samurai', cid, cn);
+      const mwBuscarZipCapitulo  = (cid, cn) => capBuscarZip('manhwa',  cid, cn);
 
 
       async function capListarDescargados(categoria, coleccion_id) {
@@ -1926,8 +1926,8 @@
         });
       }
 
-      const sjzListarDescargados = cid => capListarDescargados('sjz', cid);
-      const mwListarDescargados  = cid => capListarDescargados('mw',  cid);
+      const sjzListarDescargados = cid => capListarDescargados('samurai', cid);
+      const mwListarDescargados  = cid => capListarDescargados('manhwa',  cid);
 
       // ── descargas_temp — persistencia de progreso ──
       async function dtCrear(slotId, meta) {
@@ -2881,25 +2881,14 @@
 
       let _zsColeccionActual = null;
 
-      async function zsBuscarZip(colId, capTitulo) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
-          req.onsuccess = e => {
-            const nombre = 'zs-' + colId + '-' + capTitulo;
-            const reg = e.target.result.find(z => z.nombre && z.nombre.startsWith(nombre));
-            resolve(reg || null);
-          };
-          req.onerror = e => reject(e.target.error);
-        });
-      }
+      const zsBuscarZip = (colId, capTitulo) => capBuscarZip('zonascans', colId, capTitulo);
 
       async function zsAbrirCapitulo(col, cap, chipEl) {
         // Ya descargado → abrir desde ZIP
         const existente = await zsBuscarZip(col.id, cap.titulo);
         if (existente) {
           actualizarStatus('⏳ Cargando ' + cap.titulo + '…');
-          const imagenes = await cargarDesdeSlotOZip('zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-'), existente.id);
+          const imagenes = await cargarDesdeSlotOZip('zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-'), existente.id ?? existente);
           if (imagenes) {
             archivosDescargados.length = 0;
             imagenes.forEach(a => archivosDescargados.push(a));
@@ -2939,8 +2928,8 @@
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const zsNombre = 'zs-' + col.id + '-' + cap.titulo + '.zip';
-            const zipId   = await bvGuardar(zsNombre, zipBlob, 'zonascans');
+            const zsNombre = col.nombre + ' - ' + cap.titulo + '.zip';
+            const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, col.id, cap.titulo);
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
@@ -2973,8 +2962,8 @@
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
-          const zsNombre = 'zs-' + col.id + '-' + cap.titulo + '.zip';
-          const zipId   = await bvGuardar(zsNombre, zipBlob, 'zonascans');
+          const zsNombre = col.nombre + ' - ' + cap.titulo + '.zip';
+          const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, col.id, cap.titulo);
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
@@ -2991,8 +2980,7 @@
         return new Promise((resolve, reject) => {
           const req = db.transaction('zips','readonly').objectStore('zips').getAll();
           req.onsuccess = e => {
-            const prefijo = 'zs-' + colId + '-';
-            const reg = e.target.result.find(z => z.nombre && z.nombre.startsWith(prefijo));
+            const reg = e.target.result.find(z => z.zonascans_coleccion_id === colId);
             resolve(reg || null);
           };
           req.onerror = e => reject(e.target.error);
@@ -3054,7 +3042,7 @@
             caps:            _zsColeccionActual.caps,
             getClave:        cap => cap.titulo,
             getLabel:        cap => cap.titulo,
-            prefijoDB:       'zs-',
+            categoriaDB:     'zonascans',
             ordenDesc:       _zsOrdenDesc,
             onToggleOrden:   () => { _zsOrdenDesc = !_zsOrdenDesc; renderZonaScans(document.getElementById('bvLista')); },
             onBuscarNuevos:  zsBuscarNuevos,
@@ -3063,7 +3051,7 @@
             iconoCategoria:  '📡',
             metaLinea:       null,
             getDescargarLabel: (cap, nombre) => nombre + ' - ' + cap.titulo + '.zip',
-            buscarZipFn:     null,   // usa descMap directo (zipId viene del mapa)
+            buscarZipFn:     (colId, titulo) => capBuscarZip('zonascans', colId, titulo),
             abrirCapFn:      zsAbrirCapitulo,
           });
           return;
@@ -4529,21 +4517,8 @@
           contenedor.appendChild(meta);
         }
 
-        // Cargar mapa de descargados
-        const db = await bvAbrirDB();
-        const todosZips = await new Promise(res => {
-          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
-          req.onsuccess = e => res(e.target.result);
-          req.onerror   = () => res([]);
-        });
-        const prefijo = cfg.prefijoDB + cfg.coleccion.id + '-';
-        const descMap = {};
-        todosZips.forEach(z => {
-          if (z.nombre && z.nombre.startsWith(prefijo)) {
-            const clave = z.nombre.slice(prefijo.length).replace(/\.zip$/, '');
-            descMap[clave] = z.id;
-          }
-        });
+        // Cargar mapa de descargados — todos usan campos DB
+        const descMap = await capListarDescargados(cfg.categoriaDB, cfg.coleccion.id);
 
         const capsOrdenadas = cfg.ordenDesc ? [...cfg.caps].reverse() : [...cfg.caps];
         const grid = document.createElement('div');
@@ -4621,7 +4596,7 @@
             caps:            _sjzColeccionActual.capitulos,
             getClave:        cap => cap.num,
             getLabel:        cap => cap.num,
-            prefijoDB:       'sjz-',
+            categoriaDB:     'samurai',
             ordenDesc:       _sjzOrdenDesc,
             onToggleOrden:   () => { _sjzOrdenDesc = !_sjzOrdenDesc; renderBoveda(); },
             onBuscarNuevos:  sjzBuscarNuevos,
@@ -4630,7 +4605,7 @@
             iconoCategoria:  '⚔️',
             metaLinea:       _sjzColeccionActual.capitulos.length + ' capítulos · ' + _sjzColeccionActual.base_url,
             getDescargarLabel: (cap, nombre) => nombre + ' - Cap ' + cap.num + '.zip',
-            buscarZipFn:     (colId, num) => sjzBuscarZipCapitulo(colId, Number(num)),
+            buscarZipFn:     (colId, num) => capBuscarZip('samurai', colId, Number(num)),
             abrirCapFn:      sjzAbrirCapitulo,
           });
           return;
