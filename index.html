@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v66❄️
+          PerfectView🪷v67❄️
         </div>
       </header>
 
@@ -2048,10 +2048,28 @@
       async function bvLimpiarTemp() {
         const slots = await dtListar();
         if (!slots.length) { actualizarStatus('✨ No hay imágenes temporales'); return; }
-        const totalImg = slots.reduce((acc, s) => acc + (s.imagenes?.length || 0), 0);
-        if (!confirm('Liberar ' + totalImg + ' imágenes temporales de ' + slots.length + ' descargas incompletas?\n\nLos .zip guardados no se tocarán.')) return;
+
+        const incompletos = slots.filter(s => {
+          const total = s.total || 0;
+          const desc  = s.imagenes?.length || 0;
+          return total > 0 && desc < total; // descarga interrumpida
+        });
+        const cache = slots.filter(s => !incompletos.includes(s));
+
+        const lineas = [];
+        if (incompletos.length) {
+          const imgs = incompletos.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
+          lineas.push('• ' + incompletos.length + ' descargas incompletas (' + imgs + ' imágenes)');
+        }
+        if (cache.length) {
+          const imgs = cache.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
+          lineas.push('• ' + cache.length + ' cachés de visor (' + imgs + ' imágenes) — borrarlos hará más lenta la próxima apertura');
+        }
+
+        if (!confirm('Liberar imágenes temporales?\n\n' + lineas.join('\n') + '\n\nLos .zip guardados no se tocarán.')) return;
         for (const slot of slots) await dtEliminar(slot.slotId);
-        actualizarStatus('✨ ' + totalImg + ' imágenes temporales liberadas');
+        const total = slots.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
+        actualizarStatus('✨ ' + total + ' imágenes temporales liberadas');
       }
 
       async function bvLimpiarTodo() {
