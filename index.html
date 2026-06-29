@@ -2052,28 +2052,37 @@
         const incompletos = slots.filter(s => {
           const total = s.total || 0;
           const desc  = s.imagenes?.length || 0;
-          return total > 0 && desc < total; // descarga interrumpida
+          return total > 0 && desc < total;
         });
-        const cache = slots.filter(s => !incompletos.includes(s));
+        const cacheSlots = slots.filter(s => !incompletos.includes(s));
 
-        const lineas = [];
-        if (incompletos.length) {
-          const imgs = incompletos.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
-          lineas.push('• ' + incompletos.length + ' descargas incompletas (' + imgs + ' imágenes)');
-        }
-        if (cache.length) {
-          const imgs = cache.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
-          lineas.push('• ' + cache.length + ' cachés de visor (' + imgs + ' imágenes) — borrarlos hará más lenta la próxima apertura');
-        }
+        const imgsInc   = incompletos.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
+        const imgsCache = cacheSlots.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
 
-        if (!confirm('Liberar imágenes temporales?\n\n' + lineas.join('\n') + '\n\nLos .zip guardados no se tocarán.')) return;
-        for (const slot of slots) await dtEliminar(slot.slotId);
-        const total = slots.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
-        actualizarStatus('✨ ' + total + ' imágenes temporales liberadas');
+        const opciones = [];
+        if (incompletos.length) opciones.push('1 — Solo descargas incompletas (' + imgsInc + ' imágenes de ' + incompletos.length + ' slots)');
+        if (cacheSlots.length)  opciones.push('2 — Solo caché de visor (' + imgsCache + ' imágenes de ' + cacheSlots.length + ' slots)');
+        if (incompletos.length && cacheSlots.length) opciones.push('3 — Todo (' + (imgsInc + imgsCache) + ' imágenes)');
+
+        const resp = prompt(
+          'Limpiar imágenes temporales:\n\n' + opciones.join('\n') +
+          '\n\nEscribe el número de opción (o cancela):'
+        );
+        if (!resp) return;
+
+        let aBorrar = [];
+        if (resp.trim() === '1') aBorrar = incompletos;
+        else if (resp.trim() === '2') aBorrar = cacheSlots;
+        else if (resp.trim() === '3') aBorrar = slots;
+        else { actualizarStatus('⚠️ Opción no válida'); return; }
+
+        for (const slot of aBorrar) await dtEliminar(slot.slotId);
+        const total = aBorrar.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
+        actualizarStatus('✨ ' + total + ' imágenes liberadas de ' + aBorrar.length + ' slots');
       }
 
       async function bvLimpiarTodo() {
-        const stores = ['zips', 'portadas', 'sjz_colecciones', 'mw_colecciones', 'nh_galerias', 'ht_galerias'];
+        const stores = ['zips', 'portadas', 'sjz_colecciones', 'mw_colecciones', 'nh_galerias', 'ht_galerias', 'zs_colecciones', 'descargas_temp'];
         for (const s of stores) {
           try { await bvClearStore(s); } catch(e) {}
         }
