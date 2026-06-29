@@ -1778,7 +1778,16 @@
 
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
-          if (_bvDB) { resolve(_bvDB); return; }
+          if (_bvDB) {
+            // Verificar que el store zs_colecciones existe
+            if (!_bvDB.objectStoreNames.contains('zs_colecciones')) {
+              _bvDB.close();
+              _bvDB = null;
+            } else {
+              resolve(_bvDB);
+              return;
+            }
+          }
           const req = indexedDB.open('PerfectViewBoveda', 8);
           req.onupgradeneeded = e => {
             const db = e.target.result;
@@ -1801,12 +1810,13 @@
             if (!db.objectStoreNames.contains('ht_galerias')) {
               db.createObjectStore('ht_galerias', { keyPath: 'id', autoIncrement: true });
             }
+            if (!db.objectStoreNames.contains('zs_colecciones')) {
+              db.createObjectStore('zs_colecciones', { keyPath: 'id', autoIncrement: true });
+            }    
             if (!db.objectStoreNames.contains('descargas_temp')) {
               db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
             }
-            if (!db.objectStoreNames.contains('zs_colecciones')) {
-              db.createObjectStore('zs_colecciones', { keyPath: 'id', autoIncrement: true });
-            }
+            
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
           req.onerror   = e => reject(e.target.error);
@@ -2677,18 +2687,26 @@
 
       async function zsConfirmarDescarga() {
         if (!_zsInfoPendiente) return;
-        const existentes = await zsListar();
-        const yaExiste   = existentes.find(c => c.url === _zsInfoPendiente.url);
-        if (yaExiste) {
-          document.getElementById('zsInfo').textContent = '⚠️ Esta serie ya está en la bóveda';
-          return;
+        try {
+          const existentes = await zsListar();
+          const yaExiste   = existentes.find(c => c.url === _zsInfoPendiente.url);
+          if (yaExiste) {
+            document.getElementById('zsInfo').textContent = '⚠️ Esta serie ya está en la bóveda';
+            return;
+          }
+          document.getElementById('zsBtnDescargar').style.display = 'none';
+          document.getElementById('zsInfo').textContent = '⏳ Guardando…';
+          const id = await zsGuardar(_zsInfoPendiente);
+          actualizarStatus('✅ Guardado ID: ' + id);
+          _zsInfoPendiente = null;
+          document.getElementById('zsUrl').value = '';
+          const todos = await zsListar();
+          actualizarStatus('🔍 DB tiene ' + todos.length + ' · ID: ' + id);
+          renderZonaScans(document.getElementById('bvLista'));
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+          document.getElementById('zsInfo').textContent = '❌ ' + err.message;
         }
-        document.getElementById('zsBtnDescargar').style.display = 'none';
-        document.getElementById('zsInfo').textContent = '⏳ Guardando…';
-        await zsGuardar(_zsInfoPendiente);
-        _zsInfoPendiente = null;
-        document.getElementById('zsUrl').value = '';
-        renderZonaScans(document.getElementById('bvLista'));
       }
 
       let _zsColeccionActual = null;
@@ -2801,7 +2819,7 @@
             <button class="sjz-btn" onclick="zsBuscarInfo()">🔍</button>
           </div>
           <div id="zsInfo" class="sjz-info"></div>
-          <button id="zsBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none" onclick="zsConfirmarDescarga()">➕ Agregar a biblioteca</button>
+          <button id="zsBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none" onclick="actualizarStatus('🔍 pendiente: ' + (!!_zsInfoPendiente) + ' · caps: ' + (_zsInfoPendiente?.caps?.length||0)); zsConfirmarDescarga()">➕ Agregar a biblioteca</button>
         `;
         contenedor.appendChild(panel);
 
