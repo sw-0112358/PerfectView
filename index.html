@@ -1800,8 +1800,10 @@
             }
             if (!db.objectStoreNames.contains('ht_galerias')) {
               db.createObjectStore('ht_galerias', { keyPath: 'id', autoIncrement: true });
+            } 
+            if (!db.objectStoreNames.contains('zs_colecciones')) {
+              db.createObjectStore('zs_colecciones', { keyPath: 'id', autoIncrement: true });
             }
-            // zs_colecciones reutiliza nc_colecciones — no se necesita store separado    
             if (!db.objectStoreNames.contains('descargas_temp')) {
               db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
             }
