@@ -4173,18 +4173,15 @@
         const existente = await sjzBuscarZipCapitulo(coleccion.id, cap.num);
         if (existente) {
           actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
-          const zip      = await JSZip.loadAsync(existente.blob);
-          const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
-          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          const slotId = 'sjz-' + coleccion.id + '-' + cap.num;
+          const imagenes = await cargarDesdeSlotOZip(slotId, existente.id);
+          if (!imagenes) { actualizarStatus('❌ No se pudo cargar'); return; }
           archivosDescargados.length = 0;
-          for (const e of entradas) {
-            archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
-          }
+          imagenes.forEach(a => archivosDescargados.push(a));
           _visorContexto = { tipo: 'samurai', coleccion, capNum: cap.num };
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
-          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + imagenes.length + ' imágenes');
           return;
         }
 
@@ -4238,7 +4235,6 @@
               zipBlob, coleccion.id, cap.num
             );
             if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-            await dtEliminar(slotId);
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
             chipEl.title = '✅ Descargado — tap para abrir';
@@ -4289,13 +4285,6 @@
           // 5. Guardar portada
           if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
 
-          // 6. Marcar chip como descargado
-          chipEl.classList.remove('descargando');
-          chipEl.classList.add('descargado');
-          chipEl.title = '✅ Descargado';
-
-          // 7. Marcar como descargado — sin navegar automáticamente
-          await dtEliminar(slotId);
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado — tap para abrir';
@@ -4863,16 +4852,15 @@
         const existente = await mwBuscarZipCapitulo(coleccion.id, cap.num);
         if (existente) {
           actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
-          const zip      = await JSZip.loadAsync(existente.blob);
-          const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
-          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          const slotId = 'mw-' + coleccion.id + '-' + cap.num;
+          const imagenes = await cargarDesdeSlotOZip(slotId, existente.id);
+          if (!imagenes) { actualizarStatus('❌ No se pudo cargar'); return; }
           archivosDescargados.length = 0;
-          for (const e of entradas) archivosDescargados.push({ nombre: e.name, blob: await e.async('blob') });
+          imagenes.forEach(a => archivosDescargados.push(a));
           _visorContexto = { tipo: 'manhwa', coleccion, capNum: cap.num };
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
-          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + entradas.length + ' imágenes');
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + imagenes.length + ' imágenes');
           return;
         }
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
@@ -4915,7 +4903,6 @@
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-            await dtEliminar(slotId);
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
             chipEl.title = '✅ Descargado — tap para abrir';
@@ -4941,7 +4928,6 @@
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
           if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-          await dtEliminar(slotId);
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado — tap para abrir';
