@@ -2735,7 +2735,7 @@
             archivosDescargados.length = 0;
             imagenes.forEach(a => archivosDescargados.push(a));
             _visorContexto = { tipo: 'zonascans', coleccion: col, capTitulo: cap.titulo };
-            bvNavegar('pantalla1');
+            mostrarVisor(true);
             mostrarImagenesEnVisor();
             actualizarStatus('✅ ' + cap.titulo + ' — ' + imagenes.length + ' imágenes');
           }
