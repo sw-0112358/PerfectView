@@ -2712,7 +2712,36 @@
 
       let _zsColeccionActual = null;
 
+      async function zsBuscarZip(colId, capTitulo) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const nombre = 'zs-' + colId + '-' + capTitulo;
+            const reg = e.target.result.find(z => z.nombre && z.nombre.startsWith(nombre));
+            resolve(reg || null);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
       async function zsAbrirCapitulo(col, cap, chipEl) {
+        // Ya descargado → abrir desde ZIP
+        const existente = await zsBuscarZip(col.id, cap.titulo);
+        if (existente) {
+          actualizarStatus('⏳ Cargando ' + cap.titulo + '…');
+          const imagenes = await cargarDesdeSlotOZip('zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-'), existente.id);
+          if (imagenes) {
+            archivosDescargados.length = 0;
+            imagenes.forEach(a => archivosDescargados.push(a));
+            _visorContexto = { tipo: 'zonascans', coleccion: col, capTitulo: cap.titulo };
+            bvNavegar('pantalla1');
+            mostrarImagenesEnVisor();
+            actualizarStatus('✅ ' + cap.titulo + ' — ' + imagenes.length + ' imágenes');
+          }
+          return;
+        }
+
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         const slotId = 'zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-');
 
@@ -2738,7 +2767,8 @@
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const zipId   = await bvGuardar(col.nombre + ' - ' + cap.titulo + '.zip', zipBlob, 'zonascans');
+            const zsNombre = 'zs-' + col.id + '-' + cap.titulo + '.zip';
+            const zipId   = await bvGuardar(zsNombre, zipBlob, 'zonascans');
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
@@ -2768,7 +2798,8 @@
           const zip = new JSZip();
           archivos.forEach(a => zip.file(a.nombre, a.blob));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
-          const zipId   = await bvGuardar(col.nombre + ' - ' + cap.titulo + '.zip', zipBlob, 'zonascans');
+          const zsNombre = 'zs-' + col.id + '-' + cap.titulo + '.zip';
+          const zipId   = await bvGuardar(zsNombre, zipBlob, 'zonascans');
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
