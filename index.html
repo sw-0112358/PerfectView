@@ -4495,11 +4495,18 @@
 
           const chips = lote.map(cap => {
             const clave = String(getClave(cap));
-            return chipContainer
-              ? ([...chipContainer.querySelectorAll('.sjz-cap-chip')]
-                  .find(el => el.textContent.trim() === clave || el.title.includes(clave))
-                  || document.createElement('div'))
-              : document.createElement('div');
+            if (!chipContainer) return document.createElement('div');
+            return [...chipContainer.querySelectorAll('.sjz-cap-chip')]
+              .find(el => {
+                // Buscar en cap-num (chips con portada) o en textContent directo
+                const capNum = el.querySelector('.cap-num');
+                const texto  = capNum ? capNum.textContent.trim() : el.textContent.trim();
+                // Match exacto para evitar que "5" coincida con "52"
+                return texto === clave
+                  || el.title === '✅ ' + clave
+                  || el.title === '⬇️ ' + clave;
+              })
+              || document.createElement('div');
           });
 
           await Promise.allSettled(
