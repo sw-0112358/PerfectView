@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v58❄️
+          PerfectView🪷v62❄️
         </div>
       </header>
 
@@ -3069,8 +3069,24 @@
                 const num = document.createElement('div');
                 num.className = 'cap-num';
                 num.textContent = cap.titulo;
-                chip.append(img, num);
+                const dl = document.createElement('button');
+                dl.textContent = '🔽';
+                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+                dl.onclick = async e => {
+                  e.stopPropagation();
+                  if (zipId) bovedaDescargar(zipId, _zsColeccionActual.nombre + ' - ' + cap.titulo + '.zip');
+                };
+                chip.append(img, num, dl);
               }).catch(() => {});
+            } else if (yaDesc) {
+              const dl = document.createElement('span');
+              dl.textContent = ' 🔽';
+              dl.style.cssText = 'font-size:.6rem;cursor:pointer';
+              dl.onclick = async e => {
+                e.stopPropagation();
+                if (zipId) bovedaDescargar(zipId, _zsColeccionActual.nombre + ' - ' + cap.titulo + '.zip');
+              };
+              chip.appendChild(dl);
             }
             grid.appendChild(chip);
           });
