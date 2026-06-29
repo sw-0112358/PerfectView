@@ -2579,7 +2579,7 @@
       async function zsListar() {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('nc_colecciones','readonly').objectStore('nc_colecciones').getAll();
+          const req = db.transaction('zs_colecciones','readonly').objectStore('zs_colecciones').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -2588,8 +2588,8 @@
       async function zsGuardar(info) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx  = db.transaction('nc_colecciones','readwrite');
-          const req = tx.objectStore('nc_colecciones').add({ ...info, fecha: new Date().toISOString() });
+          const tx  = db.transaction('zs_colecciones','readwrite');
+          const req = tx.objectStore('zs_colecciones').add({ ...info, fecha: new Date().toISOString() });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
@@ -2598,8 +2598,8 @@
       async function zsEliminarDB(id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx = db.transaction('nc_colecciones','readwrite');
-          tx.objectStore('nc_colecciones').delete(id);
+          const tx = db.transaction('zs_colecciones','readwrite');
+          tx.objectStore('zs_colecciones').delete(id);
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
@@ -2837,12 +2837,12 @@
           // Actualizar en DB
           const db = await bvAbrirDB();
           await new Promise((res, rej) => {
-            const tx  = db.transaction('nc_colecciones','readwrite');
-            const req = tx.objectStore('nc_colecciones').get(_zsColeccionActual.id);
+            const tx  = db.transaction('zs_colecciones','readwrite');
+            const req = tx.objectStore('zs_colecciones').get(_zsColeccionActual.id);
             req.onsuccess = e => {
               const reg = e.target.result;
               reg.caps  = nuevasCaps;
-              tx.objectStore('nc_colecciones').put(reg);
+              tx.objectStore('zs_colecciones').put(reg);
               tx.oncomplete = () => res();
               tx.onerror    = e => rej(e.target.error);
             };
