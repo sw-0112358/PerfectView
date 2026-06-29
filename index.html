@@ -949,6 +949,42 @@
         padding: 60px 20px; font-size: 1rem; line-height: 2;
       }
 
+      /* ── Pill de almacenamiento ── */
+      .bv-espacio-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px 5px 8px;
+        margin-bottom: 10px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(91,127,255,0.10) 0%, rgba(124,95,255,0.08) 100%);
+        border: 1px solid rgba(91,127,255,0.22);
+        box-shadow: 0 1px 4px rgba(91,127,255,0.10), inset 0 1px 0 rgba(255,255,255,0.55);
+        cursor: pointer;
+        transition: background .18s, box-shadow .18s, transform .15s;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        max-width: 100%;
+      }
+      .bv-espacio-pill:active {
+        transform: scale(.97);
+        box-shadow: none;
+      }
+      .bv-espacio-ico {
+        font-size: .88rem;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .bv-espacio-txt {
+        font-size: .70rem;
+        font-weight: 600;
+        color: var(--accent2);
+        letter-spacing: .01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
       /* ======= EMOJI BOARD ======= */
       .bv-emoji-overlay {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -1168,7 +1204,10 @@
 
           <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
             <div class="bv-titulo" style="cursor:pointer;margin-bottom:4px" onclick="solicitarPersistencia()">🏛️ Bóveda</div>
-            <div id="bvEspacio" style="font-size:.72rem;color:var(--text-muted);margin-bottom:10px;cursor:pointer" onclick="bvVerEspacio()">📦 calculando…</div>
+            <div id="bvEspacio" class="bv-espacio-pill" onclick="bvVerEspacio()">
+  <span class="bv-espacio-ico">💾</span>
+  <span class="bv-espacio-txt">calculando…</span>
+</div>
 
             <!-- Acceso rápido ADM -->
             <div id="bvListaADM" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
@@ -2039,8 +2078,29 @@
           const bytesTemp = await calcularTamañoStore('descargas_temp');
           const mbZips   = (bytesZips / 1048576).toFixed(1);
           const mbTemp   = (bytesTemp / 1048576).toFixed(1);
-          const el = document.getElementById('bvEspacio');
-          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres · 🗜️ ${mbZips} MB · 🖼️ ${mbTemp} MB`;
+          const persiste = await navigator.storage.persisted();
+          const pill     = document.getElementById('bvEspacio');
+          if (!pill) return;
+          const ico = pill.querySelector('.bv-espacio-ico');
+          const txt = pill.querySelector('.bv-espacio-txt');
+          if (ico) ico.textContent = persiste ? '🔒' : '💾';
+          if (txt) txt.textContent = `${usado} MB usados · ${libre} MB libres · 🗜️ ${mbZips} · 🖼️ ${mbTemp}`;
+        } catch(e) {}
+      }
+
+      async function _bvActualizarPill() {
+        try {
+          if (!navigator.storage || !navigator.storage.estimate) return;
+          const est      = await navigator.storage.estimate();
+          const usado    = (est.usage / 1048576).toFixed(1);
+          const libre    = ((est.quota - est.usage) / 1048576).toFixed(0);
+          const persiste = await navigator.storage.persisted();
+          const pill     = document.getElementById('bvEspacio');
+          if (!pill) return;
+          const ico      = pill.querySelector('.bv-espacio-ico');
+          const txt      = pill.querySelector('.bv-espacio-txt');
+          if (ico) ico.textContent = persiste ? '🔒' : '💾';
+          if (txt) txt.textContent = usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? '' : ' · sin persistir');
         } catch(e) {}
       }
 
@@ -2050,8 +2110,7 @@
           const usado = (est.usage  / 1048576).toFixed(1);
           const total = (est.quota  / 1048576).toFixed(1);
           const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
-          const el = document.getElementById('bvEspacio');
-          if (el) el.textContent = `📦 ${usado} MB usados · ${libre} MB libres`;
+          await _bvActualizarPill();
 
           const confirmTxt = prompt(
             `Almacenamiento\nUsado: ${usado} MB · Libre: ${libre} MB\n\n⚠️ Esto eliminará TODOS los ZIPs, portadas y colecciones.\nEscribe "Si borrar" para confirmar:`
@@ -4999,16 +5058,7 @@
         if (categoriaActual === 'menu') {
           if (toolbar) toolbar.style.display = 'none';
 
-          const elEspacio = document.getElementById('bvEspacio');
-          try {
-            if (navigator.storage && navigator.storage.estimate) {
-              const est  = await navigator.storage.estimate();
-              const usado = (est.usage / 1048576).toFixed(1);
-              const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
-              const persiste = await navigator.storage.persisted();
-              if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? ' · 🔒 persistente' : ' · ⚠️ no persistente');
-            }
-          } catch(e) {}
+          _bvActualizarPill();
 
           // Botón cambiar combinación
           const btnCombo = document.createElement('button');
@@ -5079,16 +5129,7 @@
           + '<span class="bv-breadcrumb-label">' + (carpeta ? carpeta.icon + ' ' + carpeta.label : '') + '</span>';
         contenedor.appendChild(bc);
 
-        const elEspacio = document.getElementById('bvEspacio');
-        try {
-          if (navigator.storage && navigator.storage.estimate) {
-            const est  = await navigator.storage.estimate();
-            const usado = (est.usage / 1048576).toFixed(1);
-            const libre = ((est.quota - est.usage) / 1048576).toFixed(0);
-            const persiste = await navigator.storage.persisted();
-            if (elEspacio) elEspacio.textContent = '📦 ' + usado + ' MB usados · ' + libre + ' MB libres' + (persiste ? ' · 🔒 persistente' : ' · ⚠️ no persistente');
-          }
-        } catch(e) {}
+        _bvActualizarPill();
 
         let items;
         try {
