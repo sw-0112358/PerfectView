@@ -4561,10 +4561,17 @@
         btnAuto.className = 'bv-breadcrumb-back';
         btnAuto.title = 'Descargar todos los pendientes';
         btnAuto.textContent = '⬇️ Auto';
-        if (!_modoAutoDescarga) { bvNavegar('pantalla1'); mostrarImagenesEnVisor(); }
-          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + imagenes.length + ' imágenes');
-          return;
-        }
+        btnAuto.addEventListener('click', () => {
+          autoDescargar(
+            cfg.coleccion,
+            cfg.caps,
+            descMap,
+            cfg.abrirCapFn,
+            cfg.getClave,
+            grid,
+            btnAuto
+          );
+        });
 
         const btnOrden = document.createElement('button');
         btnOrden.className = 'bv-breadcrumb-back';
