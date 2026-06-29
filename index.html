@@ -1168,20 +1168,17 @@
 
           <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
             <div class="bv-titulo" style="cursor:pointer;margin-bottom:4px" onclick="solicitarPersistencia()">🏛️ Bóveda</div>
-            <div id="bvEspacio" style="font-size:.72rem;color:var(--text-muted);margin-bottom:12px;cursor:pointer" onclick="bvVerEspacio()">📦 calculando…</div>
-            <div class="action-grid">
-              <button class="action-btn" style="flex:1;min-width:140px" onclick="bvBloquear()">
-                <span class="icon">🔒</span> Bloquear
-              </button>
-              <button class="action-btn" style="flex:1;min-width:140px" onclick="bvLimpiarTemp()">
-                <span class="icon">✨</span> Limpiar caché
-              </button>
-              <button class="action-btn" style="flex:1;min-width:140px" id="btnFullscreen" onclick="toggleFullscreen()">
-                <span class="icon">⛶</span> Pantalla completa
-              </button>
-              <button class="action-btn" style="flex:1;min-width:140px" onclick="bvNavegar('pantalla1')">
-                <span class="icon">←</span> Volver
-              </button>
+            <div id="bvEspacio" style="font-size:.72rem;color:var(--text-muted);margin-bottom:10px;cursor:pointer" onclick="bvVerEspacio()">📦 calculando…</div>
+
+            <!-- Acceso rápido ADM -->
+            <div id="bvListaADM" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+
+            <!-- Controles -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px">
+              <button class="action-btn" style="flex:1" onclick="bvBloquear()"><span class="icon">🔒</span> Bloquear</button>
+              <button class="action-btn" style="flex:1" onclick="bvLimpiarTemp()"><span class="icon">✨</span> Limpiar caché</button>
+              <button class="action-btn" style="flex:1" id="btnFullscreen" onclick="toggleFullscreen()"><span class="icon">⛶</span> Pantalla completa</button>
+              <button class="action-btn" style="flex:1" onclick="bvNavegar('pantalla1')"><span class="icon">←</span> Volver</button>
             </div>
           </div>
 
@@ -1713,7 +1710,7 @@
       // — Contexto del visor para navegación entre episodios —
       let _visorContexto = null;
 
-     
+
       function visorSiguienteCap() {
         if (!_visorContexto) return null;
         const { tipo } = _visorContexto;
@@ -1806,14 +1803,14 @@
             if (!db.objectStoreNames.contains('descargas_temp')) {
               db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
             }
-            
+
           };
           req.onsuccess = e => { _bvDB = e.target.result; resolve(_bvDB); };
           req.onerror   = e => reject(e.target.error);
         });
       }
 
-      
+
       async function capGuardarZip(categoria, nombre, blob, coleccion_id, cap_num) {
         const db = await bvAbrirDB();
         const prefix = categoria; // 'samurai' o 'manhwa'
@@ -1834,8 +1831,8 @@
 
       const sjzGuardarCapitulo = (n, b, cid, cn) => capGuardarZip('samurai', n, b, cid, cn);
       const mwGuardarCapitulo  = (n, b, cid, cn) => capGuardarZip('manhwa',  n, b, cid, cn);
-      
-      
+
+
       async function capBuscarZip(categoria, coleccion_id, cap_num) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -1852,8 +1849,8 @@
 
       const sjzBuscarZipCapitulo = (cid, cn) => capBuscarZip('sjz', cid, cn);
       const mwBuscarZipCapitulo  = (cid, cn) => capBuscarZip('mw',  cid, cn);
-      
-      
+
+
       async function capListarDescargados(categoria, coleccion_id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -1871,7 +1868,7 @@
 
       const sjzListarDescargados = cid => capListarDescargados('sjz', cid);
       const mwListarDescargados  = cid => capListarDescargados('mw',  cid);
-      
+
       // ── descargas_temp — persistencia de progreso ──
       async function dtCrear(slotId, meta) {
         const db = await bvAbrirDB();
@@ -2197,6 +2194,7 @@
 
       function bvBloquear() {
         bovedaDesbloqueada = false;
+        _bvMaestra = false;
         bvActualizarIcono();
         bvNavegar('pantalla1');
         actualizarStatus('🔒 Bóveda bloqueada');
@@ -2498,13 +2496,14 @@
         '🏆','⚛️','🐬','🦁',
         '🫯','❤️','💠','🫆'
       ];
-           
+
       const BV_MASTER    = '🫯🫆';
       const BV_COMBO_KEY = '_bv_combo';
 
       let _bvSeleccion         = [];
       let _bvCeldaSeleccionada = null;
-      let _bvDesbloqueada      = false; // permanece true durante la sesión
+      let _bvDesbloqueada = false; // permanece true durante la sesión
+      let _bvMaestra      = false; // true solo si entró con combinación maestra
 
       function irABoveda() {
         // Si ya está desbloqueada en esta sesión, entrar directo
@@ -2559,7 +2558,7 @@
         const combo   = localStorage.getItem(BV_COMBO_KEY);
 
         // Combinación maestra — siempre abre
-        if (intento === BV_MASTER) { bvAcceder(); return; }
+        if (intento === BV_MASTER) { _bvMaestra = true; bvAcceder(); return; }
 
         // Primera vez → guardar combo
         if (!combo) {
@@ -2617,12 +2616,17 @@
         });
       }, { rootMargin: '150px' }); // pre-carga 150px antes de entrar al viewport
 
+      // Categorías en el panel superior (acceso rápido tipo galería)
+      const BV_CARPETAS_ADM = [
+        { id: 'mangas',  icon: '📚', label: 'Mangas'  },
+        { id: 'nhentai', icon: '🪷', label: 'nhentai' },
+        { id: 'hitomi',  icon: '🌸', label: 'Hitomi'  },
+      ];
+
+      // Categorías en el menú principal (bvLista)
       const BV_CARPETAS = [
-        { id: 'mangas',    icon: '📚', label: 'Mangas'    },
         { id: 'samurai',   icon: '⚔️', label: 'Samurai'   },
         { id: 'manhwa',    icon: '📖', label: 'Manhwa'    },
-        { id: 'nhentai',   icon: '🪷', label: 'nhentai'   },
-        { id: 'hitomi',    icon: '🌸', label: 'Hitomi'    },
         { id: 'zonascans', icon: '📡', label: 'ZonaScans' },
       ];
 
@@ -2698,8 +2702,8 @@
         doc.querySelectorAll('a.ch-link[href]').forEach(a => {
           const url    = a.getAttribute('href');
           const titulo = a.querySelector('.chapter-name, .text-chapter') 
-                        ?.textContent.trim() 
-                        || a.textContent.trim().split('\n')[0].trim();
+          ?.textContent.trim() 
+          || a.textContent.trim().split('\n')[0].trim();
           if (url && titulo) caps.push({ titulo, url });
         });
         // Invertir — el HTML pone el más reciente primero
@@ -2727,7 +2731,7 @@
       async function zsObtenerImagenesCapitulo(chapUrl) {
         const base = CF_WORKER.replace(/\/$/, '');
         const html = await fetch(base + '/fetch-html?target=' + encodeURIComponent(chapUrl)
-          + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
+                                 + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
         return zsExtraerImagenes(html);
       }
 
@@ -2747,7 +2751,7 @@
           if (!CF_WORKER) throw new Error('Configura el Worker primero');
           const base = CF_WORKER.replace(/\/$/, '');
           const html = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url)
-            + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
+                                   + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
           const caps  = zsExtraerCapitulos(html);
           if (!caps.length) throw new Error('No se encontraron capítulos — verifica la URL');
           const nombre = zsExtraerNombre(html) || url.split('/').filter(Boolean).pop();
@@ -2829,14 +2833,14 @@
             const nombresYa     = new Set(slotPrevio.imagenes.map(a => a.nombre));
             const pendientes    = todasEntradas.filter(e => !nombresYa.has(e.nombre));
             const nuevas = pendientes.length > 0
-              ? await batchDescargar(pendientes, { 'Referer': 'https://archiviumbar.com/' }, (n, t) => {
-                  const total = slotPrevio.imagenes.length + n;
-                  actualizarStatus('⏳ ' + cap.titulo + ' · ' + total + '/' + todasEntradas.length);
-                  chipEl.textContent = total + '/' + todasEntradas.length;
-                }, false, slotId)
-              : [];
+            ? await batchDescargar(pendientes, { 'Referer': 'https://archiviumbar.com/' }, (n, t) => {
+              const total = slotPrevio.imagenes.length + n;
+              actualizarStatus('⏳ ' + cap.titulo + ' · ' + total + '/' + todasEntradas.length);
+              chipEl.textContent = total + '/' + todasEntradas.length;
+            }, false, slotId)
+            : [];
             const archivos = [...slotPrevio.imagenes, ...nuevas]
-              .sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+            .sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
             const zip = new JSZip();
             archivos.forEach(a => zip.file(a.nombre, a.blob));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -2907,7 +2911,7 @@
           const base    = CF_WORKER.replace(/\/$/, '');
           const url     = _zsColeccionActual.url;
           const html    = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url)
-            + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
+                                      + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
           const caps    = zsExtraerCapitulos(html);
           if (!caps.length) { actualizarStatus('⚠️ No se encontraron capítulos'); return; }
           const maxSitio = caps.length;
@@ -2976,8 +2980,8 @@
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
           const capsOrdenadas = _zsOrdenDesc
-            ? [..._zsColeccionActual.caps].reverse()
-            : [..._zsColeccionActual.caps];
+          ? [..._zsColeccionActual.caps].reverse()
+          : [..._zsColeccionActual.caps];
           capsOrdenadas.forEach(cap => {
             const yaDesc = !!descMap[cap.titulo];
             const zipId  = descMap[cap.titulo];
@@ -3018,7 +3022,7 @@
           <div class="sjz-row">
             <input id="zsUrl" class="sjz-input" placeholder="https://archiviumbar.com/manga/slug/" style="flex:1">
             <button class="sjz-btn" onclick="zsBuscarInfo()">🔍</button>
-          </div>
+      </div>
           <div id="zsInfo" class="sjz-info"></div>
           <button id="zsBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none" onclick="actualizarStatus('🔍 pendiente: ' + (!!_zsInfoPendiente) + ' · caps: ' + (_zsInfoPendiente?.caps?.length||0)); zsConfirmarDescarga()">➕ Agregar a biblioteca</button>
         `;
@@ -3111,7 +3115,7 @@
         return dbGuardar('ht_galerias', { ...info, zip_id: null });
       }
 
-       // — Fetch info desde galleries/{id}.js —
+      // — Fetch info desde galleries/{id}.js —
       async function htFetchInfo(htId) {
         if (!CF_WORKER) throw new Error('Configura el Worker primero');
         const jsUrl = 'https://ltn.gold-usergeneratedcontent.net/galleries/' + htId + '.js';
@@ -3938,11 +3942,11 @@
       let _sjzColeccionActual = null; // null = lista de mangas, object = capítulos
 
       // — CRUD IndexedDB —
-      
-     // — Samurai aliases —
+
+      // — Samurai aliases —
       const sjzListar     = ()  => dbListar('sjz_colecciones');
       const sjzEliminarDB = id  => dbEliminar('sjz_colecciones', id);
-      
+
       async function sjzGuardar(nombre, base_url, capitulos) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -4115,15 +4119,15 @@
       }
 
       // — Guardar capítulo descargado en zips store con metadatos SJZ —
-      
+
 
 
       // — Buscar ZIP de un capítulo concreto —
-      
+
 
 
       // — Mapa de capítulos descargados para una colección —
-      
+
 
 
       // — Abrir capítulo: descarga o carga desde DB —
@@ -4568,7 +4572,7 @@
       async function mwGuardar(nombre, base_url, slug, capitulos) {
         return dbGuardar('mw_colecciones', { nombre, base_url, slug, capitulos });
       }
-      
+
       // — Crear carpeta Manhwa —
       async function mwCrearCarpeta() {
         const url    = document.getElementById('mwUrl').value.trim();
@@ -4809,7 +4813,7 @@
           actualizarStatus('❌ Cap. ' + cap.num + ': ' + err.message);
         }
       }
-     
+
       // — Agregar episodios manualmente —
       async function mwAgregarEpisodios() {
         if (!_mwColeccionActual) return;
@@ -4974,6 +4978,22 @@
         const contenedor = document.getElementById('bvLista');
         const toolbar    = document.getElementById('bvToolbar');
         contenedor.innerHTML = '';
+
+        // Poblar panel ADM — solo visible con combinación maestra
+        const adm = document.getElementById('bvListaADM');
+        if (adm) {
+          adm.innerHTML = '';
+          adm.style.display = _bvMaestra ? 'flex' : 'none';
+          if (!_bvMaestra) { adm.style.marginBottom = '0'; }
+          BV_CARPETAS_ADM.forEach(c => {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.style.cssText = 'flex:1;min-width:80px;justify-content:center';
+            btn.innerHTML = c.icon + ' ' + c.label;
+            btn.onclick = () => bvAbrirCarpeta(c.id);
+            adm.appendChild(btn);
+          });
+        }
 
         // — Vista Menú —
         if (categoriaActual === 'menu') {
