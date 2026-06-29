@@ -2995,7 +2995,7 @@
         });
       }
 
-      let _zsOrdenDesc = false; // false = cap 1 primero
+      let _zsOrdenDesc = true; // true = más reciente primero (igual que Samurai)
 
       async function zsBuscarNuevos() {
         if (!_zsColeccionActual) return;
@@ -4455,7 +4455,16 @@
           return;
         }
 
-        const pendientes = caps.filter(cap => !descargados[String(getClave(cap))]);
+        // Ordenar siempre ascendente para la auto-descarga (ep 1 primero)
+        const pendientes = [...caps]
+          .filter(cap => !descargados[String(getClave(cap))])
+          .sort((a, b) => {
+            const ca = getClave(a), cb = getClave(b);
+            const na = Number(ca), nb = Number(cb);
+            return isNaN(na) || isNaN(nb)
+              ? String(ca).localeCompare(String(cb))
+              : na - nb;
+          });
         if (!pendientes.length) {
           actualizarStatus('✅ Todos los episodios ya están descargados');
           return;
