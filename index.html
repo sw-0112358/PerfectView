@@ -3315,7 +3315,6 @@
             await htActualizarZip(galeria.id, zipId);
             galeria.zip_id = zipId;
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-            await dtEliminar(slotId);
             if (cardEl) {
               if (ph && img && archivos[0]) {
                 img.src = URL.createObjectURL(archivos[0].blob);
@@ -3350,7 +3349,6 @@
           await htActualizarZip(galeria.id, zipId);
           galeria.zip_id = zipId;
           if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-          await dtEliminar(slotId);
           if (cardEl) {
             if (ph && img && archivos[0]) {
               img.src = URL.createObjectURL(archivos[0].blob);
@@ -3737,7 +3735,6 @@
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
             await nhActualizarZip(galeria.id, zipId);
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
-            await dtEliminar(slotId);
             galeria.zip_id = zipId;
             if (cardEl) {
               if (img && archivos[0]) {
@@ -4340,30 +4337,10 @@
         //   getLabelLog,   // fn(clave) → texto para el status de progreso
         // }
 
-        // — Obtener mapa { clave → {id, reg?} } según el tipo —
-        let entradas; // array de { clave, zipId }
-
-        if (cfg.prefijoDB) {
-          // Samurai / Manhwa: usan capListarDescargados
-          const descMap = await capListarDescargados(cfg.prefijoDB, col.id);
-          entradas = Object.entries(descMap).map(([k, id]) => ({ clave: k, zipId: id }));
-          entradas.sort((a, b) => Number(a.clave) - Number(b.clave));
-        } else {
-          // ZonaScans: escanear store zips por prefijo de nombre
-          const db = await bvAbrirDB();
-          const todosZips = await new Promise(res => {
-            const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
-            req.onsuccess = e => res(e.target.result);
-            req.onerror   = () => res([]);
-          });
-          const prefijo = cfg.prefijoNombre + col.id + '-';
-          entradas = todosZips
-            .filter(z => z.nombre && z.nombre.startsWith(prefijo))
-            .map(z => ({
-              clave: z.nombre.slice(prefijo.length).replace(/\.zip$/, ''),
-              zipId: z.id,
-            }));
-        }
+        // — Obtener mapa { clave → zipId } — todos usan campos DB
+        const descMap = await capListarDescargados(cfg.categoriaDB, col.id);
+        let entradas = Object.entries(descMap).map(([k, id]) => ({ clave: k, zipId: id }));
+        if (cfg.ordenarNumerico) entradas.sort((a, b) => Number(a.clave) - Number(b.clave));
 
         if (!entradas.length) {
           actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
@@ -4415,9 +4392,10 @@
 
       // — Aliases específicos por categoría —
       const sjzExportarZipCompleto = col => exportarZipCompleto(col, {
-        tipo:        'samurai',
-        prefijoDB:   'sjz',
-        metaExtra:   (col, entradas) => ({
+        tipo:           'samurai',
+        categoriaDB:    'samurai',
+        ordenarNumerico: true,
+        metaExtra:      (col, entradas) => ({
           base_url:   col.base_url,
           total_caps: col.capitulos.length,
           capitulos:  col.capitulos.map(c => ({
@@ -4431,9 +4409,10 @@
       });
 
       const mwExportarZipCompleto = col => exportarZipCompleto(col, {
-        tipo:        'manhwa',
-        prefijoDB:   'mw',
-        metaExtra:   (col, entradas) => ({
+        tipo:            'manhwa',
+        categoriaDB:     'manhwa',
+        ordenarNumerico: true,
+        metaExtra:       (col, entradas) => ({
           base_url:   col.base_url,
           slug:       col.slug,
           total_caps: col.capitulos.length,
@@ -4447,10 +4426,10 @@
       });
 
       const zsExportarZipCompleto = col => exportarZipCompleto(col, {
-        tipo:          'zonascans',
-        prefijoDB:     null,
-        prefijoNombre: 'zs-',
-        metaExtra:     (col) => ({
+        tipo:            'zonascans',
+        categoriaDB:     'zonascans',
+        ordenarNumerico: false,
+        metaExtra:       (col) => ({
           url:  col.url,
           caps: col.caps,
         }),
