@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v77❄️
+          PerfectView🪷v78❄️
         </div>
       </header>
 
@@ -4446,6 +4446,59 @@
         getLabelLog:  clave => '"' + clave + '"',
       });
       
+      // — Descarga automática de todos los episodios pendientes —
+      let _autoDescargaActiva = false;
+
+      async function autoDescargar(coleccion, caps, descargados, abrirCapFn, getClave, chipContainer) {
+        if (_autoDescargaActiva) {
+          _autoDescargaActiva = false;
+          actualizarStatus('⏸ Descarga automática pausada');
+          return;
+        }
+
+        const pendientes = caps.filter(cap => !descargados[String(getClave(cap))]);
+        if (!pendientes.length) {
+          actualizarStatus('✅ Todos los episodios ya están descargados');
+          return;
+        }
+
+        if (!confirm('⬇️ Descargar ' + pendientes.length + ' episodios pendientes en secuencia?\n\nPuedes pausar tocando el botón ⏸ durante la descarga.')) return;
+
+        _autoDescargaActiva = true;
+        actualizarStatus('🤖 Auto-descarga iniciada — ' + pendientes.length + ' pendientes');
+
+        for (let i = 0; i < pendientes.length; i++) {
+          if (!_autoDescargaActiva) break;
+
+          const cap   = pendientes[i];
+          const clave = getClave(cap);
+
+          // Buscar el chip real en el DOM, o crear uno dummy
+          const chipReal = chipContainer
+            ? [...chipContainer.querySelectorAll('.sjz-cap-chip')]
+                .find(el => el.textContent.trim() === String(clave) || el.title.includes(String(clave)))
+            : null;
+          const chip = chipReal || document.createElement('div');
+
+          actualizarStatus('🤖 (' + (i+1) + '/' + pendientes.length + ') Descargando ' + clave + '…');
+          try {
+            await abrirCapFn(coleccion, cap, chip);
+          } catch(err) {
+            actualizarStatus('❌ Error en ' + clave + ': ' + err.message + ' — continuando…');
+          }
+
+          // Pausa entre descargas para no saturar
+          if (_autoDescargaActiva && i < pendientes.length - 1) {
+            await new Promise(r => setTimeout(r, 800));
+          }
+        }
+
+        if (_autoDescargaActiva) {
+          actualizarStatus('✅ Auto-descarga completada');
+        }
+        _autoDescargaActiva = false;
+      }
+      
       // — Render genérico de vista de capítulos (Samurai / ZonaScans / Manhwa) —
       async function renderVistaCapitulos(contenedor, cfg) {
         // cfg = {
@@ -4489,13 +4542,28 @@
         btnNuevos.textContent = '🔄';
         btnNuevos.addEventListener('click', cfg.onBuscarNuevos);
 
+        const btnAuto = document.createElement('button');
+        btnAuto.className = 'bv-breadcrumb-back';
+        btnAuto.title = 'Descargar todos los pendientes';
+        btnAuto.textContent = '⬇️ Auto';
+        btnAuto.addEventListener('click', () => {
+          autoDescargar(
+            cfg.coleccion,
+            cfg.caps,
+            descMap,
+            cfg.abrirCapFn,
+            cfg.getClave,
+            grid
+          );
+        });
+
         const btnOrden = document.createElement('button');
         btnOrden.className = 'bv-breadcrumb-back';
         btnOrden.title = 'Invertir orden';
         btnOrden.textContent = cfg.ordenDesc ? '🔼 Asc' : '🔽 Desc';
         btnOrden.addEventListener('click', cfg.onToggleOrden);
 
-        bc.append(btnVolver, sep1, lblColeccion, btnNuevos, btnOrden);
+        bc.append(btnVolver, sep1, lblColeccion, btnNuevos, btnAuto, btnOrden);
         contenedor.appendChild(bc);
 
         if (cfg.metaLinea) {
