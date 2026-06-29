@@ -3025,78 +3025,23 @@
         bc.className = 'bv-breadcrumb';
 
         if (_zsColeccionActual) {
-          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_zsColeccionActual=null;renderBoveda()">← Menú</button>'
-            + '<span class="bv-breadcrumb-sep">/</span>'
-            + '<span class="bv-breadcrumb-label">📡 ZonaScans</span>'
-            + '<span class="bv-breadcrumb-sep">/</span>'
-            + '<span class="bv-breadcrumb-label">' + _zsColeccionActual.nombre + '</span>'
-            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="zsBuscarNuevos()" title="Buscar nuevos episodios">🔄</button>'
-            + '<button class="bv-breadcrumb-back" onclick="_zsOrdenDesc=!_zsOrdenDesc;renderZonaScans(document.getElementById(\'bvLista\'))" title="Invertir orden">'
-            + (_zsOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
-          contenedor.appendChild(bc);
-
-          // Cargar mapa de descargados
-          const db = await bvAbrirDB();
-          const todosZips = await new Promise(res => {
-            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
-            req.onsuccess = e => res(e.target.result);
-            req.onerror   = () => res([]);
+          await renderVistaCapitulos(contenedor, {
+            coleccion:       _zsColeccionActual,
+            caps:            _zsColeccionActual.caps,
+            getClave:        cap => cap.titulo,
+            getLabel:        cap => cap.titulo,
+            prefijoDB:       'zs-',
+            ordenDesc:       _zsOrdenDesc,
+            onToggleOrden:   () => { _zsOrdenDesc = !_zsOrdenDesc; renderZonaScans(document.getElementById('bvLista')); },
+            onBuscarNuevos:  zsBuscarNuevos,
+            onVolver:        () => { _zsColeccionActual = null; renderBoveda(); },
+            onVolverLabel:   'Menú',
+            iconoCategoria:  '📡',
+            metaLinea:       null,
+            getDescargarLabel: (cap, nombre) => nombre + ' - ' + cap.titulo + '.zip',
+            buscarZipFn:     null,   // usa descMap directo (zipId viene del mapa)
+            abrirCapFn:      zsAbrirCapitulo,
           });
-          const prefijo = 'zs-' + _zsColeccionActual.id + '-';
-          const descMap = {};
-          todosZips.forEach(z => {
-            if (z.nombre && z.nombre.startsWith(prefijo)) {
-              const titulo = z.nombre.slice(prefijo.length).replace(/\.zip$/, '');
-              descMap[titulo] = z.id;
-            }
-          });
-
-          const grid = document.createElement('div');
-          grid.className = 'sjz-cap-grid';
-          const capsOrdenadas = _zsOrdenDesc
-          ? [..._zsColeccionActual.caps].reverse()
-          : [..._zsColeccionActual.caps];
-          capsOrdenadas.forEach(cap => {
-            const yaDesc = !!descMap[cap.titulo];
-            const zipId  = descMap[cap.titulo];
-            const chip   = document.createElement('div');
-            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
-            chip.textContent = cap.titulo;
-            chip.title = yaDesc ? '✅ ' + cap.titulo : '⬇️ ' + cap.titulo;
-            chip.onclick = () => zsAbrirCapitulo(_zsColeccionActual, cap, chip);
-
-            if (yaDesc && zipId) {
-              bvCargarPortada(zipId).then(blob => {
-                if (!blob) return;
-                chip.textContent = '';
-                chip.classList.add('con-portada');
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(blob);
-                const num = document.createElement('div');
-                num.className = 'cap-num';
-                num.textContent = cap.titulo;
-                const dl = document.createElement('button');
-                dl.textContent = '🔽';
-                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
-                dl.onclick = async e => {
-                  e.stopPropagation();
-                  if (zipId) bovedaDescargar(zipId, _zsColeccionActual.nombre + ' - ' + cap.titulo + '.zip');
-                };
-                chip.append(img, num, dl);
-              }).catch(() => {});
-            } else if (yaDesc) {
-              const dl = document.createElement('span');
-              dl.textContent = ' 🔽';
-              dl.style.cssText = 'font-size:.6rem;cursor:pointer';
-              dl.onclick = async e => {
-                e.stopPropagation();
-                if (zipId) bovedaDescargar(zipId, _zsColeccionActual.nombre + ' - ' + cap.titulo + '.zip');
-              };
-              chip.appendChild(dl);
-            }
-            grid.appendChild(chip);
-          });
-          contenedor.appendChild(grid);
           return;
         }
 
@@ -3152,59 +3097,6 @@
         });
       }
 
-      async function zsExportarZipCompleto(col) {
-        const db = await bvAbrirDB();
-        const todosZips = await new Promise(res => {
-          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
-          req.onsuccess = e => res(e.target.result);
-          req.onerror   = () => res([]);
-        });
-        const prefijo = 'zs-' + col.id + '-';
-        const caps = todosZips.filter(z => z.nombre && z.nombre.startsWith(prefijo));
-        if (!caps.length) {
-          actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
-          return;
-        }
-        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + caps.length + ' capítulo(s) descargado(s)?\n\nPuede tardar varios minutos.')) return;
-
-        actualizarStatus('⏳ Preparando exportación…');
-        try {
-          const masterZip = new JSZip();
-          const metaJson  = {
-            version:  1,
-            tipo:     'zonascans',
-            nombre:   col.nombre,
-            url:      col.url,
-            fecha:    col.fecha,
-            caps:     col.caps,
-          };
-          masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
-
-          for (let i = 0; i < caps.length; i++) {
-            const z      = caps[i];
-            const titulo = z.nombre.slice(prefijo.length).replace(/\.zip$/, '');
-            actualizarStatus('⏳ Empacando "' + titulo + '" (' + (i+1) + '/' + caps.length + ')…');
-            const reg = await bvCargar(z.id);
-            if (!reg) continue;
-            masterZip.file(titulo + '.zip', reg.blob);
-          }
-
-          actualizarStatus('⏳ Generando ZIP maestro…');
-          const masterBlob = await masterZip.generateAsync({ type: 'blob' }, meta => {
-            actualizarStatus('⏳ Comprimiendo… ' + Math.round(meta.percent) + '%');
-          });
-
-          const url = URL.createObjectURL(masterBlob);
-          const a   = document.createElement('a');
-          a.href    = url;
-          a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-          actualizarStatus('✅ Exportado: ' + caps.length + ' capítulos');
-        } catch(err) {
-          actualizarStatus('❌ ' + err.message);
-        }
-      }
 
       /* =============================================
          HITOMI.LA
@@ -4271,15 +4163,8 @@
       }
 
       // — Guardar capítulo descargado en zips store con metadatos SJZ —
-
-
-
       // — Buscar ZIP de un capítulo concreto —
-
-
-
       // — Mapa de capítulos descargados para una colección —
-
 
 
       // — Abrir capítulo: descarga o carga desde DB —
@@ -4425,45 +4310,71 @@
 
       let _sjzOrdenDesc = true; // true = más reciente primero
 
-      // — Exportar colección completa como ZIP maestro —
-      async function sjzExportarZipCompleto(col) {
-        const descargados = await sjzListarDescargados(col.id);
-        const capsDesc    = Object.keys(descargados).map(Number).sort((a,b) => a-b);
-        if (!capsDesc.length) {
+      // — Exportar colección completa como ZIP maestro (genérico) —
+      async function exportarZipCompleto(col, cfg) {
+        // cfg = {
+        //   tipo,          // 'samurai' | 'manhwa' | 'zonascans'
+        //   prefijoDB,     // 'sjz' | 'mw' | null (zs usa escaneo por nombre)
+        //   prefijoNombre, // 'zs-' | null  (solo para zs)
+        //   metaExtra,     // fn(col, descMap) → objeto con campos extra para coleccion.json
+        //   getNombreZip,  // fn(clave, reg) → nombre del archivo dentro del ZIP maestro
+        //   getLabelLog,   // fn(clave) → texto para el status de progreso
+        // }
+
+        // — Obtener mapa { clave → {id, reg?} } según el tipo —
+        let entradas; // array de { clave, zipId }
+
+        if (cfg.prefijoDB) {
+          // Samurai / Manhwa: usan capListarDescargados
+          const descMap = await capListarDescargados(cfg.prefijoDB, col.id);
+          entradas = Object.entries(descMap).map(([k, id]) => ({ clave: k, zipId: id }));
+          entradas.sort((a, b) => Number(a.clave) - Number(b.clave));
+        } else {
+          // ZonaScans: escanear store zips por prefijo de nombre
+          const db = await bvAbrirDB();
+          const todosZips = await new Promise(res => {
+            const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = () => res([]);
+          });
+          const prefijo = cfg.prefijoNombre + col.id + '-';
+          entradas = todosZips
+            .filter(z => z.nombre && z.nombre.startsWith(prefijo))
+            .map(z => ({
+              clave: z.nombre.slice(prefijo.length).replace(/\.zip$/, ''),
+              zipId: z.id,
+            }));
+        }
+
+        if (!entradas.length) {
           actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
           return;
         }
-        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + capsDesc.length + ' capítulo(s) descargado(s)?\n\nEsto puede tardar varios minutos según el tamaño.')) return;
+
+        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + entradas.length + ' capítulo(s) descargado(s)?\n\nPuede tardar varios minutos.')) return;
 
         actualizarStatus('⏳ Preparando exportación…');
         try {
           const masterZip = new JSZip();
 
-          // JSON de la colección
+          // coleccion.json con metadata específica del tipo
           const metaJson = {
-            version:    1,
-            tipo:       'samurai',
-            nombre:     col.nombre,
-            base_url:   col.base_url,
-            fecha:      col.fecha,
-            total_caps: col.capitulos.length,
-            capitulos:  col.capitulos.map(c => ({
-              num:        c.num,
-              url:        c.url,
-              descargado: !!descargados[c.num],
-            })),
+            version: 1,
+            tipo:    cfg.tipo,
+            nombre:  col.nombre,
+            fecha:   col.fecha,
+            ...cfg.metaExtra(col, entradas),
           };
           masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
 
-          // Agregar ZIPs de capítulos descargados
-          for (let i = 0; i < capsDesc.length; i++) {
-            const capNum = capsDesc[i];
-            const zipId  = descargados[capNum];
-            actualizarStatus('⏳ Empacando cap. ' + capNum + ' (' + (i+1) + '/' + capsDesc.length + ')…');
+          // Empacar cada capítulo
+          for (let i = 0; i < entradas.length; i++) {
+            const { clave, zipId } = entradas[i];
+            const label = cfg.getLabelLog(clave);
+            actualizarStatus('⏳ Empacando ' + label + ' (' + (i + 1) + '/' + entradas.length + ')…');
             const reg = await bvCargar(zipId);
             if (!reg) continue;
-            const nombre = 'cap_' + String(capNum).padStart(4, '0') + '.zip';
-            masterZip.file(nombre, reg.blob);
+            masterZip.file(cfg.getNombreZip(clave), reg.blob);
           }
 
           actualizarStatus('⏳ Generando ZIP maestro…');
@@ -4473,69 +4384,177 @@
 
           const url = URL.createObjectURL(masterBlob);
           const a   = document.createElement('a');
-          a.href    = url;
+          a.href     = url;
           a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
           a.click();
           setTimeout(() => URL.revokeObjectURL(url), 5000);
-          actualizarStatus('✅ Exportado: ' + capsDesc.length + ' capítulos');
+          actualizarStatus('✅ Exportado: ' + entradas.length + ' capítulos');
         } catch(err) {
           actualizarStatus('❌ ' + err.message);
         }
       }
 
-      // — Exportar colección Manhwa como ZIP maestro —
-      async function mwExportarZipCompleto(col) {
-        const descargados = await mwListarDescargados(col.id);
-        const capsDesc    = Object.keys(descargados).map(Number).sort((a,b) => a-b);
-        if (!capsDesc.length) {
-          actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
-          return;
+      // — Aliases específicos por categoría —
+      const sjzExportarZipCompleto = col => exportarZipCompleto(col, {
+        tipo:        'samurai',
+        prefijoDB:   'sjz',
+        metaExtra:   (col, entradas) => ({
+          base_url:   col.base_url,
+          total_caps: col.capitulos.length,
+          capitulos:  col.capitulos.map(c => ({
+            num:        c.num,
+            url:        c.url,
+            descargado: entradas.some(e => Number(e.clave) === c.num),
+          })),
+        }),
+        getNombreZip: clave => 'cap_' + String(Number(clave)).padStart(4, '0') + '.zip',
+        getLabelLog:  clave => 'cap. ' + clave,
+      });
+
+      const mwExportarZipCompleto = col => exportarZipCompleto(col, {
+        tipo:        'manhwa',
+        prefijoDB:   'mw',
+        metaExtra:   (col, entradas) => ({
+          base_url:   col.base_url,
+          slug:       col.slug,
+          total_caps: col.capitulos.length,
+          capitulos:  col.capitulos.map(c => ({
+            num:        c.num,
+            descargado: entradas.some(e => Number(e.clave) === c.num),
+          })),
+        }),
+        getNombreZip: clave => 'cap_' + String(Number(clave)).padStart(4, '0') + '.zip',
+        getLabelLog:  clave => 'cap. ' + clave,
+      });
+
+      const zsExportarZipCompleto = col => exportarZipCompleto(col, {
+        tipo:          'zonascans',
+        prefijoDB:     null,
+        prefijoNombre: 'zs-',
+        metaExtra:     (col) => ({
+          url:  col.url,
+          caps: col.caps,
+        }),
+        getNombreZip: clave => clave + '.zip',
+        getLabelLog:  clave => '"' + clave + '"',
+      });
+      
+      // — Render genérico de vista de capítulos (Samurai / ZonaScans / Manhwa) —
+      async function renderVistaCapitulos(contenedor, cfg) {
+        // cfg = {
+        //   coleccion,       // objeto colección actual
+        //   caps,            // array de capítulos [ {clave, label, ...} ]
+        //   getClave,        // fn(cap) → clave única (num o titulo)
+        //   getLabel,        // fn(cap) → texto del chip
+        //   prefijoDB,       // 'sjz-' | 'zs-'
+        //   ordenDesc,       // boolean
+        //   onToggleOrden,   // fn() que invierte orden y re-renderiza
+        //   onBuscarNuevos,  // fn()
+        //   onVolverLabel,   // 'Samurai' | 'Menú' etc.
+        //   onVolver,        // fn() para el botón ←
+        //   iconoCategoria,  // '⚔️' | '📡'
+        //   getDescargarLabel, // fn(cap, nombre) → string del nombre del ZIP
+        //   buscarZipFn,     // fn(colId, clave) → Promise<reg|null>  (null = usar descMap directo)
+        //   abrirCapFn,      // fn(col, cap, chipEl)
+        //   metaLinea,       // string opcional debajo del breadcrumb
+        // }
+
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+        bc.innerHTML =
+          '<button class="bv-breadcrumb-back" onclick="(' + cfg.onVolver.toString() + ')()">'
+          + '← ' + cfg.onVolverLabel + '</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">' + cfg.iconoCategoria + ' ' + cfg.coleccion.nombre + '</span>'
+          + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="(' + cfg.onBuscarNuevos.toString() + ')()" title="Buscar nuevos episodios">🔄</button>'
+          + '<button class="bv-breadcrumb-back" onclick="(' + cfg.onToggleOrden.toString() + ')()" title="Invertir orden">'
+          + (cfg.ordenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
+        contenedor.appendChild(bc);
+
+        if (cfg.metaLinea) {
+          const meta = document.createElement('div');
+          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px';
+          meta.textContent = cfg.metaLinea;
+          contenedor.appendChild(meta);
         }
-        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + capsDesc.length + ' capítulo(s)?\n\nPuede tardar varios minutos.')) return;
 
-        actualizarStatus('⏳ Preparando exportación Manhwa…');
-        try {
-          const masterZip = new JSZip();
-          const metaJson  = {
-            version:    1,
-            tipo:       'manhwa',
-            nombre:     col.nombre,
-            base_url:   col.base_url,
-            slug:       col.slug,
-            fecha:      col.fecha,
-            total_caps: col.capitulos.length,
-            capitulos:  col.capitulos.map(c => ({
-              num:        c.num,
-              descargado: !!descargados[c.num],
-            })),
-          };
-          masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
-
-          for (let i = 0; i < capsDesc.length; i++) {
-            const capNum = capsDesc[i];
-            const zipId  = descargados[capNum];
-            actualizarStatus('⏳ Empacando cap. ' + capNum + ' (' + (i+1) + '/' + capsDesc.length + ')…');
-            const reg = await bvCargar(zipId);
-            if (!reg) continue;
-            masterZip.file('cap_' + String(capNum).padStart(4, '0') + '.zip', reg.blob);
+        // Cargar mapa de descargados
+        const db = await bvAbrirDB();
+        const todosZips = await new Promise(res => {
+          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+          req.onsuccess = e => res(e.target.result);
+          req.onerror   = () => res([]);
+        });
+        const prefijo = cfg.prefijoDB + cfg.coleccion.id + '-';
+        const descMap = {};
+        todosZips.forEach(z => {
+          if (z.nombre && z.nombre.startsWith(prefijo)) {
+            const clave = z.nombre.slice(prefijo.length).replace(/\.zip$/, '');
+            descMap[clave] = z.id;
           }
+        });
 
-          actualizarStatus('⏳ Generando ZIP maestro…');
-          const masterBlob = await masterZip.generateAsync({ type: 'blob' }, m => {
-            actualizarStatus('⏳ Comprimiendo… ' + Math.round(m.percent) + '%');
-          });
+        const capsOrdenadas = cfg.ordenDesc ? [...cfg.caps].reverse() : [...cfg.caps];
+        const grid = document.createElement('div');
+        grid.className = 'sjz-cap-grid';
 
-          const url = URL.createObjectURL(masterBlob);
-          const a   = document.createElement('a');
-          a.href    = url;
-          a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-          actualizarStatus('✅ Exportado: ' + capsDesc.length + ' capítulos');
-        } catch(err) {
-          actualizarStatus('❌ ' + err.message);
-        }
+        capsOrdenadas.forEach(cap => {
+          const clave  = cfg.getClave(cap);
+          const label  = cfg.getLabel(cap);
+          const yaDesc = !!descMap[String(clave)];
+          const zipId  = descMap[String(clave)];
+          const chip   = document.createElement('div');
+          chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
+          chip.textContent = label;
+          chip.title = yaDesc ? '✅ ' + label : '⬇️ ' + label;
+          chip.onclick = () => cfg.abrirCapFn(cfg.coleccion, cap, chip);
+
+          if (yaDesc && zipId) {
+            bvCargarPortada(zipId).then(blob => {
+              if (!blob) return;
+              chip.textContent = '';
+              chip.classList.add('con-portada');
+              const img = document.createElement('img');
+              img.src = URL.createObjectURL(blob);
+              const num = document.createElement('div');
+              num.className = 'cap-num';
+              num.textContent = label;
+              const dl = document.createElement('button');
+              dl.textContent = '🔽';
+              dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+              dl.onclick = async e => {
+                e.stopPropagation();
+                const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+                if (cfg.buscarZipFn) {
+                  const reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                  if (reg) bovedaDescargar(reg.id, nombre);
+                } else if (zipId) {
+                  bovedaDescargar(zipId, nombre);
+                }
+              };
+              chip.append(img, num, dl);
+            }).catch(() => {});
+          } else if (yaDesc) {
+            const dl = document.createElement('span');
+            dl.textContent = ' 🔽';
+            dl.style.cssText = 'font-size:.6rem;cursor:pointer';
+            dl.onclick = async e => {
+              e.stopPropagation();
+              const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+              if (cfg.buscarZipFn) {
+                const reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                if (reg) bovedaDescargar(reg.id, nombre);
+              } else if (zipId) {
+                bovedaDescargar(zipId, nombre);
+              }
+            };
+            chip.appendChild(dl);
+          }
+          grid.appendChild(chip);
+        });
+        contenedor.appendChild(grid);
       }
+      
 
       // — Render Samurai —
       async function renderSamurai(contenedor) {
@@ -4546,76 +4565,23 @@
         bc.className = 'bv-breadcrumb';
 
         if (_sjzColeccionActual) {
-          // — Vista de capítulos —
-          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_sjzColeccionActual=null;renderBoveda()">← Samurai</button>'
-            + '<span class="bv-breadcrumb-sep">/</span>'
-            + '<span class="bv-breadcrumb-label">⚔️ ' + _sjzColeccionActual.nombre + '</span>'
-            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="sjzBuscarNuevos()" title="Buscar nuevos episodios">🔄</button>'
-            + '<button class="bv-breadcrumb-back" onclick="_sjzOrdenDesc=!_sjzOrdenDesc;renderBoveda()" title="Invertir orden">'
-            + (_sjzOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
-          contenedor.appendChild(bc);
-
-          const meta = document.createElement('div');
-          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px';
-          meta.textContent = _sjzColeccionActual.capitulos.length + ' capítulos · ' + _sjzColeccionActual.base_url;
-          contenedor.appendChild(meta);
-
-          // Cargar mapa de descargados antes de renderizar
-          let descargados = {};
-          try { descargados = await sjzListarDescargados(_sjzColeccionActual.id); } catch(e) {}
-
-          const capsOrdenadas = _sjzOrdenDesc
-          ? [..._sjzColeccionActual.capitulos].reverse()
-          : [..._sjzColeccionActual.capitulos];
-
-          const grid = document.createElement('div');
-          grid.className = 'sjz-cap-grid';
-          capsOrdenadas.forEach(cap => {
-            const yaDesc = !!descargados[cap.num];
-            const zipId  = descargados[cap.num];
-            const chip   = document.createElement('div');
-            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
-            chip.textContent = cap.num;
-            chip.title = yaDesc ? '✅ Cap. ' + cap.num : '⬇️ Cap. ' + cap.num;
-            chip.onclick = () => sjzAbrirCapitulo(_sjzColeccionActual, cap, chip);
-
-            // Si tiene portada → crecer y mostrar imagen
-            if (yaDesc && zipId) {
-              bvCargarPortada(zipId).then(blob => {
-                if (!blob) return;
-                chip.textContent = '';
-                chip.classList.add('con-portada');
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(blob);
-                const num = document.createElement('div');
-                num.className = 'cap-num';
-                num.textContent = cap.num;
-                const dl = document.createElement('button');
-                dl.textContent = '🔽';
-                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
-                dl.onclick = async e => {
-                  e.stopPropagation();
-                  const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
-                  if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
-                };
-                chip.append(img, num, dl);
-              }).catch(() => {});
-            } else if (yaDesc) {
-              // Chip simple descargado sin portada: agregar ícono descarga
-              const dl = document.createElement('span');
-              dl.textContent = ' 🔽';
-              dl.style.cssText = 'font-size:.6rem;cursor:pointer';
-              dl.onclick = async e => {
-                e.stopPropagation();
-                const reg = await sjzBuscarZipCapitulo(_sjzColeccionActual.id, cap.num);
-                if (reg) bovedaDescargar(reg.id, _sjzColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
-              };
-              chip.appendChild(dl);
-            }
-
-            grid.appendChild(chip);
+          await renderVistaCapitulos(contenedor, {
+            coleccion:       _sjzColeccionActual,
+            caps:            _sjzColeccionActual.capitulos,
+            getClave:        cap => cap.num,
+            getLabel:        cap => cap.num,
+            prefijoDB:       'sjz-',
+            ordenDesc:       _sjzOrdenDesc,
+            onToggleOrden:   () => { _sjzOrdenDesc = !_sjzOrdenDesc; renderBoveda(); },
+            onBuscarNuevos:  sjzBuscarNuevos,
+            onVolver:        () => { _sjzColeccionActual = null; renderBoveda(); },
+            onVolverLabel:   'Samurai',
+            iconoCategoria:  '⚔️',
+            metaLinea:       _sjzColeccionActual.capitulos.length + ' capítulos · ' + _sjzColeccionActual.base_url,
+            getDescargarLabel: (cap, nombre) => nombre + ' - Cap ' + cap.num + '.zip',
+            buscarZipFn:     (colId, num) => sjzBuscarZipCapitulo(colId, Number(num)),
+            abrirCapFn:      sjzAbrirCapitulo,
           });
-          contenedor.appendChild(grid);
           return;
         }
 
