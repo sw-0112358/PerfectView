@@ -3121,10 +3121,16 @@
 
         colecciones.forEach(col => {
           const { card, ph, img } = crearTarjeta({
-            nombre:  col.nombre,
-            phTexto: '📖',
-            onTap:   () => { _zsColeccionActual = col; renderZonaScans(contenedor); },
-            onDelete: async () => { await zsEliminarDB(col.id); card.remove(); }
+            nombre:      col.nombre,
+            phTexto:     '📖',
+            onTap:       () => { _zsColeccionActual = col; renderZonaScans(contenedor); },
+            onDelete:    async () => { await zsEliminarDB(col.id); card.remove(); },
+            btnSecundario: {
+              texto:   '📦',
+              titulo:  'Exportar colección completa',
+              style:   'top:6px;right:36px',
+              onClick: () => zsExportarZipCompleto(col),
+            },
           });
           grid.appendChild(card);
           // Cargar portada del primer capítulo descargado
@@ -3138,6 +3144,60 @@
             ph.style.display  = 'none';
           }).catch(() => {});
         });
+      }
+
+      async function zsExportarZipCompleto(col) {
+        const db = await bvAbrirDB();
+        const todosZips = await new Promise(res => {
+          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+          req.onsuccess = e => res(e.target.result);
+          req.onerror   = () => res([]);
+        });
+        const prefijo = 'zs-' + col.id + '-';
+        const caps = todosZips.filter(z => z.nombre && z.nombre.startsWith(prefijo));
+        if (!caps.length) {
+          actualizarStatus('⚠️ No hay capítulos descargados en "' + col.nombre + '"');
+          return;
+        }
+        if (!confirm('📦 Exportar "' + col.nombre + '" con ' + caps.length + ' capítulo(s) descargado(s)?\n\nPuede tardar varios minutos.')) return;
+
+        actualizarStatus('⏳ Preparando exportación…');
+        try {
+          const masterZip = new JSZip();
+          const metaJson  = {
+            version:  1,
+            tipo:     'zonascans',
+            nombre:   col.nombre,
+            url:      col.url,
+            fecha:    col.fecha,
+            caps:     col.caps,
+          };
+          masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
+
+          for (let i = 0; i < caps.length; i++) {
+            const z      = caps[i];
+            const titulo = z.nombre.slice(prefijo.length).replace(/\.zip$/, '');
+            actualizarStatus('⏳ Empacando "' + titulo + '" (' + (i+1) + '/' + caps.length + ')…');
+            const reg = await bvCargar(z.id);
+            if (!reg) continue;
+            masterZip.file(titulo + '.zip', reg.blob);
+          }
+
+          actualizarStatus('⏳ Generando ZIP maestro…');
+          const masterBlob = await masterZip.generateAsync({ type: 'blob' }, meta => {
+            actualizarStatus('⏳ Comprimiendo… ' + Math.round(meta.percent) + '%');
+          });
+
+          const url = URL.createObjectURL(masterBlob);
+          const a   = document.createElement('a');
+          a.href    = url;
+          a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          actualizarStatus('✅ Exportado: ' + caps.length + ' capítulos');
+        } catch(err) {
+          actualizarStatus('❌ ' + err.message);
+        }
       }
 
       /* =============================================
