@@ -2503,12 +2503,14 @@
          EMOJI BOARD — Acceso a bóveda
       ============================================= */
 
-      const BV_EMOJI_POOL = [
-        '🍎','🚀','🌙','⭐','🎭','🎨','🎯','🦊',
-        '🐉','🌈','🔥','❄️','🌊','🌸','🍀','💎',
-        '🏆','🎲','🌴','🦋','🐬','🦁','🐺','🦅',
-        '🫯','🫆'  // ← emojis de la combinación maestra
+      // Pool fijo de 16 — siempre el mismo orden, siempre incluye 🫯 y 🫆
+      const BV_TABLERO_FIJO = [
+        '🍎','🚀','🌙','⭐',
+        '🪷','🔥','🌸','💎',
+        '🏆','⚛️','🐬','🦁',
+        '🫯','❤️','💠','🫆'
       ];
+           
       const BV_MASTER    = '🫯🫆';
       const BV_COMBO_KEY = '_bv_combo';
 
@@ -2535,14 +2537,6 @@
         }
         document.getElementById('bvEmojiOverlay').style.display = 'flex';
       }
-
-      // Pool fijo de 16 — siempre el mismo orden, siempre incluye 🫯 y 🫆
-      const BV_TABLERO_FIJO = [
-        '🍎','🚀','🌙','⭐',
-        '🪷','🔥','🌸','💎',
-        '🏆','⚛️','🐬','🦁',
-        '🫯','❤️','💠','🫆'
-      ];
 
       function bvGenerarTablero() {
         const tablero = document.getElementById('bvEmojiTablero');
@@ -4601,15 +4595,6 @@
         return dbGuardar('mw_colecciones', { nombre, base_url, slug, capitulos });
       }
       
-      
-
-
-      
-
-
-      
-
-
       // — Detectar episodios desde la página del manhwa —
       async function mwVerEpisodios() {
         const url  = document.getElementById('mwUrl').value.trim();
@@ -4658,8 +4643,6 @@
       }
 
       // — Fetch genérico con Referer vía Worker —
-
-
 
       function crearTarjeta(cfg) {
         // cfg: { nombre, phTexto, onTap, onDelete, btnSecundario: { texto, titulo, style, onClick } }
