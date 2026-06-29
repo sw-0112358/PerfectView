@@ -1751,8 +1751,14 @@
 
       function traslape() {
         const enVisor = document.getElementById('frameMain').style.display === 'none';
-        if (enVisor) mostrarFrame();
-        else mostrarVisor(false);
+        if (enVisor){ 
+          mostrarFrame();
+          if (_bvMaestra) {
+            archivosDescargados.length = 0;
+            document.getElementById('visor').innerHTML = '';
+            _visorContexto = null;
+          }
+        } else mostrarVisor(false);
       }
 
 
@@ -2264,7 +2270,6 @@
         document.getElementById('PanelAdmi').style.display = 'none';
         bvActualizarIcono();
         bvNavegar('pantalla1');
-        actualizarStatus('🔒 Bóveda bloqueada');
       }
 
       // — Enviar archivosDescargados → Bóveda —
