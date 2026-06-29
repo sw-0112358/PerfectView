@@ -2902,8 +2902,7 @@
             archivosDescargados.length = 0;
             imagenes.forEach(a => archivosDescargados.push(a));
             _visorContexto = { tipo: 'zonascans', coleccion: col, capTitulo: cap.titulo, caps: col.caps };
-            mostrarVisor(true);
-            mostrarImagenesEnVisor();
+            if (!_modoAutoDescarga) { mostrarVisor(true); mostrarImagenesEnVisor(); }
             actualizarStatus('✅ ' + cap.titulo + ' — ' + imagenes.length + ' imágenes');
           }
           return;
@@ -4209,8 +4208,7 @@
           archivosDescargados.length = 0;
           imagenes.forEach(a => archivosDescargados.push(a));
           _visorContexto = { tipo: 'samurai', coleccion, capNum: cap.num };
-          bvNavegar('pantalla1');
-          mostrarImagenesEnVisor();
+          if (!_modoAutoDescarga) { bvNavegar('pantalla1'); mostrarImagenesEnVisor(); }
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + imagenes.length + ' imágenes');
           return;
         }
@@ -4448,11 +4446,12 @@
       
       // — Descarga automática de todos los episodios pendientes —
       let _autoDescargaActiva = false;
+      let _modoAutoDescarga   = false;
 
-      async function autoDescargar(coleccion, caps, descargados, abrirCapFn, getClave, chipContainer) {
+      async function autoDescargar(coleccion, caps, descargados, abrirCapFn, getClave, chipContainer, btnAuto) {
+        // Alternar pausa
         if (_autoDescargaActiva) {
           _autoDescargaActiva = false;
-          actualizarStatus('⏸ Descarga automática pausada');
           return;
         }
 
@@ -4462,41 +4461,57 @@
           return;
         }
 
-        if (!confirm('⬇️ Descargar ' + pendientes.length + ' episodios pendientes en secuencia?\n\nPuedes pausar tocando el botón ⏸ durante la descarga.')) return;
+        if (!confirm('⬇️ Descargar ' + pendientes.length + ' episodios pendientes de 3 en 3?\n\nToca ⏸ Pausar para detener.')) return;
 
         _autoDescargaActiva = true;
-        actualizarStatus('🤖 Auto-descarga iniciada — ' + pendientes.length + ' pendientes');
+        _modoAutoDescarga   = true;
+        if (btnAuto) btnAuto.textContent = '⏸ Pausar';
 
-        for (let i = 0; i < pendientes.length; i++) {
+        const LOTE = 3;
+        let completados = 0;
+        let errores     = 0;
+
+        for (let i = 0; i < pendientes.length; i += LOTE) {
           if (!_autoDescargaActiva) break;
 
-          const cap   = pendientes[i];
-          const clave = getClave(cap);
+          const lote = pendientes.slice(i, i + LOTE);
+          actualizarStatus('🤖 Lote ' + (i + 1) + '–' + Math.min(i + LOTE, pendientes.length) + ' de ' + pendientes.length + '…');
 
-          // Buscar el chip real en el DOM, o crear uno dummy
-          const chipReal = chipContainer
-            ? [...chipContainer.querySelectorAll('.sjz-cap-chip')]
-                .find(el => el.textContent.trim() === String(clave) || el.title.includes(String(clave)))
-            : null;
-          const chip = chipReal || document.createElement('div');
+          const chips = lote.map(cap => {
+            const clave = String(getClave(cap));
+            return chipContainer
+              ? ([...chipContainer.querySelectorAll('.sjz-cap-chip')]
+                  .find(el => el.textContent.trim() === clave || el.title.includes(clave))
+                  || document.createElement('div'))
+              : document.createElement('div');
+          });
 
-          actualizarStatus('🤖 (' + (i+1) + '/' + pendientes.length + ') Descargando ' + clave + '…');
-          try {
-            await abrirCapFn(coleccion, cap, chip);
-          } catch(err) {
-            actualizarStatus('❌ Error en ' + clave + ': ' + err.message + ' — continuando…');
-          }
+          await Promise.allSettled(
+            lote.map((cap, j) =>
+              abrirCapFn(coleccion, cap, chips[j])
+                .then(() => completados++)
+                .catch(err => {
+                  errores++;
+                  actualizarStatus('⚠️ ' + getClave(cap) + ': ' + err.message);
+                })
+            )
+          );
 
-          // Pausa entre descargas para no saturar
-          if (_autoDescargaActiva && i < pendientes.length - 1) {
-            await new Promise(r => setTimeout(r, 800));
+          if (_autoDescargaActiva && i + LOTE < pendientes.length) {
+            await new Promise(r => setTimeout(r, 600));
           }
         }
 
-        if (_autoDescargaActiva) {
-          actualizarStatus('✅ Auto-descarga completada');
-        }
+        const pausado = !_autoDescargaActiva;
         _autoDescargaActiva = false;
+        _modoAutoDescarga   = false;
+        if (btnAuto) btnAuto.textContent = '⬇️ Auto';
+
+        actualizarStatus(
+          pausado
+            ? '⏸ Pausado — ' + completados + ' completados' + (errores ? ', ' + errores + ' errores' : '')
+            : '✅ Completado — ' + completados + ' episodios' + (errores ? ', ' + errores + ' errores' : '')
+        );
       }
       
       // — Render genérico de vista de capítulos (Samurai / ZonaScans / Manhwa) —
@@ -4546,16 +4561,10 @@
         btnAuto.className = 'bv-breadcrumb-back';
         btnAuto.title = 'Descargar todos los pendientes';
         btnAuto.textContent = '⬇️ Auto';
-        btnAuto.addEventListener('click', () => {
-          autoDescargar(
-            cfg.coleccion,
-            cfg.caps,
-            descMap,
-            cfg.abrirCapFn,
-            cfg.getClave,
-            grid
-          );
-        });
+        if (!_modoAutoDescarga) { bvNavegar('pantalla1'); mostrarImagenesEnVisor(); }
+          actualizarStatus('✅ Cap. ' + cap.num + ' — ' + imagenes.length + ' imágenes');
+          return;
+        }
 
         const btnOrden = document.createElement('button');
         btnOrden.className = 'bv-breadcrumb-back';
@@ -4931,8 +4940,7 @@
           archivosDescargados.length = 0;
           imagenes.forEach(a => archivosDescargados.push(a));
           _visorContexto = { tipo: 'manhwa', coleccion, capNum: cap.num };
-          bvNavegar('pantalla1');
-          mostrarImagenesEnVisor();
+          if (!_modoAutoDescarga) { bvNavegar('pantalla1'); mostrarImagenesEnVisor(); }
           actualizarStatus('✅ Cap. ' + cap.num + ' — ' + imagenes.length + ' imágenes');
           return;
         }
