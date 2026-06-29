@@ -2811,6 +2811,62 @@
         }
       }
 
+      async function zsBuscarZipPrimero(colId) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const prefijo = 'zs-' + colId + '-';
+            const reg = e.target.result.find(z => z.nombre && z.nombre.startsWith(prefijo));
+            resolve(reg || null);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      let _zsOrdenDesc = false; // false = cap 1 primero
+
+      async function zsBuscarNuevos() {
+        if (!_zsColeccionActual) return;
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        actualizarStatus('🔄 Buscando nuevos episodios…');
+        try {
+          const base    = CF_WORKER.replace(/\/$/, '');
+          const url     = _zsColeccionActual.url;
+          const html    = await fetch(base + '/fetch-html?target=' + encodeURIComponent(url)
+            + '&referer=' + encodeURIComponent('https://archiviumbar.com/')).then(r => r.text());
+          const caps    = zsExtraerCapitulos(html);
+          if (!caps.length) { actualizarStatus('⚠️ No se encontraron capítulos'); return; }
+          const maxSitio = caps.length;
+          const maxLocal = _zsColeccionActual.caps.length;
+          if (maxSitio <= maxLocal) {
+            actualizarStatus('✅ Todo al día — ' + maxLocal + ' capítulos');
+            return;
+          }
+          const nuevas = caps.slice(maxLocal);
+          if (!confirm('🆕 Hay ' + nuevas.length + ' capítulo(s) nuevo(s).\n¿Agregar a la colección?')) return;
+          const nuevasCaps = [..._zsColeccionActual.caps, ...nuevas];
+          // Actualizar en DB
+          const db = await bvAbrirDB();
+          await new Promise((res, rej) => {
+            const tx  = db.transaction('nc_colecciones','readwrite');
+            const req = tx.objectStore('nc_colecciones').get(_zsColeccionActual.id);
+            req.onsuccess = e => {
+              const reg = e.target.result;
+              reg.caps  = nuevasCaps;
+              tx.objectStore('nc_colecciones').put(reg);
+              tx.oncomplete = () => res();
+              tx.onerror    = e => rej(e.target.error);
+            };
+          });
+          _zsColeccionActual.caps = nuevasCaps;
+          actualizarStatus('✅ ' + nuevas.length + ' capítulos nuevos agregados');
+          renderZonaScans(contenedor || document.getElementById('bvLista'));
+        } catch(err) {
+          actualizarStatus('❌ ' + err.message);
+        }
+      }
+
       async function renderZonaScans(contenedor) {
         contenedor.innerHTML = '';
 
@@ -2822,15 +2878,55 @@
             + '<span class="bv-breadcrumb-sep">/</span>'
             + '<span class="bv-breadcrumb-label">📡 ZonaScans</span>'
             + '<span class="bv-breadcrumb-sep">/</span>'
-            + '<span class="bv-breadcrumb-label">' + _zsColeccionActual.nombre + '</span>';
+            + '<span class="bv-breadcrumb-label">' + _zsColeccionActual.nombre + '</span>'
+            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="zsBuscarNuevos()" title="Buscar nuevos episodios">🔄</button>'
+            + '<button class="bv-breadcrumb-back" onclick="_zsOrdenDesc=!_zsOrdenDesc;renderZonaScans(document.getElementById(\'bvLista\'))" title="Invertir orden">'
+            + (_zsOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
           contenedor.appendChild(bc);
+
+          // Cargar mapa de descargados
+          const db = await bvAbrirDB();
+          const todosZips = await new Promise(res => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = () => res([]);
+          });
+          const prefijo = 'zs-' + _zsColeccionActual.id + '-';
+          const descMap = {};
+          todosZips.forEach(z => {
+            if (z.nombre && z.nombre.startsWith(prefijo)) {
+              const titulo = z.nombre.slice(prefijo.length).replace(/\.zip$/, '');
+              descMap[titulo] = z.id;
+            }
+          });
+
           const grid = document.createElement('div');
           grid.className = 'sjz-cap-grid';
-          _zsColeccionActual.caps.forEach(cap => {
-            const chip = document.createElement('button');
-            chip.className = 'sjz-cap-chip';
+          const capsOrdenadas = _zsOrdenDesc
+            ? [..._zsColeccionActual.caps].reverse()
+            : [..._zsColeccionActual.caps];
+          capsOrdenadas.forEach(cap => {
+            const yaDesc = !!descMap[cap.titulo];
+            const zipId  = descMap[cap.titulo];
+            const chip   = document.createElement('div');
+            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
             chip.textContent = cap.titulo;
+            chip.title = yaDesc ? '✅ ' + cap.titulo : '⬇️ ' + cap.titulo;
             chip.onclick = () => zsAbrirCapitulo(_zsColeccionActual, cap, chip);
+
+            if (yaDesc && zipId) {
+              bvCargarPortada(zipId).then(blob => {
+                if (!blob) return;
+                chip.textContent = '';
+                chip.classList.add('con-portada');
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(blob);
+                const num = document.createElement('div');
+                num.className = 'cap-num';
+                num.textContent = cap.titulo;
+                chip.append(img, num);
+              }).catch(() => {});
+            }
             grid.appendChild(chip);
           });
           contenedor.appendChild(grid);
@@ -2870,6 +2966,16 @@
             onDelete: async () => { await zsEliminarDB(col.id); card.remove(); }
           });
           grid.appendChild(card);
+          // Cargar portada del primer capítulo descargado
+          zsBuscarZipPrimero(col.id).then(reg => {
+            if (!reg) return;
+            return bvCargarPortada(reg.id);
+          }).then(blob => {
+            if (!blob) return;
+            img.src = URL.createObjectURL(blob);
+            img.style.display = 'block';
+            ph.style.display  = 'none';
+          }).catch(() => {});
         });
       }
 
