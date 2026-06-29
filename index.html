@@ -2261,7 +2261,7 @@
       function bvActualizarIcono() {
         const ic  = document.getElementById('iconBoveda');
         const btn = document.getElementById('btnEnviarBoveda');
-        if (ic)  ic.textContent      = bovedaDesbloqueada ? '🔓' : '🔐';
+        if (ic)  ic.textContent      = bovedaDesbloqueada ? '•': '°';
         if (btn) btn.style.display   = bovedaDesbloqueada ? ''   : 'none';
       }
 
@@ -2269,6 +2269,7 @@
         bovedaDesbloqueada = false;
         _bvMaestra = false;
         document.getElementById('PanelAdmi').style.display = 'none';
+        bvActualizarIcono();
         bvNavegar('pantalla1');
       }
 
