@@ -1825,6 +1825,65 @@
         });
       }
 
+      
+      async function capGuardarZip(categoria, nombre, blob, coleccion_id, cap_num) {
+        const db = await bvAbrirDB();
+        const prefix = categoria; // 'samurai' o 'manhwa'
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction('zips', 'readwrite');
+          const req = tx.objectStore('zips').add({
+            nombre, fecha: new Date().toISOString(),
+            tamaño: blob.size, blob,
+            categoria,
+            [prefix + '_coleccion_id']: coleccion_id,
+            [prefix + '_cap_num']:      cap_num
+          });
+          tx.oncomplete = () => resolve(req.result);
+          tx.onerror    = e => reject(e.target.error);
+          tx.onabort    = e => reject(e.target.error);
+        });
+      }
+
+      const sjzGuardarCapitulo = (n, b, cid, cn) => capGuardarZip('samurai', n, b, cid, cn);
+      const mwGuardarCapitulo  = (n, b, cid, cn) => capGuardarZip('manhwa',  n, b, cid, cn);
+      
+      
+      async function capBuscarZip(categoria, coleccion_id, cap_num) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const found = e.target.result.find(
+              r => r[categoria + '_coleccion_id'] === coleccion_id && r[categoria + '_cap_num'] === cap_num
+            );
+            resolve(found || null);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      const sjzBuscarZipCapitulo = (cid, cn) => capBuscarZip('sjz', cid, cn);
+      const mwBuscarZipCapitulo  = (cid, cn) => capBuscarZip('mw',  cid, cn);
+      
+      
+      async function capListarDescargados(categoria, coleccion_id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
+          req.onsuccess = e => {
+            const mapa = {};
+            e.target.result
+              .filter(r => r[categoria + '_coleccion_id'] === coleccion_id)
+              .forEach(r => { mapa[r[categoria + '_cap_num']] = r.id; });
+            resolve(mapa);
+          };
+          req.onerror = e => reject(e.target.error);
+        });
+      }
+
+      const sjzListarDescargados = cid => capListarDescargados('sjz', cid);
+      const mwListarDescargados  = cid => capListarDescargados('mw',  cid);
+      
       // ── descargas_temp — persistencia de progreso ──
       async function dtCrear(slotId, meta) {
         const db = await bvAbrirDB();
@@ -4088,53 +4147,16 @@
       }
 
       // — Guardar capítulo descargado en zips store con metadatos SJZ —
-      async function sjzGuardarCapitulo(nombre, blob, coleccion_id, cap_num) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('zips', 'readwrite');
-          const req = tx.objectStore('zips').add({
-            nombre, fecha: new Date().toISOString(),
-            tamaño: blob.size, blob,
-            categoria: 'samurai',
-            sjz_coleccion_id: coleccion_id,
-            sjz_cap_num: cap_num
-          });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-          tx.onabort    = e => reject(e.target.error);
-        });
-      }
+      
+
 
       // — Buscar ZIP de un capítulo concreto —
-      async function sjzBuscarZipCapitulo(coleccion_id, cap_num) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
-          req.onsuccess = e => {
-            const found = e.target.result.find(
-              r => r.sjz_coleccion_id === coleccion_id && r.sjz_cap_num === cap_num
-            );
-            resolve(found || null);
-          };
-          req.onerror = e => reject(e.target.error);
-        });
-      }
+      
+
 
       // — Mapa de capítulos descargados para una colección —
-      async function sjzListarDescargados(coleccion_id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
-          req.onsuccess = e => {
-            const mapa = {};
-            e.target.result
-              .filter(r => r.sjz_coleccion_id === coleccion_id)
-              .forEach(r => { mapa[r.sjz_cap_num] = r.id; });
-            resolve(mapa);
-          };
-          req.onerror = e => reject(e.target.error);
-        });
-      }
+      
+
 
       // — Abrir capítulo: descarga o carga desde DB —
       async function sjzAbrirCapitulo(coleccion, cap, chipEl) {
@@ -4579,52 +4601,14 @@
         return dbGuardar('mw_colecciones', { nombre, base_url, slug, capitulos });
       }
       
-      // — ZIP de capítulo Manhwa en store zips —
-      async function mwGuardarCapitulo(nombre, blob, coleccion_id, cap_num) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('zips', 'readwrite');
-          const req = tx.objectStore('zips').add({
-            nombre, fecha: new Date().toISOString(),
-            tamaño: blob.size, blob,
-            categoria: 'manhwa',
-            mw_coleccion_id: coleccion_id,
-            mw_cap_num: cap_num
-          });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-          tx.onabort    = e => reject(e.target.error);
-        });
-      }
+      
 
-      async function mwBuscarZipCapitulo(coleccion_id, cap_num) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
-          req.onsuccess = e => {
-            const found = e.target.result.find(
-              r => r.mw_coleccion_id === coleccion_id && r.mw_cap_num === cap_num
-            );
-            resolve(found || null);
-          };
-          req.onerror = e => reject(e.target.error);
-        });
-      }
 
-      async function mwListarDescargados(coleccion_id) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
-          req.onsuccess = e => {
-            const mapa = {};
-            e.target.result
-              .filter(r => r.mw_coleccion_id === coleccion_id)
-              .forEach(r => { mapa[r.mw_cap_num] = r.id; });
-            resolve(mapa);
-          };
-          req.onerror = e => reject(e.target.error);
-        });
-      }
+      
+
+
+      
+
 
       // — Detectar episodios desde la página del manhwa —
       async function mwVerEpisodios() {
