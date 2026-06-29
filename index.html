@@ -1182,6 +1182,9 @@
               <button class="action-btn" style="flex:1;min-width:140px" onclick="bvNavegar('pantalla1')">
                 <span class="icon">←</span> Volver
               </button>
+              <button class="action-btn" style="flex:1;min-width:140px" onclick="(async()=>{if(_bvDB){_bvDB.close();_bvDB=null;}await bvAbrirDB();actualizarStatus('DB v'+_bvDB.version+' · '+Array.from(_bvDB.objectStoreNames).join(', '));})()">
+                <span class="icon">🔄</span> DB
+              </button>
             </div>
           </div>
 
@@ -2590,7 +2593,7 @@
       async function zsListar() {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('zs_colecciones','readonly').objectStore('zs_colecciones').getAll();
+          const req = db.transaction('nc_colecciones','readonly').objectStore('nc_colecciones').getAll();
           req.onsuccess = e => resolve(e.target.result);
           req.onerror   = e => reject(e.target.error);
         });
@@ -2599,8 +2602,8 @@
       async function zsGuardar(info) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx  = db.transaction('zs_colecciones','readwrite');
-          const req = tx.objectStore('zs_colecciones').add({ ...info, fecha: new Date().toISOString() });
+          const tx  = db.transaction('nc_colecciones','readwrite');
+          const req = tx.objectStore('nc_colecciones').add({ ...info, fecha: new Date().toISOString() });
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
         });
@@ -2609,8 +2612,8 @@
       async function zsEliminarDB(id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx = db.transaction('zs_colecciones','readwrite');
-          tx.objectStore('zs_colecciones').delete(id);
+          const tx = db.transaction('nc_colecciones','readwrite');
+          tx.objectStore('nc_colecciones').delete(id);
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
