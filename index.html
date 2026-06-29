@@ -2229,19 +2229,8 @@
         }
 
         // — Navegación a la Bóveda —
-        function irABoveda() {
-          if (bovedaDesbloqueada) {
-            bvNavegar('pantalla3');
-            renderBoveda();
-            return;
-          }
-          const tienePIN = !!localStorage.getItem('_bv_pin_hash');
-          if (tienePIN) {
-            bvMostrarModalPIN(() => { bvNavegar('pantalla3'); renderBoveda(); });
-          } else {
-            bvPrimerAcceso();
-          }
-        }
+        
+
 
         async function solicitarPersistencia() {
           if (!navigator.storage || !navigator.storage.persist) return;
