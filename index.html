@@ -1725,6 +1725,7 @@
       // — Contexto del visor para navegación entre episodios —
       let _visorContexto = null;
 
+     
       function visorSiguienteCap() {
         if (!_visorContexto) return null;
         const { tipo } = _visorContexto;
@@ -1733,6 +1734,12 @@
           const idx = galerias.findIndex(g => g.id === galeria.id);
           if (idx === -1 || idx >= galerias.length - 1) return null;
           return galerias[idx + 1];
+        }
+        if (tipo === 'zonascans') {
+          const caps = _visorContexto.coleccion.caps;
+          const idx  = caps.findIndex(c => c.titulo === _visorContexto.capTitulo);
+          if (idx === -1 || idx >= caps.length - 1) return null;
+          return caps[idx + 1];
         }
         const ordenadas = [..._visorContexto.coleccion.capitulos].sort((a,b) => a.num - b.num);
         const idx = ordenadas.findIndex(c => c.num === _visorContexto.capNum);
@@ -1750,6 +1757,10 @@
           await nhAbrirEnVisor(sig);
         } else if (ctx.tipo === 'mangas') {
           await bovedaAbrirEnVisor(sig, ctx.galerias);
+        } else if (ctx.tipo === 'zonascans') {
+          const dummy = document.createElement('div');
+          dummy.classList = { add: () => {}, remove: () => {} };
+          await zsAbrirCapitulo(ctx.coleccion, sig, dummy);
         } else {
           const dummy = document.createElement('div');
           dummy.classList = { add: () => {}, remove: () => {} };
@@ -2724,7 +2735,7 @@
           if (imagenes) {
             archivosDescargados.length = 0;
             imagenes.forEach(a => archivosDescargados.push(a));
-            _visorContexto = { tipo: 'zonascans', coleccion: col, capTitulo: cap.titulo };
+            _visorContexto = { tipo: 'zonascans', coleccion: col, capTitulo: cap.titulo, caps: col.caps };
             mostrarVisor(true);
             mostrarImagenesEnVisor();
             actualizarStatus('✅ ' + cap.titulo + ' — ' + imagenes.length + ' imágenes');
