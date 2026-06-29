@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v74❄️
+          PerfectView🪷v75❄️
         </div>
       </header>
 
@@ -1563,15 +1563,36 @@
       function mostrarImagenesEnVisor() {
         const visor = document.getElementById("visor");
         visor.innerHTML = "";
+
+        // Revocar ObjectURLs previos para liberar memoria
+        if (visor._objectURLs) {
+          visor._objectURLs.forEach(u => URL.revokeObjectURL(u));
+        }
+        visor._objectURLs = [];
+
+        const observer = new IntersectionObserver(entries => {
+          entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const img = entry.target;
+            if (img._blob && !img.src) {
+              const url = URL.createObjectURL(img._blob);
+              visor._objectURLs.push(url);
+              img.src = url;
+              img._blob = null;
+            }
+            observer.unobserve(img);
+          });
+        }, { rootMargin: '400px' }); // precarga 400px antes de entrar al viewport
+
         archivosDescargados.forEach(a => {
           const img = document.createElement("img");
-          img.src = URL.createObjectURL(a.blob);
+          img._blob = a.blob;  // guardar blob sin crear URL todavía
           img.alt = a.nombre;
           img.classList.add("mangaImg");
-          img.style.maxWidth = "100%";
-          img.style.margin = "0";
+          img.style.cssText = 'max-width:100%;margin:0;min-height:100px'; // min-height para que el observer funcione
           if (filtroActivo) img.classList.add(filtroActivo);
           visor.appendChild(img);
+          observer.observe(img);
         });
 
         // Sentinel de siguiente episodio
