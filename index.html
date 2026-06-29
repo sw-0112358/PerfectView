@@ -4329,12 +4329,12 @@
       // — Exportar colección completa como ZIP maestro (genérico) —
       async function exportarZipCompleto(col, cfg) {
         // cfg = {
-        //   tipo,          // 'samurai' | 'manhwa' | 'zonascans'
-        //   prefijoDB,     // 'sjz' | 'mw' | null (zs usa escaneo por nombre)
-        //   prefijoNombre, // 'zs-' | null  (solo para zs)
-        //   metaExtra,     // fn(col, descMap) → objeto con campos extra para coleccion.json
-        //   getNombreZip,  // fn(clave, reg) → nombre del archivo dentro del ZIP maestro
-        //   getLabelLog,   // fn(clave) → texto para el status de progreso
+        //   tipo,            // 'samurai' | 'manhwa' | 'zonascans'
+        //   categoriaDB,     // categoria usada en campos DB (ej: 'samurai', 'zonascans')
+        //   ordenarNumerico, // true = ordenar claves como números (caps numéricas)
+        //   metaExtra,       // fn(col, entradas) → campos extra para coleccion.json
+        //   getNombreZip,    // fn(clave) → nombre del archivo dentro del ZIP maestro
+        //   getLabelLog,     // fn(clave) → texto para el status de progreso
         // }
 
         // — Obtener mapa { clave → zipId } — todos usan campos DB
