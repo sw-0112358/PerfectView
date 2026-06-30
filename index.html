@@ -4356,11 +4356,9 @@
 
         if (!confirm('📦 Exportar "' + col.nombre + '" con ' + entradas.length + ' capítulo(s) descargado(s)?\n\nPuede tardar varios minutos.')) return;
 
-        actualizarStatus('⏳ Preparando exportación…');
+        actualizarStatus('⏳ Preparando descargas…');
         try {
-          const masterZip = new JSZip();
-
-          // coleccion.json con metadata específica del tipo
+          // coleccion.json con metadata específica del tipo (se descarga aparte)
           const metaJson = {
             version: 1,
             tipo:    cfg.tipo,
@@ -4368,30 +4366,33 @@
             fecha:   col.fecha,
             ...cfg.metaExtra(col, entradas),
           };
-          masterZip.file('coleccion.json', JSON.stringify(metaJson, null, 2));
+          const jsonBlob = new Blob([JSON.stringify(metaJson, null, 2)], { type: 'application/json' });
+          const jsonUrl  = URL.createObjectURL(jsonBlob);
+          const aJson    = document.createElement('a');
+          aJson.href     = jsonUrl;
+          aJson.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_coleccion.json';
+          aJson.click();
+          setTimeout(() => URL.revokeObjectURL(jsonUrl), 5000);
 
-          // Empacar cada capítulo
+          // Descargar cada capítulo individualmente, tal como está
           for (let i = 0; i < entradas.length; i++) {
             const { clave, zipId } = entradas[i];
             const label = cfg.getLabelLog(clave);
-            actualizarStatus('⏳ Empacando ' + label + ' (' + (i + 1) + '/' + entradas.length + ')…');
+            actualizarStatus('⏳ Descargando ' + label + ' (' + (i + 1) + '/' + entradas.length + ')…');
             const reg = await bvCargar(zipId);
             if (!reg) continue;
-            masterZip.file(cfg.getNombreZip(clave), reg.blob);
+
+            const url = URL.createObjectURL(reg.blob);
+            const a   = document.createElement('a');
+            a.href     = url;
+            a.download = cfg.getNombreZip(clave);
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+            if (i < entradas.length - 1) await new Promise(r => setTimeout(r, 300));
           }
 
-          actualizarStatus('⏳ Generando ZIP maestro…');
-          const masterBlob = await masterZip.generateAsync({ type: 'blob' }, meta => {
-            actualizarStatus('⏳ Comprimiendo… ' + Math.round(meta.percent) + '%');
-          });
-
-          const url = URL.createObjectURL(masterBlob);
-          const a   = document.createElement('a');
-          a.href     = url;
-          a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-          actualizarStatus('✅ Exportado: ' + entradas.length + ' capítulos');
+          actualizarStatus('✅ Descargados: ' + entradas.length + ' capítulos');
         } catch(err) {
           actualizarStatus('❌ ' + err.message);
         }
