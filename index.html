@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v93❄️
+          PerfectView🪷v95❄️
         </div>
       </header>
 
@@ -4370,7 +4370,7 @@
           const jsonUrl  = URL.createObjectURL(jsonBlob);
           const aJson    = document.createElement('a');
           aJson.href     = jsonUrl;
-          aJson.download = col.nombre.replace(/[^a-zA-Z0-9À-ÿ\-_\s]/g, '') + '_coleccion.json';
+          aJson.download = col.nombre.replace(/[\/\\:*?"<>|\x00-\x1F]/g, '').trim() + '_coleccion.json';
           aJson.click();
           setTimeout(() => URL.revokeObjectURL(jsonUrl), 5000);
 
@@ -4385,7 +4385,7 @@
             const url = URL.createObjectURL(reg.blob);
             const a   = document.createElement('a');
             a.href     = url;
-            a.download = col.nombre.replace(/[^a-zA-Z0-9À-ÿ\-_\s]/g, '') + '_' + cfg.getNombreZip(clave);
+            a.download = col.nombre.replace(/[\/\\:*?"<>|\x00-\x1F]/g, '').trim() + '_' + cfg.getNombreZip(clave);
             a.click();
             setTimeout(() => URL.revokeObjectURL(url), 5000);
 
