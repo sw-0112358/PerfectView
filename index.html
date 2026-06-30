@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v92❄️
+          PerfectView🪷v93❄️
         </div>
       </header>
 
@@ -4370,7 +4370,7 @@
           const jsonUrl  = URL.createObjectURL(jsonBlob);
           const aJson    = document.createElement('a');
           aJson.href     = jsonUrl;
-          aJson.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_coleccion.json';
+          aJson.download = col.nombre.replace(/[^a-zA-Z0-9À-ÿ\-_\s]/g, '') + '_coleccion.json';
           aJson.click();
           setTimeout(() => URL.revokeObjectURL(jsonUrl), 5000);
 
