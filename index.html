@@ -4385,7 +4385,7 @@
             const url = URL.createObjectURL(reg.blob);
             const a   = document.createElement('a');
             a.href     = url;
-            a.download = col.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_' + cfg.getNombreZip(clave);
+            a.download = col.nombre.replace(/[^a-zA-Z0-9À-ÿ\-_\s]/g, '') + '_' + cfg.getNombreZip(clave);
             a.click();
             setTimeout(() => URL.revokeObjectURL(url), 5000);
 
