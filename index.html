@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v91❄️
+          PerfectView🪷v90❄️
         </div>
       </header>
 
@@ -1226,10 +1226,6 @@
                   <button class="action-btn" style="flex:1" onclick="bvBloquear()"><span class="icon">🔒</span> Bloquear</button>
                   <button class="action-btn" style="flex:1" onclick="bvLimpiarTemp()"><span class="icon">✨</span> Limpiar caché</button>
                 </div>
-                <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.74rem;color:var(--text-muted);cursor:pointer">
-                  <input type="checkbox" id="chkSwCache" onchange="bvToggleSwCache(this.checked)" style="width:16px;height:16px;cursor:pointer">
-                  🧩 Descargar imágenes vía sw.js (en lugar del Worker)
-                </label>
               </div>
             </div>
           </div>
@@ -4904,70 +4900,12 @@
         return archivos;
       }
 
-      // — Toggle: usar sw.js exclusivamente para descargar imágenes —
-      let _swCacheActivo = localStorage.getItem('_sw_cache_img') === '1';
-      let _swDetenido     = false; // se activa tras un error para frenar el tráfico
-
-      function bvToggleSwCache(activo) {
-        _swCacheActivo = activo;
-        _swDetenido    = false;
-        localStorage.setItem('_sw_cache_img', activo ? '1' : '0');
-        if (activo) bvRegistrarSW();
-        actualizarStatus(activo ? '🧩 Vía sw.js activada — Worker desactivado' : '🧩 Vía sw.js desactivada — usando Worker');
-      }
-
-      async function bvRegistrarSW() {
-        if (!('serviceWorker' in navigator)) return;
-        try {
-          await navigator.serviceWorker.register('./sw.js');
-        } catch(e) { console.warn('SW no registrado:', e); }
-      }
-
-      document.addEventListener('DOMContentLoaded', () => {
-        const chk = document.getElementById('chkSwCache');
-        if (chk) chk.checked = _swCacheActivo;
-        if (_swCacheActivo) bvRegistrarSW();
-      });
-
       async function proxyImagen(url, referer) {
-        if (_swCacheActivo) {
-          if (_swDetenido) return null; // tráfico detenido tras un error previo
-
-          if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
-            _swDetenido = true;
-            actualizarStatus('❌ sw.js no está activo (recarga la página) — tráfico detenido');
-            return null;
-          }
-
-          const endpointSw = './sw-proxy-img?target=' + encodeURIComponent(url)
-          + '&referer=' + encodeURIComponent(referer);
-          try {
-            const respSw = await fetch(endpointSw);
-            if (!respSw.ok) {
-              _swDetenido = true;
-              actualizarStatus('❌ Error en sw.js (' + respSw.status + ') — tráfico detenido');
-              return null;
-            }
-            const blobSw = await respSw.blob();
-            if (blobSw.size < 500 || !blobSw.type.startsWith('image/')) {
-              _swDetenido = true;
-              actualizarStatus('❌ sw.js devolvió contenido inválido — tráfico detenido');
-              return null;
-            }
-            return blobSw;
-          } catch(e) {
-            _swDetenido = true;
-            actualizarStatus('❌ Error en sw.js: ' + e.message + ' — tráfico detenido');
-            return null;
-          }
-        }
-
-        // — Ruta normal: Worker —
         if (!CF_WORKER) return null;
-        const endpointWorker = CF_WORKER.replace(/\/$/, '') + '/proxy-img?target='
+        const endpoint = CF_WORKER.replace(/\/$/, '') + '/proxy-img?target='
         + encodeURIComponent(url) + '&referer=' + encodeURIComponent(referer);
         try {
-          const resp = await fetch(endpointWorker);
+          const resp = await fetch(endpoint);
           if (!resp.ok) return null;
           const blob = await resp.blob();
           if (blob.size < 500) return null;
