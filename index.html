@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v101❄️
+          PerfectView🪷v102❄️
         </div>
       </header>
 
@@ -5839,7 +5839,9 @@
               + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
               + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
 
-            let abierto = true;
+            let abierto = false;
+            cuerpo.style.maxHeight = '0';
+            titulo.querySelector('.gf-chevron').style.transform = 'rotate(-90deg)';
             titulo.addEventListener('click', () => {
               abierto = !abierto;
               cuerpo.style.maxHeight  = abierto ? cuerpo.scrollHeight + 'px' : '0';
@@ -5858,7 +5860,7 @@
       // — Etiqueta legible por categoría —
       function gfCatLabel(cat) {
         const map = { mangas:'📖 Mangas', samurai:'⚔️ Samurai', manhwa:'🌸 Manhwa',
-                      nhentai:'🔞 nhentai', hitomi:'💫 Hitomi', zonascans:'📡 ZonaScans' };
+                      nhentai:'💠 nhentai', hitomi:'💫 Hitomi', zonascans:'📡 ZonaScans' };
         return map[cat] || ('📁 ' + cat);
       }
 
