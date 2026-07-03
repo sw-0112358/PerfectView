@@ -1261,6 +1261,7 @@
 
           <!-- Botón volver -->
           <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="btn-ghost btn-sm" style="flex:1;gap:6px" id="btnFullscreenGF" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
             <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="bvNavegar('pantalla1')">← Volver</button>
           </div>
 
@@ -5591,33 +5592,74 @@
           _gfItems = items;
           if (!items.length) { el.textContent = 'No hay archivos en la bóveda.'; return; }
 
+          // Resumen total
+          const total     = items.length;
+          const cifrados  = items.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
+          const totalSize = items.reduce((s, i) => s + (i.tamaño || 0), 0);
+
           el.innerHTML = '';
+
+          // Pill resumen
+          const resumen = document.createElement('div');
+          resumen.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px';
+          resumen.innerHTML =
+            '<span style="background:var(--accent-lt);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">📦 ' + total + ' archivos</span>'
+          + '<span style="background:rgba(74,158,106,.12);color:var(--success);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">🔐 ' + cifrados + ' cifrados</span>'
+          + '<span style="background:var(--surface2);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">💾 ' + gfFmtSize(totalSize) + '</span>';
+          el.appendChild(resumen);
+
+          // Agrupar por categoria normalizada
+          const ORDEN_CAT = ['mangas','samurai','manhwa','nhentai','hitomi','zonascans'];
           const porCategoria = {};
           items.forEach(it => {
-            const cat = it.categoria || 'sin categoría';
+            let cat = it.categoria || '';
+            // Registros viejos sin categoria van a 'mangas'
+            if (!cat || cat === 'boveda1') cat = 'mangas';
             if (!porCategoria[cat]) porCategoria[cat] = [];
             porCategoria[cat].push(it);
           });
 
-          Object.entries(porCategoria).forEach(([cat, lista]) => {
+          // Renderizar en orden conocido primero, luego cualquier otro
+          const cats = [
+            ...ORDEN_CAT.filter(c => porCategoria[c]),
+            ...Object.keys(porCategoria).filter(c => !ORDEN_CAT.includes(c))
+          ];
+
+          cats.forEach(cat => {
+            const lista = porCategoria[cat];
+            const seccion = document.createElement('div');
+            seccion.style.cssText = 'margin-bottom:14px';
+
             const titulo = document.createElement('div');
-            titulo.style.cssText = 'font-weight:600;color:var(--text);margin:10px 0 4px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em';
-            titulo.textContent = cat + ' (' + lista.length + ')';
-            el.appendChild(titulo);
+            titulo.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px';
+            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
+            titulo.innerHTML = gfCatLabel(cat)
+              + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
+              + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
+            seccion.appendChild(titulo);
+
             lista.forEach(it => {
               const row = document.createElement('div');
-              const esCifrado = it.nombre.endsWith('.zip.webc');
+              const esCifrado = it.nombre && it.nombre.endsWith('.zip.webc');
               row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
               row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
-                + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
+                + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
                 + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
-                + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600">CIFRADO</span>' : '');
-              el.appendChild(row);
+                + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600;white-space:nowrap">CIFRADO</span>' : '');
+              seccion.appendChild(row);
             });
+            el.appendChild(seccion);
           });
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
         }
+      }
+
+      // — Etiqueta legible por categoría —
+      function gfCatLabel(cat) {
+        const map = { mangas:'📖 Mangas', samurai:'⚔️ Samurai', manhwa:'🌸 Manhwa',
+                      nhentai:'🔞 nhentai', hitomi:'💫 Hitomi', zonascans:'📡 ZonaScans' };
+        return map[cat] || ('📁 ' + cat);
       }
 
       // — Cargar lista para cifrar —
@@ -5632,10 +5674,12 @@
             req.onsuccess = e => res(e.target.result);
             req.onerror   = e => rej(e.target.error);
           });
-          const filtrados = items.filter(it =>
-            !it.nombre.endsWith('.zip.webc') &&
-            (cat === 'todas' || it.categoria === cat)
-          );
+          const filtrados = items.filter(it => {
+            if (!it.nombre) return false;
+            if (it.nombre.endsWith('.zip.webc')) return false;
+            const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+            return cat === 'todas' || itCat === cat;
+          });
           _gfItems = filtrados;
           if (!filtrados.length) { el.textContent = 'No hay archivos .zip en esta categoría.'; return; }
           el.innerHTML = '';
@@ -5664,10 +5708,12 @@
             req.onsuccess = e => res(e.target.result);
             req.onerror   = e => rej(e.target.error);
           });
-          const filtrados = items.filter(it =>
-            it.nombre.endsWith('.zip.webc') &&
-            (cat === 'todas' || it.categoria === cat)
-          );
+          const filtrados = items.filter(it => {
+            if (!it.nombre) return false;
+            if (!it.nombre.endsWith('.zip.webc')) return false;
+            const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+            return cat === 'todas' || itCat === cat;
+          });
           _gfItems = filtrados;
           if (!filtrados.length) { el.textContent = 'No hay archivos .zip.webc en esta categoría.'; return; }
           el.innerHTML = '';
