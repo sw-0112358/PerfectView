@@ -120,7 +120,10 @@
       #frameMain {
         display: block;
         width: 100%;
-        min-height: 100vh;
+        height: 100vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
       }
 
       #pantalla2 {
@@ -1199,7 +1202,7 @@
       <!-- ============================================================
            PANTALLA 3 — BÓVEDA (dentro del frame)
       ============================================================ -->
-      <div id="pantalla3" style="display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
+      <div id="pantalla3" style="display:none;height:100vh">
         <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
 
           <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
@@ -1249,7 +1252,7 @@
       <!-- ============================================================
            PANTALLA 4 — GESTOR DE ARCHIVOS
       ============================================================ -->
-      <div id="pantalla4" style="display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
+      <div id="pantalla4" style="display:none;height:100vh">
         <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
 
           <!-- Header -->
@@ -1298,7 +1301,7 @@
                   <option value="mangas">📖 Mangas</option>
                   <option value="samurai">⚔️ Samurai</option>
                   <option value="manhwa">🌸 Manhwa</option>
-                  <option value="nhentai">🔞 nhentai</option>
+                  <option value="nhentai">💠 nhentai</option>
                   <option value="hitomi">💫 Hitomi</option>
                   <option value="zonascans">📡 ZonaScans</option>
                 </select>
@@ -1326,7 +1329,7 @@
                   <option value="mangas">📖 Mangas</option>
                   <option value="samurai">⚔️ Samurai</option>
                   <option value="manhwa">🌸 Manhwa</option>
-                  <option value="nhentai">🔞 nhentai</option>
+                  <option value="nhentai">💠 nhentai</option>
                   <option value="hitomi">💫 Hitomi</option>
                   <option value="zonascans">📡 ZonaScans</option>
                 </select>
