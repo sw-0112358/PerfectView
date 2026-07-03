@@ -1275,7 +1275,7 @@
           <div style="display:flex;gap:6px;margin-bottom:16px">
             <button id="gfTabScan"    class="filter-chip active" onclick="gfSetOp('scan')">🔍 Escanear</button>
             <button id="gfTabCifrar"  class="filter-chip"        onclick="gfSetOp('cifrar')">🔐 Cifrar</button>
-            <button id="gfTabDecifrar" class="filter-chip"       onclick="gfSetOp('descifrar')">🔓 Descifrar</button>
+            <button id="gfTabDescifrar" class="filter-chip"       onclick="gfSetOp('descifrar')">🔓 Descifrar</button>
           </div>
 
           <!-- Panel: Escanear -->
@@ -5568,11 +5568,11 @@
 
       function gfSetOp(op) {
         _gfOp = op;
+        const tabIds   = { scan:'gfTabScan',      cifrar:'gfTabCifrar',      descifrar:'gfTabDescifrar' };
+        const panelIds = { scan:'gfPanelScan',    cifrar:'gfPanelCifrar',    descifrar:'gfPanelDescifrar' };
         ['scan','cifrar','descifrar'].forEach(o => {
-          document.getElementById('gfTab' + o.charAt(0).toUpperCase() + o.slice(1))
-            .classList.toggle('active', o === op);
-          document.getElementById('gfPanel' + o.charAt(0).toUpperCase() + o.slice(1))
-            .style.display = (o === op) ? '' : 'none';
+          document.getElementById(tabIds[o]).classList.toggle('active', o === op);
+          document.getElementById(panelIds[o]).style.display = (o === op) ? '' : 'none';
         });
         if (op === 'cifrar')    gfCargarListaCifrar();
         if (op === 'descifrar') gfCargarListaDescifrar();
