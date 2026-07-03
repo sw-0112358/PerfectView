@@ -1268,7 +1268,7 @@
           <!-- Tabs nivel 1: almacenamiento -->
           <div style="display:flex;gap:6px;margin-bottom:12px">
             <button id="gfTabLocal" class="filter-chip active" onclick="gfSetStorage('local')">📱 Local</button>
-            <button id="gfTabCloud" class="filter-chip" style="opacity:.45;pointer-events:none" title="Próximamente">☁️ Cloudflare</button>
+            <button id="gfTabCloud" class="filter-chip" onclick="gfSetStorage('cloud')">☁️ Cloudflare</button>
           </div>
 
           <!-- Tabs nivel 2: operación -->
@@ -1310,7 +1310,7 @@
                 <input type="text" id="gfPwdCifrar" value="🪷🌸💠" style="font-size:1.1rem;letter-spacing:2px">
               </div>
               <div id="gfListaCifrar" style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Selecciona una categoría para ver los archivos.</div>
-              <button class="action-btn" style="width:100%;justify-content:center" onclick="gfCifrarTodos()">
+              <button class="action-btn" style="width:100%;justify-content:center" onclick="_gfStorage==='cloud'?gfCifrarTodosCloud():gfCifrarTodos()">
                 <span class="icon">🔐</span> Cifrar seleccionados
               </button>
               <div id="gfProgresoCifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
@@ -1338,7 +1338,7 @@
                 <input type="text" id="gfPwdDescifrar" value="🪷🌸💠" style="font-size:1.1rem;letter-spacing:2px">
               </div>
               <div id="gfListaDescifrar" style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Selecciona una categoría para ver los archivos.</div>
-              <button class="action-btn" style="width:100%;justify-content:center" onclick="gfDescifrarTodos()">
+              <button class="action-btn" style="width:100%;justify-content:center" onclick="_gfStorage==='cloud'?gfCloudDescargarTodos():gfDescifrarTodos()">
                 <span class="icon">🔓</span> Descifrar seleccionados
               </button>
               <div id="gfProgresoDescifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
@@ -5564,6 +5564,185 @@
         _gfStorage = s;
         document.getElementById('gfTabLocal').classList.toggle('active', s === 'local');
         document.getElementById('gfTabCloud').classList.toggle('active', s === 'cloud');
+        if (s === 'cloud') gfCloudInit();
+        if (s === 'local') gfEscanear();
+      }
+
+      // ── Tab ☁️ Cloudflare — R2 ──
+      let _gfCloudItems = [];
+
+      async function gfCloudInit() {
+        // Redirige las operaciones al panel cloud según op activa
+        const op = _gfOp;
+        if (op === 'scan')      await gfCloudEscanear();
+        if (op === 'cifrar')    await gfCloudCargarSubir();
+        if (op === 'descifrar') await gfCloudCargarDescargar();
+      }
+
+      // — Escanear R2 —
+      async function gfCloudEscanear() {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        const el = document.getElementById('gfScanLista');
+        el.textContent = '⏳ Consultando R2…';
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-list');
+          const data = await resp.json();
+          if (!data.ok) throw new Error(data.error);
+          _gfCloudItems = data.objetos;
+
+          if (!data.objetos.length) { el.textContent = '☁️ El bucket está vacío.'; return; }
+
+          const totalSize = data.objetos.reduce((s, o) => s + (o.size || 0), 0);
+          el.innerHTML = '';
+
+          // Pills resumen
+          const resumen = document.createElement('div');
+          resumen.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px';
+          resumen.innerHTML =
+            '<span style="background:var(--accent-lt);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">☁️ ' + data.objetos.length + ' archivos</span>'
+          + '<span style="background:var(--surface2);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">💾 ' + gfFmtSize(totalSize) + '</span>';
+          el.appendChild(resumen);
+
+          data.objetos.forEach(o => {
+            const row = document.createElement('div');
+            const fecha = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>🔐</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.key + '</span>'
+              + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
+              + '<span style="font-size:.7rem;color:var(--text-muted);white-space:nowrap">' + fecha + '</span>'
+              + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem" title="Descargar" onclick="gfCloudDescargar(' + JSON.stringify(o.key) + ')">⬇️</button>'
+              + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar" onclick="gfCloudEliminar(' + JSON.stringify(o.key) + ',this.closest(\'div\'))">🗑️</button>';
+            el.appendChild(row);
+          });
+        } catch(err) {
+          el.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Subir .zip.webc a R2 (tab Cifrar en modo cloud) —
+      async function gfCloudCargarSubir() {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        const cat = document.getElementById('gfCatCifrar').value;
+        const el  = document.getElementById('gfListaCifrar');
+        el.textContent = '⏳ Cargando cifrados locales…';
+        try {
+          const db    = await bvAbrirDB();
+          const items = await new Promise((res, rej) => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+          });
+          const filtrados = items.filter(it => {
+            if (!it.nombre || !it.nombre.endsWith('.zip.webc')) return false;
+            const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+            return cat === 'todas' || itCat === cat;
+          });
+          _gfItems = filtrados;
+          if (!filtrados.length) { el.textContent = 'No hay archivos .zip.webc para subir en esta categoría.'; return; }
+          el.innerHTML = '';
+          filtrados.forEach(it => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>🔐</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
+              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(it.tamaño) + '</span>';
+            el.appendChild(row);
+          });
+          // Cambiar botón a "Subir a R2"
+          document.querySelector('#gfPanelCifrar .action-btn:last-of-type').textContent = '☁️ Subir a R2';
+        } catch(err) {
+          el.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Subir todos los .zip.webc listados a R2 —
+      async function gfCifrarTodosCloud() {
+        const prog = document.getElementById('gfProgresoCifrar');
+        if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para subir.'; return; }
+        const base = CF_WORKER.replace(/\/$/, '');
+        let ok = 0;
+        for (const it of _gfItems) {
+          prog.textContent = '☁️ Subiendo ' + (ok+1) + '/' + _gfItems.length + ': ' + it.nombre;
+          try {
+            const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(it.nombre), {
+              method: 'POST',
+              body: it.blob,
+            });
+            const data = await resp.json();
+            if (!data.ok) throw new Error(data.error);
+            ok++;
+          } catch(err) {
+            prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
+            return;
+          }
+        }
+        prog.textContent = '✅ ' + ok + ' archivo(s) subido(s) a R2.';
+      }
+
+      // — Cargar lista R2 para descargar (tab Descifrar en modo cloud) —
+      async function gfCloudCargarDescargar() {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        const el = document.getElementById('gfListaDescifrar');
+        el.textContent = '⏳ Consultando R2…';
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-list');
+          const data = await resp.json();
+          if (!data.ok) throw new Error(data.error);
+          _gfCloudItems = data.objetos;
+          if (!data.objetos.length) { el.textContent = '☁️ No hay archivos en R2.'; return; }
+          el.innerHTML = '';
+          data.objetos.forEach(o => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>🔐</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.key + '</span>'
+              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(o.size) + '</span>';
+            el.appendChild(row);
+          });
+          // Cambiar botón a "Descargar de R2"
+          document.querySelector('#gfPanelDescifrar .action-btn:last-of-type').textContent = '☁️ Descargar de R2';
+        } catch(err) {
+          el.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Descargar archivo de R2 al dispositivo —
+      async function gfCloudDescargar(key) {
+        if (!CF_WORKER) return;
+        try {
+          actualizarStatus('⏳ Descargando ' + key + '…');
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(key));
+          if (!resp.ok) throw new Error('Error ' + resp.status);
+          const blob = await resp.blob();
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a');
+          a.href = url; a.download = key.split('/').pop(); a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+          actualizarStatus('✅ Descargado: ' + key);
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+        }
+      }
+
+      // — Eliminar archivo de R2 —
+      async function gfCloudEliminar(key, rowEl) {
+        if (!confirm('¿Eliminar ' + key + ' de R2? No se puede deshacer.')) return;
+        if (!CF_WORKER) return;
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-delete?key=' + encodeURIComponent(key));
+          const data = await resp.json();
+          if (!data.ok) throw new Error(data.error);
+          rowEl.style.opacity = '0';
+          setTimeout(() => rowEl.remove(), 300);
+          actualizarStatus('✅ Eliminado de R2: ' + key);
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+        }
       }
 
       function gfSetOp(op) {
@@ -5574,8 +5753,12 @@
           document.getElementById(tabIds[o]).classList.toggle('active', o === op);
           document.getElementById(panelIds[o]).style.display = (o === op) ? '' : 'none';
         });
-        if (op === 'cifrar')    gfCargarListaCifrar();
-        if (op === 'descifrar') gfCargarListaDescifrar();
+        if (_gfStorage === 'cloud') {
+          gfCloudInit();
+        } else {
+          if (op === 'cifrar')    gfCargarListaCifrar();
+          if (op === 'descifrar') gfCargarListaDescifrar();
+        }
       }
 
       // — Escanear todos los zips en IDB —
