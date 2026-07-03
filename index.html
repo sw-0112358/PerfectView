@@ -1142,6 +1142,9 @@
             <button class="action-btn" onclick="abrirConfigWorker()">
               <span class="icon">☁️</span>cloudflare
             </button>
+            <button class="action-btn" onclick="abrirGestorArchivos()">
+              <span class="icon">🗂️</span> Gestor
+            </button>
             <button class="action-btn" id="btnEnviarBoveda" onclick="enviarABoveda()" style="display:none">
               <span class="icon">📨🔐</span> 
             </button>
@@ -1244,6 +1247,105 @@
           <div id="bvLista"></div>
         </div>
       </div><!-- /pantalla3 -->
+
+      <!-- ============================================================
+           PANTALLA 4 — GESTOR DE ARCHIVOS
+      ============================================================ -->
+      <div id="pantalla4" style="display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
+        <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
+
+          <!-- Header -->
+          <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
+            <div class="bv-titulo" style="margin-bottom:4px">🗂️ Gestor de Archivos</div>
+          </div>
+
+          <!-- Botón volver -->
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="bvNavegar('pantalla1')">← Volver</button>
+          </div>
+
+          <!-- Tabs nivel 1: almacenamiento -->
+          <div style="display:flex;gap:6px;margin-bottom:12px">
+            <button id="gfTabLocal" class="filter-chip active" onclick="gfSetStorage('local')">📱 Local</button>
+            <button id="gfTabCloud" class="filter-chip" style="opacity:.45;pointer-events:none" title="Próximamente">☁️ Cloudflare</button>
+          </div>
+
+          <!-- Tabs nivel 2: operación -->
+          <div style="display:flex;gap:6px;margin-bottom:16px">
+            <button id="gfTabScan"    class="filter-chip active" onclick="gfSetOp('scan')">🔍 Escanear</button>
+            <button id="gfTabCifrar"  class="filter-chip"        onclick="gfSetOp('cifrar')">🔐 Cifrar</button>
+            <button id="gfTabDecifrar" class="filter-chip"       onclick="gfSetOp('descifrar')">🔓 Descifrar</button>
+          </div>
+
+          <!-- Panel: Escanear -->
+          <div id="gfPanelScan">
+            <div class="card" style="margin-bottom:10px">
+              <div class="card-title">Archivos en PerfectViewBoveda</div>
+              <button class="action-btn" style="width:100%;justify-content:center;margin-bottom:10px" onclick="gfEscanear()">
+                <span class="icon">🔍</span> Escanear ahora
+              </button>
+              <div id="gfScanLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear para ver los archivos.</div>
+            </div>
+          </div>
+
+          <!-- Panel: Cifrar -->
+          <div id="gfPanelCifrar" style="display:none">
+            <div class="card" style="margin-bottom:10px">
+              <div class="card-title">Cifrar archivos .zip → .zip.webc</div>
+              <div class="field-group" style="margin-bottom:10px">
+                <label class="field-label">Categoría</label>
+                <select id="gfCatCifrar" onchange="gfCargarListaCifrar()">
+                  <option value="todas">— Todas —</option>
+                  <option value="mangas">📖 Mangas</option>
+                  <option value="samurai">⚔️ Samurai</option>
+                  <option value="manhwa">🌸 Manhwa</option>
+                  <option value="nhentai">🔞 nhentai</option>
+                  <option value="hitomi">💫 Hitomi</option>
+                  <option value="zonascans">📡 ZonaScans</option>
+                </select>
+              </div>
+              <div class="field-group" style="margin-bottom:10px">
+                <label class="field-label">Contraseña</label>
+                <input type="text" id="gfPwdCifrar" value="🪷🌸💠" style="font-size:1.1rem;letter-spacing:2px">
+              </div>
+              <div id="gfListaCifrar" style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Selecciona una categoría para ver los archivos.</div>
+              <button class="action-btn" style="width:100%;justify-content:center" onclick="gfCifrarTodos()">
+                <span class="icon">🔐</span> Cifrar seleccionados
+              </button>
+              <div id="gfProgresoCifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
+            </div>
+          </div>
+
+          <!-- Panel: Descifrar -->
+          <div id="gfPanelDescifrar" style="display:none">
+            <div class="card" style="margin-bottom:10px">
+              <div class="card-title">Descifrar archivos .zip.webc → .zip</div>
+              <div class="field-group" style="margin-bottom:10px">
+                <label class="field-label">Categoría</label>
+                <select id="gfCatDescifrar" onchange="gfCargarListaDescifrar()">
+                  <option value="todas">— Todas —</option>
+                  <option value="mangas">📖 Mangas</option>
+                  <option value="samurai">⚔️ Samurai</option>
+                  <option value="manhwa">🌸 Manhwa</option>
+                  <option value="nhentai">🔞 nhentai</option>
+                  <option value="hitomi">💫 Hitomi</option>
+                  <option value="zonascans">📡 ZonaScans</option>
+                </select>
+              </div>
+              <div class="field-group" style="margin-bottom:10px">
+                <label class="field-label">Contraseña</label>
+                <input type="text" id="gfPwdDescifrar" value="🪷🌸💠" style="font-size:1.1rem;letter-spacing:2px">
+              </div>
+              <div id="gfListaDescifrar" style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Selecciona una categoría para ver los archivos.</div>
+              <button class="action-btn" style="width:100%;justify-content:center" onclick="gfDescifrarTodos()">
+                <span class="icon">🔓</span> Descifrar seleccionados
+              </button>
+              <div id="gfProgresoDescifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /pantalla4 -->
 
     </div><!-- /frameMain -->
 
@@ -1825,6 +1927,7 @@
         mostrarFrame();
         document.getElementById('pantalla1').style.display = (id === 'pantalla1') ? 'block' : 'none';
         document.getElementById('pantalla3').style.display = (id === 'pantalla3') ? 'block' : 'none';
+        document.getElementById('pantalla4').style.display = (id === 'pantalla4') ? 'block' : 'none';
         const el = document.getElementById(id);
         if (el) el.scrollTop = 0;
       }
@@ -5441,16 +5544,265 @@
         }
       }
 
+      
+      
+      /* =============================================
+         GESTOR DE ARCHIVOS — pantalla4
+      ============================================= */
+
+      let _gfStorage = 'local';
+      let _gfOp      = 'scan';
+      let _gfItems   = []; // cache del último escaneo
+
+      function abrirGestorArchivos() {
+        bvNavegar('pantalla4');
+        gfEscanear();
+      }
+
+      function gfSetStorage(s) {
+        _gfStorage = s;
+        document.getElementById('gfTabLocal').classList.toggle('active', s === 'local');
+        document.getElementById('gfTabCloud').classList.toggle('active', s === 'cloud');
+      }
+
+      function gfSetOp(op) {
+        _gfOp = op;
+        ['scan','cifrar','descifrar'].forEach(o => {
+          document.getElementById('gfTab' + o.charAt(0).toUpperCase() + o.slice(1))
+            .classList.toggle('active', o === op);
+          document.getElementById('gfPanel' + o.charAt(0).toUpperCase() + o.slice(1))
+            .style.display = (o === op) ? '' : 'none';
+        });
+        if (op === 'cifrar')    gfCargarListaCifrar();
+        if (op === 'descifrar') gfCargarListaDescifrar();
+      }
+
+      // — Escanear todos los zips en IDB —
+      async function gfEscanear() {
+        const el = document.getElementById('gfScanLista');
+        el.textContent = '⏳ Escaneando…';
+        try {
+          const db    = await bvAbrirDB();
+          const items = await new Promise((res, rej) => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+          });
+          _gfItems = items;
+          if (!items.length) { el.textContent = 'No hay archivos en la bóveda.'; return; }
+
+          el.innerHTML = '';
+          const porCategoria = {};
+          items.forEach(it => {
+            const cat = it.categoria || 'sin categoría';
+            if (!porCategoria[cat]) porCategoria[cat] = [];
+            porCategoria[cat].push(it);
+          });
+
+          Object.entries(porCategoria).forEach(([cat, lista]) => {
+            const titulo = document.createElement('div');
+            titulo.style.cssText = 'font-weight:600;color:var(--text);margin:10px 0 4px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em';
+            titulo.textContent = cat + ' (' + lista.length + ')';
+            el.appendChild(titulo);
+            lista.forEach(it => {
+              const row = document.createElement('div');
+              const esCifrado = it.nombre.endsWith('.zip.webc');
+              row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+              row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
+                + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
+                + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
+                + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600">CIFRADO</span>' : '');
+              el.appendChild(row);
+            });
+          });
+        } catch(err) {
+          el.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Cargar lista para cifrar —
+      async function gfCargarListaCifrar() {
+        const cat = document.getElementById('gfCatCifrar').value;
+        const el  = document.getElementById('gfListaCifrar');
+        el.textContent = '⏳ Cargando…';
+        try {
+          const db    = await bvAbrirDB();
+          const items = await new Promise((res, rej) => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+          });
+          const filtrados = items.filter(it =>
+            !it.nombre.endsWith('.zip.webc') &&
+            (cat === 'todas' || it.categoria === cat)
+          );
+          _gfItems = filtrados;
+          if (!filtrados.length) { el.textContent = 'No hay archivos .zip en esta categoría.'; return; }
+          el.innerHTML = '';
+          filtrados.forEach(it => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>📦</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
+              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(it.tamaño) + '</span>';
+            el.appendChild(row);
+          });
+        } catch(err) {
+          el.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Cargar lista para descifrar —
+      async function gfCargarListaDescifrar() {
+        const cat = document.getElementById('gfCatDescifrar').value;
+        const el  = document.getElementById('gfListaDescifrar');
+        el.textContent = '⏳ Cargando…';
+        try {
+          const db    = await bvAbrirDB();
+          const items = await new Promise((res, rej) => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+          });
+          const filtrados = items.filter(it =>
+            it.nombre.endsWith('.zip.webc') &&
+            (cat === 'todas' || it.categoria === cat)
+          );
+          _gfItems = filtrados;
+          if (!filtrados.length) { el.textContent = 'No hay archivos .zip.webc en esta categoría.'; return; }
+          el.innerHTML = '';
+          filtrados.forEach(it => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>🔐</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
+              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(it.tamaño) + '</span>';
+            el.appendChild(row);
+          });
+        } catch(err) {
+          el.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Derivar clave AES-GCM desde contraseña —
+      async function gfDerivarClave(pwd) {
+        const enc  = new TextEncoder();
+        const base = await crypto.subtle.importKey('raw', enc.encode(pwd), 'PBKDF2', false, ['deriveKey']);
+        return crypto.subtle.deriveKey(
+          { name:'PBKDF2', salt: enc.encode('PerfectViewGF'), iterations:100000, hash:'SHA-256' },
+          base,
+          { name:'AES-GCM', length:256 },
+          false,
+          ['encrypt','decrypt']
+        );
+      }
+
+      // — Cifrar un blob —
+      async function gfCifrarBlob(blob, clave) {
+        const iv   = crypto.getRandomValues(new Uint8Array(12));
+        const buf  = await blob.arrayBuffer();
+        const enc  = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, clave, buf);
+        // Estructura: 12 bytes IV + datos cifrados
+        const out  = new Uint8Array(12 + enc.byteLength);
+        out.set(iv, 0);
+        out.set(new Uint8Array(enc), 12);
+        return new Blob([out]);
+      }
+
+      // — Descifrar un blob —
+      async function gfDescifrarBlob(blob, clave) {
+        const buf = await blob.arrayBuffer();
+        const iv  = buf.slice(0, 12);
+        const dat = buf.slice(12);
+        const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv: new Uint8Array(iv) }, clave, dat);
+        return new Blob([dec]);
+      }
+
+      // — Actualizar nombre+blob en IDB —
+      async function gfActualizarItem(id, nuevoNombre, nuevoBlob) {
+        const db = await bvAbrirDB();
+        return new Promise((res, rej) => {
+          const tx    = db.transaction('zips','readwrite');
+          const store = tx.objectStore('zips');
+          const req   = store.get(id);
+          req.onsuccess = e => {
+            const rec = e.target.result;
+            if (!rec) { res(); return; }
+            rec.nombre = nuevoNombre;
+            rec.blob   = nuevoBlob;
+            rec.tamaño = nuevoBlob.size;
+            store.put(rec);
+          };
+          tx.oncomplete = () => res();
+          tx.onerror    = e => rej(e.target.error);
+        });
+      }
+
+      // — Cifrar todos los .zip de la lista actual —
+      async function gfCifrarTodos() {
+        const pwd = document.getElementById('gfPwdCifrar').value;
+        if (!pwd) { alert('Ingresa una contraseña'); return; }
+        const prog = document.getElementById('gfProgresoCifrar');
+        if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para cifrar.'; return; }
+        try {
+          const clave = await gfDerivarClave(pwd);
+          let ok = 0;
+          for (const it of _gfItems) {
+            prog.textContent = '🔐 Cifrando ' + (ok+1) + '/' + _gfItems.length + ': ' + it.nombre;
+            const blobCifrado = await gfCifrarBlob(it.blob, clave);
+            const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
+            await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
+            ok++;
+          }
+          prog.textContent = '✅ ' + ok + ' archivo(s) cifrado(s) correctamente.';
+          gfCargarListaCifrar();
+        } catch(err) {
+          document.getElementById('gfProgresoCifrar').textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Descifrar todos los .zip.webc de la lista actual —
+      async function gfDescifrarTodos() {
+        const pwd = document.getElementById('gfPwdDescifrar').value;
+        if (!pwd) { alert('Ingresa una contraseña'); return; }
+        const prog = document.getElementById('gfProgresoDescifrar');
+        if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para descifrar.'; return; }
+        try {
+          const clave = await gfDerivarClave(pwd);
+          let ok = 0;
+          for (const it of _gfItems) {
+            prog.textContent = '🔓 Descifrando ' + (ok+1) + '/' + _gfItems.length + ': ' + it.nombre;
+            const blobDec    = await gfDescifrarBlob(it.blob, clave);
+            const nuevoNombre = it.nombre.replace(/\.zip\.webc$/i, '.zip');
+            await gfActualizarItem(it.id, nuevoNombre, blobDec);
+            ok++;
+          }
+          prog.textContent = '✅ ' + ok + ' archivo(s) descifrado(s) correctamente.';
+          gfCargarListaDescifrar();
+        } catch(err) {
+          document.getElementById('gfProgresoDescifrar').textContent = '❌ Error: ' + err.message;
+        }
+      }
+
+      // — Formatear tamaño —
+      function gfFmtSize(bytes) {
+        if (!bytes) return '?';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+        return (bytes/1048576).toFixed(1) + ' MB';
+      }
+      
 
       /* =============================================
          10. INIT
       ============================================= */
 
       document.addEventListener("DOMContentLoaded", () => {
-        // Frame visible, pantalla1 visible, pantalla3 y visor ocultos
+        // Frame visible, pantalla1 visible, pantalla3/4 y visor ocultos
         document.getElementById('frameMain').style.display = 'block';
         document.getElementById('pantalla1').style.display = 'block';
         document.getElementById('pantalla3').style.display = 'none';
+        document.getElementById('pantalla4').style.display = 'none';
         document.getElementById('pantalla2').style.display = 'none';
         cargarLinksLocal();
       });
