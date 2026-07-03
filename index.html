@@ -5916,12 +5916,23 @@
           _gfItems = filtrados;
           if (!filtrados.length) { el.textContent = 'No hay archivos .zip.webc en esta categoría.'; return; }
           el.innerHTML = '';
+
+          // Botón subir todos
+          const btnTodos = document.createElement('button');
+          btnTodos.className = 'action-btn';
+          btnTodos.style.cssText = 'width:100%;justify-content:center;margin-bottom:8px';
+          btnTodos.innerHTML = '<span class="icon">☁️</span> Subir todos a R2';
+          btnTodos.onclick = () => gfSubirTodosR2();
+          el.appendChild(btnTodos);
+
           filtrados.forEach(it => {
+            const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
             const row = document.createElement('div');
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
             row.innerHTML = '<span>🔐</span>'
               + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
-              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(it.tamaño) + '</span>';
+              + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
+              + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem" title="Subir a R2" onclick="gfSubirUnoR2(' + it.id + ',this)">☁️</button>';
             el.appendChild(row);
           });
         } catch(err) {
@@ -6037,6 +6048,86 @@
         return (bytes/1048576).toFixed(1) + ' MB';
       }
       
+      
+      // — Subir un solo .zip.webc a R2 conservando categoría —
+      async function gfSubirUnoR2(id, btnEl) {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        const it = _gfItems.find(i => i.id === id);
+        if (!it) return;
+        const itCat  = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+        const r2Key  = itCat + '/' + it.nombre;
+        btnEl.textContent = '⏳';
+        btnEl.disabled    = true;
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(r2Key), {
+            method: 'POST',
+            body:   it.blob,
+          });
+          const data = await resp.json();
+          if (!data.ok) throw new Error(data.error);
+          btnEl.textContent = '✅';
+          actualizarStatus('✅ Subido a R2: ' + r2Key);
+        } catch(err) {
+          btnEl.textContent  = '❌';
+          btnEl.disabled     = false;
+          actualizarStatus('❌ Error al subir: ' + err.message);
+        }
+      }
+
+      // — Subir todos los .zip.webc de la lista a R2 —
+      async function gfSubirTodosR2() {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        if (!_gfItems.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
+        const prog = document.getElementById('gfProgresoDescifrar');
+        const base = CF_WORKER.replace(/\/$/, '');
+        let ok = 0, errores = 0;
+        for (const it of _gfItems) {
+          const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+          const r2Key = itCat + '/' + it.nombre;
+          prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + it.nombre;
+          try {
+            const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(r2Key), {
+              method: 'POST',
+              body:   it.blob,
+            });
+            const data = await resp.json();
+            if (!data.ok) throw new Error(data.error);
+            ok++;
+          } catch(err) {
+            errores++;
+            prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
+          }
+        }
+        prog.textContent = '✅ ' + ok + ' subido(s)' + (errores ? ' · ❌ ' + errores + ' error(es)' : '') + ' — R2';
+      }
+
+      // — Recuperar .zip.webc de R2 → importar a IDB con categoría —
+      async function gfCloudDescargarTodos() {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        if (!_gfCloudItems.length) { actualizarStatus('⚠️ Sin archivos en R2.'); return; }
+        const prog = document.getElementById('gfProgresoDescifrar');
+        const base = CF_WORKER.replace(/\/$/, '');
+        let ok = 0;
+        for (const o of _gfCloudItems) {
+          prog.textContent = '⬇️ Recuperando ' + (ok+1) + '/' + _gfCloudItems.length + ': ' + o.key;
+          try {
+            const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(o.key));
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const blob = await resp.blob();
+            // Extraer categoría y nombre de la key: "categoria/nombre.zip.webc"
+            const partes  = o.key.split('/');
+            const itCat   = partes.length > 1 ? partes[0] : 'mangas';
+            const itNombre = partes[partes.length - 1];
+            await bvGuardar(itNombre, blob, itCat);
+            ok++;
+          } catch(err) {
+            prog.textContent = '❌ Error en ' + o.key + ': ' + err.message;
+          }
+        }
+        prog.textContent = '✅ ' + ok + ' archivo(s) recuperado(s) a la bóveda.';
+        if (ok) renderBoveda();
+      }
 
       /* =============================================
          10. INIT
