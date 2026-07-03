@@ -1045,7 +1045,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v97❄️
+          PerfectView🪷v98❄️
         </div>
       </header>
 
@@ -5630,13 +5630,11 @@
             const seccion = document.createElement('div');
             seccion.style.cssText = 'margin-bottom:14px';
 
-            const titulo = document.createElement('div');
-            titulo.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px';
             const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
-            titulo.innerHTML = gfCatLabel(cat)
-              + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
-              + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
-            seccion.appendChild(titulo);
+
+            // Contenedor de items (colapsable)
+            const cuerpo = document.createElement('div');
+            cuerpo.style.cssText = 'overflow:hidden;transition:max-height .25s ease;max-height:2000px';
 
             lista.forEach(it => {
               const row = document.createElement('div');
@@ -5646,8 +5644,26 @@
                 + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
                 + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
                 + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600;white-space:nowrap">CIFRADO</span>' : '');
-              seccion.appendChild(row);
+              cuerpo.appendChild(row);
             });
+
+            // Título clickeable
+            const titulo = document.createElement('div');
+            titulo.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none';
+            titulo.innerHTML = '<span class="gf-chevron" style="font-size:.7rem;transition:transform .25s;display:inline-block">▼</span>'
+              + gfCatLabel(cat)
+              + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
+              + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
+
+            let abierto = true;
+            titulo.addEventListener('click', () => {
+              abierto = !abierto;
+              cuerpo.style.maxHeight  = abierto ? cuerpo.scrollHeight + 'px' : '0';
+              titulo.querySelector('.gf-chevron').style.transform = abierto ? 'rotate(0deg)' : 'rotate(-90deg)';
+            });
+
+            seccion.appendChild(titulo);
+            seccion.appendChild(cuerpo);
             el.appendChild(seccion);
           });
         } catch(err) {
