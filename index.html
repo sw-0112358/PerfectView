@@ -5007,8 +5007,15 @@
                   e.stopPropagation();
                   const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
                   if (cfg.buscarZipFn) {
-                    const reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                    let reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                    if (!reg2) {
+                      // ZIP no existe aún — generarlo desde slot
+                      actualizarStatus('⏳ Generando ZIP para descargar…');
+                      await gfGenerarZipsDeTemp(cfg.categoriaDB);
+                      reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                    }
                     if (reg2) bovedaDescargar(reg2.id, nombre);
+                    else actualizarStatus('❌ ZIP no encontrado — abre el capítulo primero');
                   } else if (zipId) {
                     bovedaDescargar(zipId, nombre);
                   }
@@ -5033,8 +5040,14 @@
               e.stopPropagation();
               const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
               if (cfg.buscarZipFn) {
-                const reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                let reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                if (!reg) {
+                  actualizarStatus('⏳ Generando ZIP para descargar…');
+                  await gfGenerarZipsDeTemp(cfg.categoriaDB);
+                  reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                }
                 if (reg) bovedaDescargar(reg.id, nombre);
+                else actualizarStatus('❌ ZIP no encontrado — abre el capítulo primero');
               } else if (zipId) {
                 bovedaDescargar(zipId, nombre);
               }
