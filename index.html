@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v109❄️
+          PerfectView🪷v120❄️
         </div>
       </header>
 
@@ -3207,6 +3207,7 @@
             const urlsMap = {};
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+            zip.file('meta.json', JSON.stringify({ version:1, tipo:'zonascans', nombre:col.nombre, url:col.url||'', capitulo:cap.titulo, cap_num:cap.titulo, capitulos:col.capitulos||[] }, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zsNombre = col.nombre + ' - ' + cap.titulo + '.zip';
             const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, col.id, cap.titulo);
@@ -3241,6 +3242,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('meta.json', JSON.stringify({ version:1, tipo:'zonascans', nombre:col.nombre, url:col.url||'', capitulo:cap.titulo, cap_num:cap.titulo, capitulos:col.capitulos||[] }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zsNombre = col.nombre + ' - ' + cap.titulo + '.zip';
           const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, col.id, cap.titulo);
@@ -5326,6 +5328,7 @@
             const urlsMap = {};
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+            zip.file('meta.json', JSON.stringify({ version:1, tipo:'manhwa', nombre:coleccion.nombre, base_url:coleccion.base_url||'', slug:coleccion.slug||'', capitulo:cap.num, cap_num:cap.num, capitulos:coleccion.capitulos||[] }, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
             if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
@@ -5354,6 +5357,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('meta.json', JSON.stringify({ version:1, tipo:'manhwa', nombre:coleccion.nombre, base_url:coleccion.base_url||'', slug:coleccion.slug||'', capitulo:cap.num, cap_num:cap.num, capitulos:coleccion.capitulos||[] }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
           if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
