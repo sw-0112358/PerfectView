@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v104❄️
+          PerfectView🪷v105❄️
         </div>
       </header>
 
@@ -1138,6 +1138,9 @@
             </button>
             <button class="action-btn" onclick="abrirGestorArchivos()">
               <span class="icon">🗂️</span> Gestor
+            </button>
+            <button class="action-btn" onclick="abrirPanelClave()">
+              <span class="icon">🧬</span> Clave
             </button>
             <button class="action-btn" id="btnEnviarBoveda" onclick="enviarABoveda()" style="display:none">
               <span class="icon">📨🔐</span> 
@@ -1308,7 +1311,9 @@
               </div>
               <div class="field-group" style="margin-bottom:10px">
                 <label class="field-label">Contraseña</label>
-                <input type="text" id="gfPwdCifrar" value="🪷🌸💠" style="font-size:1.1rem;letter-spacing:2px">
+                <div id="gfPwdCifrarInfo" style="font-size:.8rem;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted)">
+                  🔐 Usando contraseña maestra — <a href="#" onclick="abrirPanelClave();return false" style="color:var(--accent)">cambiar</a>
+                </div>
               </div>
               <div id="gfListaCifrar" style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Selecciona una categoría para ver los archivos.</div>
               <button class="action-btn" style="width:100%;justify-content:center" onclick="_gfStorage==='cloud'?gfCifrarTodosCloud():gfCifrarTodos()">
@@ -1336,7 +1341,9 @@
               </div>
               <div class="field-group" style="margin-bottom:10px">
                 <label class="field-label">Contraseña</label>
-                <input type="text" id="gfPwdDescifrar" value="🪷🌸💠" style="font-size:1.1rem;letter-spacing:2px">
+                <div id="gfPwdDescifrarInfo" style="font-size:.8rem;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted)">
+                  🔐 Usando contraseña maestra — <a href="#" onclick="abrirPanelClave();return false" style="color:var(--accent)">cambiar</a>
+                </div>
               </div>
               <div id="gfListaDescifrar" style="font-size:.82rem;color:var(--text-muted);margin-bottom:10px">Selecciona una categoría para ver los archivos.</div>
               <button class="action-btn" style="width:100%;justify-content:center" onclick="_gfStorage==='cloud'?gfCloudDescargarTodos():gfDescifrarTodos()">
@@ -1348,6 +1355,67 @@
 
         </div>
       </div><!-- /pantalla4 -->
+
+      <!-- ============================================================
+           PANTALLA 5 — PANEL 🧬 CLAVE MAESTRA
+      ============================================================ -->
+      <div id="pantalla5" style="display:none;height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain">
+        <div style="padding:16px;max-width:700px;margin:0 auto;width:100%">
+
+          <!-- Header -->
+          <div style="background:var(--surface);border-radius:var(--radius);padding:12px;margin-bottom:12px;border:1px solid var(--border)">
+            <div class="bv-titulo" style="margin-bottom:4px">🧬 Clave Maestra</div>
+            <div style="font-size:.78rem;color:var(--text-muted)">La contraseña final es la suma de ambas partes</div>
+          </div>
+
+          <!-- Botón volver -->
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="btn-ghost btn-sm" style="flex:1" onclick="bvNavegar('pantalla1')">← Volver</button>
+          </div>
+
+          <!-- ID activa -->
+          <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:12px;text-align:center">
+            ID activa: <span id="clvIdActiva" style="color:var(--accent);font-weight:600">—</span>
+          </div>
+
+          <!-- Parte Local -->
+          <div class="card" style="margin-bottom:10px">
+            <div class="card-title">📱 Parte Local</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input type="text" id="clvParteLocal" placeholder="Parte guardada en este dispositivo"
+                style="flex:1" oninput="clvActualizarFinal()">
+              <button class="btn-ghost btn-sm" onclick="clvGenerarRandom('clvParteLocal')" title="Generar aleatoria">🎲</button>
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted)">Se guarda en localStorage de este dispositivo</div>
+          </div>
+
+          <!-- Parte Worker -->
+          <div class="card" style="margin-bottom:10px">
+            <div class="card-title">☁️ Parte Worker</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input type="text" id="clvParteKV" placeholder="Parte guardada en Cloudflare KV"
+                style="flex:1" oninput="clvActualizarFinal()">
+              <button class="btn-ghost btn-sm" onclick="clvGenerarRandom('clvParteKV')" title="Generar aleatoria">🎲</button>
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted)">Se guarda en el Worker (Cloudflare KV)</div>
+          </div>
+
+          <!-- Contraseña final -->
+          <div class="card" style="margin-bottom:16px;border-color:var(--accent)">
+            <div class="card-title">🔐 Contraseña Maestra Final</div>
+            <input type="text" id="clvFinal" readonly
+              style="font-size:.85rem;background:var(--surface2);cursor:default;color:var(--accent);font-weight:600;letter-spacing:1px">
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:6px">LocalStorage + CloudKV · Solo existe en memoria</div>
+          </div>
+
+          <!-- Botón guardar -->
+          <button class="action-btn" style="width:100%;justify-content:center;margin-bottom:8px" onclick="clvGuardar()">
+            <span class="icon">💾</span> Guardar ambas partes
+          </button>
+          <div id="clvStatus" style="font-size:.8rem;color:var(--text-muted);text-align:center;min-height:18px"></div>
+
+        </div>
+      </div><!-- /pantalla5 -->
 
     </div><!-- /frameMain -->
 
@@ -1930,6 +1998,7 @@
         document.getElementById('pantalla1').style.display = (id === 'pantalla1') ? 'block' : 'none';
         document.getElementById('pantalla3').style.display = (id === 'pantalla3') ? 'block' : 'none';
         document.getElementById('pantalla4').style.display = (id === 'pantalla4') ? 'block' : 'none';
+        document.getElementById('pantalla5').style.display = (id === 'pantalla5') ? 'block' : 'none';
         const el = document.getElementById(id);
         if (el) el.scrollTop = 0;
       }
@@ -6074,8 +6143,8 @@
 
       // — Cifrar todos los .zip de la lista actual —
       async function gfCifrarTodos() {
-        const pwd = document.getElementById('gfPwdCifrar').value;
-        if (!pwd) { alert('Ingresa una contraseña'); return; }
+        const pwd = _gfPwdMaestra || '';
+        if (!pwd) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); abrirPanelClave(); return; }
         const prog = document.getElementById('gfProgresoCifrar');
         if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para cifrar.'; return; }
         try {
@@ -6097,8 +6166,8 @@
 
       // — Descifrar todos los .zip.webc de la lista actual —
       async function gfDescifrarTodos() {
-        const pwd = document.getElementById('gfPwdDescifrar').value;
-        if (!pwd) { alert('Ingresa una contraseña'); return; }
+        const pwd = _gfPwdMaestra || '';
+        if (!pwd) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); abrirPanelClave(); return; }
         const prog = document.getElementById('gfProgresoDescifrar');
         if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para descifrar.'; return; }
         try {
@@ -6207,6 +6276,138 @@
         if (ok) renderBoveda();
       }
 
+      
+      /* =============================================
+         PANEL 🧬 — CLAVE MAESTRA
+      ============================================= */
+
+      let _gfPwdMaestra = null; // contraseña maestra en memoria
+      let _clvIdActiva  = null; // ID con la que se cargaron las partes
+
+      // — Abrir panel: pide ID primero —
+      async function abrirPanelClave() {
+        const id = prompt('🧬 Ingresa tu ID para acceder a la clave:', _clvIdActiva || '🪷🌸💠');
+        if (id === null || !id.trim()) return;
+        _clvIdActiva = id.trim();
+        document.getElementById('clvIdActiva').textContent = _clvIdActiva;
+
+        // Cargar parte local
+        const local = localStorage.getItem('gf_pwd_' + _clvIdActiva) || '';
+        document.getElementById('clvParteLocal').value = local;
+
+        // Cargar parte KV
+        let kv = '';
+        if (CF_WORKER) {
+          try {
+            const base = CF_WORKER.replace(/\/$/, '');
+            const resp = await fetch(base + '/kv-load?key=' + encodeURIComponent('gf_pwd_' + _clvIdActiva));
+            const data = await resp.json();
+            if (data.ok && data.value) kv = data.value;
+          } catch(e) {}
+        }
+        document.getElementById('clvParteKV').value = kv;
+
+        clvActualizarFinal();
+        bvNavegar('pantalla5');
+      }
+
+      // — Actualizar contraseña final en tiempo real —
+      function clvActualizarFinal() {
+        const local = document.getElementById('clvParteLocal').value;
+        const kv    = document.getElementById('clvParteKV').value;
+        const final = local + kv;
+        document.getElementById('clvFinal').value = final;
+        _gfPwdMaestra = final || null;
+      }
+
+      // — Generar parte aleatoria —
+      function clvGenerarRandom(inputId) {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*';
+        let result  = '';
+        const arr   = crypto.getRandomValues(new Uint8Array(24));
+        arr.forEach(b => result += chars[b % chars.length]);
+        document.getElementById(inputId).value = result;
+        clvActualizarFinal();
+      }
+
+      // — Guardar ambas partes —
+      async function clvGuardar() {
+        if (!_clvIdActiva) { document.getElementById('clvStatus').textContent = '⚠️ No hay ID activa'; return; }
+        const local = document.getElementById('clvParteLocal').value;
+        const kv    = document.getElementById('clvParteKV').value;
+        const st    = document.getElementById('clvStatus');
+        st.textContent = '⏳ Guardando…';
+
+        // Guardar local
+        try {
+          localStorage.setItem('gf_pwd_' + _clvIdActiva, local);
+        } catch(e) {
+          st.textContent = '❌ Error al guardar en localStorage: ' + e.message;
+          return;
+        }
+
+        // Guardar KV
+        if (CF_WORKER) {
+          try {
+            const base = CF_WORKER.replace(/\/$/, '');
+            const resp = await fetch(base + '/kv-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: 'gf_pwd_' + _clvIdActiva, value: kv })
+            });
+            const data = await resp.json();
+            if (!data.ok) throw new Error(data.error || 'Error KV');
+          } catch(e) {
+            st.textContent = '❌ Error al guardar en Worker: ' + e.message;
+            return;
+          }
+        }
+
+        clvActualizarFinal();
+        st.textContent = '✅ Guardado — Contraseña maestra activa';
+        setTimeout(() => { st.textContent = ''; }, 3000);
+      }
+
+      // — Abrir Gestor: pide clave maestra si no existe —
+      const _abrirGestorOriginal = abrirGestorArchivos;
+      function abrirGestorArchivos() {
+        if (!_gfPwdMaestra) {
+          const id = prompt('🧬 Ingresa tu ID para activar la clave maestra:', '🪷🌸💠');
+          if (id === null) return;
+          _clvIdActiva = id.trim();
+          document.getElementById('clvIdActiva').textContent = _clvIdActiva;
+          // Cargar partes y luego abrir gestor
+          _clvCargarYAbrir();
+          return;
+        }
+        bvNavegar('pantalla4');
+        gfEscanear();
+      }
+
+      async function _clvCargarYAbrir() {
+        const local = localStorage.getItem('gf_pwd_' + _clvIdActiva) || '';
+        document.getElementById('clvParteLocal').value = local;
+        let kv = '';
+        if (CF_WORKER) {
+          try {
+            const base = CF_WORKER.replace(/\/$/, '');
+            const resp = await fetch(base + '/kv-load?key=' + encodeURIComponent('gf_pwd_' + _clvIdActiva));
+            const data = await resp.json();
+            if (data.ok && data.value) kv = data.value;
+          } catch(e) {}
+        }
+        document.getElementById('clvParteKV').value = kv;
+        clvActualizarFinal();
+        if (_gfPwdMaestra) {
+          bvNavegar('pantalla4');
+          gfEscanear();
+        } else {
+          actualizarStatus('⚠️ No se encontró clave para esa ID — configura en 🧬');
+          bvNavegar('pantalla5');
+        }
+      }
+      
+      
       /* =============================================
          10. INIT
       ============================================= */
@@ -6217,6 +6418,7 @@
         document.getElementById('pantalla1').style.display = 'block';
         document.getElementById('pantalla3').style.display = 'none';
         document.getElementById('pantalla4').style.display = 'none';
+        document.getElementById('pantalla5').style.display = 'none';
         document.getElementById('pantalla2').style.display = 'none';
         cargarLinksLocal();
       });
