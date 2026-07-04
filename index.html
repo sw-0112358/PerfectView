@@ -6634,6 +6634,7 @@
       
       // — Restaurar blob desde estructura de carpetas R2 —
       async function gfRestaurarDesdeEstructura(keyOpaca, nombreReal, blob) {
+        actualizarStatus('🔍 Restaurando: ' + nombreReal + ' (cat: ' + nombreReal.split('/')[0] + ')');
         const partes = nombreReal.split('/');
         const itCat  = partes[0];
 
