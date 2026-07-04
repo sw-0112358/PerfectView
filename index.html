@@ -3094,6 +3094,140 @@
       ];
 
       /* =============================================
+         CAT_CONECTORES — registro central de categorías
+         Cada entrada describe cómo se comporta una categoría
+         sin tocar los stores existentes.
+      ============================================= */
+      const CAT_CONECTORES = {
+
+        // ── Nivel 2: una tarjeta = un ZIP completo ──
+        mangas: {
+          nivel: 2, icon: '📚', label: 'Mangas',
+          store: 'zips', slotPrefix: null, zipCatField: 'mangas',
+          listar:          () => bvListar('mangas'),
+          eliminar:        async item => { await bvEliminarDB(item.id); await bvEliminarPortada(item.id); },
+          abrirEnVisor:    (item, todos) => bovedaAbrirEnVisor(item, todos),
+          getPortada:      async item => bvCargarPortadaOSlot(item.id, null),
+          render:          contenedor => renderBoveda(),
+        },
+
+        nhentai: {
+          nivel: 2, icon: '🪷', label: 'nhentai',
+          store: 'nh_galerias', slotPrefix: 'nh', zipCatField: 'nhentai',
+          listar:          () => nhListar(),
+          eliminar:        async gal => {
+            if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+            await nhEliminarDB(gal.id);
+          },
+          abrirEnVisor:    gal => nhAbrirEnVisor(gal),
+          descargar:       (gal, cardEl) => nhDescargarGaleria(gal, cardEl),
+          getPortada:      gal => bvCargarPortadaOSlot(gal.zip_id, 'nh-' + gal.id),
+          guardarPortada:  (gal, blob) => gal.zip_id ? bvGuardarPortada(gal.zip_id, blob).catch(() => {}) : null,
+          tieneZip:        gal => !!gal.zip_id,
+          render:          contenedor => renderNhentai(contenedor),
+        },
+
+        hitomi: {
+          nivel: 2, icon: '🌸', label: 'Hitomi',
+          store: 'ht_galerias', slotPrefix: 'ht', zipCatField: 'hitomi',
+          listar:          () => htListar(),
+          eliminar:        async gal => {
+            if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
+            await htEliminarDB(gal.id);
+          },
+          abrirEnVisor:    gal => htAbrirEnVisor(gal),
+          descargar:       (gal, cardEl) => htDescargarGaleria(gal, cardEl),
+          getPortada:      gal => bvCargarPortadaOSlot(gal.zip_id, 'ht-' + gal.id),
+          guardarPortada:  (gal, blob) => gal.zip_id ? bvGuardarPortada(gal.zip_id, blob).catch(() => {}) : null,
+          tieneZip:        gal => !!gal.zip_id,
+          render:          contenedor => renderHitomi(contenedor),
+        },
+
+        // ── Nivel 3: una tarjeta = colección, dentro tiene capítulos ──
+        samurai: {
+          nivel: 3, icon: '⚔️', label: 'Samurai',
+          store: 'sjz_colecciones', slotPrefix: 'sjz', zipCatField: 'samurai',
+          listar:          () => sjzListar(),
+          eliminar:        async col => sjzEliminarDB(col.id),
+          exportar:        col => sjzExportarZipCompleto(col),
+          getPortada:      col => sjzBuscarZipCapitulo(col.id, 1).then(async reg => {
+            const blob = await bvCargarPortadaOSlot(reg ? reg.id : null, 'sjz-' + col.id + '-1');
+            if (blob && reg) bvGuardarPortada(reg.id, blob).catch(() => {});
+            return blob;
+          }),
+          getCaps:         col => col.capitulos,
+          getCapClave:     cap => cap.num,
+          getCapLabel:     cap => cap.num,
+          getCapSlotId:    (col, cap) => 'sjz-' + col.id + '-' + cap.num,
+          buscarZipCap:    (colId, clave) => capBuscarZip('samurai', colId, Number(clave)),
+          abrirCapFn:      sjzAbrirCapitulo,
+          buscarNuevos:    () => sjzBuscarNuevos(),
+          getMetaLinea:    col => col.capitulos.length + ' capítulos · ' + col.base_url,
+          getDescargarLabel: (cap, nombre) => nombre + ' - Cap ' + cap.num + '.zip',
+          render:          contenedor => renderSamurai(contenedor),
+          colActual:       () => _sjzColeccionActual,
+          setColActual:    col => { _sjzColeccionActual = col; },
+        },
+
+        manhwa: {
+          nivel: 3, icon: '📖', label: 'Manhwa',
+          store: 'mw_colecciones', slotPrefix: 'mw', zipCatField: 'manhwa',
+          listar:          () => mwListar(),
+          eliminar:        async col => mwEliminarDB(col.id),
+          exportar:        col => mwExportarZipCompleto(col),
+          getPortada:      col => mwBuscarZipCapitulo(col.id, 1).then(async reg => {
+            const blob = await bvCargarPortadaOSlot(reg ? reg.id : null, 'mw-' + col.id + '-1');
+            if (blob && reg) bvGuardarPortada(reg.id, blob).catch(() => {});
+            return blob;
+          }),
+          getCaps:         col => col.capitulos,
+          getCapClave:     cap => cap.num,
+          getCapLabel:     cap => cap.num,
+          getCapSlotId:    (col, cap) => 'mw-' + col.id + '-' + cap.num,
+          buscarZipCap:    (colId, clave) => capBuscarZip('manhwa', colId, Number(clave)),
+          abrirCapFn:      mwAbrirCapitulo,
+          buscarNuevos:    () => mwAgregarEpisodios(),
+          getMetaLinea:    col => col.capitulos.length + ' episodios',
+          getDescargarLabel: (cap, nombre) => nombre + ' - Cap ' + cap.num + '.zip',
+          render:          contenedor => renderManhwa(contenedor),
+          colActual:       () => _mwColeccionActual,
+          setColActual:    col => { _mwColeccionActual = col; },
+        },
+
+        zonascans: {
+          nivel: 3, icon: '📡', label: 'ZonaScans',
+          store: 'zs_colecciones', slotPrefix: 'zs', zipCatField: 'zonascans',
+          listar:          () => zsListar(),
+          eliminar:        async col => zsEliminarDB(col.id),
+          exportar:        col => zsExportarZipCompleto(col),
+          getPortada:      col => zsBuscarZipPrimero(col.id).then(async reg => {
+            let blob = reg ? await bvCargarPortadaOSlot(reg.id, null) : null;
+            if (!blob) {
+              const slots  = await dtListar().catch(() => []);
+              const slot   = slots.find(s => s.slotId.startsWith('zs-' + col.id + '-') && s.imagenes && s.imagenes.length);
+              if (slot) {
+                const ords = slot.imagenes.sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+                blob = ords[0] && ords[0].blob ? ords[0].blob : null;
+              }
+            }
+            return blob;
+          }),
+          getCaps:         col => col.caps,
+          getCapClave:     cap => cap.titulo,
+          getCapLabel:     cap => cap.titulo,
+          getCapSlotId:    (col, cap) => 'zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-'),
+          buscarZipCap:    (colId, clave) => capBuscarZip('zonascans', colId, clave),
+          abrirCapFn:      zsAbrirCapitulo,
+          buscarNuevos:    () => zsBuscarNuevos(),
+          getMetaLinea:    col => (col.caps ? col.caps.length : 0) + ' capítulos · ' + col.url,
+          getDescargarLabel: (cap, nombre) => nombre + ' - ' + cap.titulo + '.zip',
+          render:          contenedor => renderZonaScans(contenedor),
+          colActual:       () => _zsColeccionActual,
+          setColActual:    col => { _zsColeccionActual = col; },
+        },
+      };
+
+      /* =============================================
          ZONASCANS / ARCHIVIUMBAR
       ============================================= */
 
@@ -3407,90 +3541,108 @@
         }
       }
 
-      async function renderZonaScans(contenedor) {
+      /* =============================================
+         RENDER GENÉRICO NIVEL 3
+         Una tarjeta = colección, dentro tiene capítulos
+         cfg: { cat, gridId, panelHtml, ordenDesc, setOrdenDesc }
+      ============================================= */
+      async function renderNivel3(contenedor, cfg) {
         contenedor.innerHTML = '';
+        const con    = CAT_CONECTORES[cfg.cat];
+        const colAct = con.colActual();
 
-        const bc = document.createElement('div');
-        bc.className = 'bv-breadcrumb';
-
-        if (_zsColeccionActual) {
+        // — Vista capítulos (colección abierta) —
+        if (colAct) {
           await renderVistaCapitulos(contenedor, {
-            coleccion:       _zsColeccionActual,
-            caps:            _zsColeccionActual.caps,
-            getClave:        cap => cap.titulo,
-            getLabel:        cap => cap.titulo,
-            categoriaDB:     'zonascans',
-            ordenDesc:       _zsOrdenDesc,
-            onToggleOrden:   () => { _zsOrdenDesc = !_zsOrdenDesc; renderZonaScans(document.getElementById('bvLista')); },
-            onBuscarNuevos:  zsBuscarNuevos,
-            onVolver:        () => { _zsColeccionActual = null; renderBoveda(); },
-            onVolverLabel:   'Menú',
-            iconoCategoria:  '📡',
-            metaLinea:       null,
-            getDescargarLabel: (cap, nombre) => nombre + ' - ' + cap.titulo + '.zip',
-            buscarZipFn:     (colId, titulo) => capBuscarZip('zonascans', colId, titulo),
-            abrirCapFn:      zsAbrirCapitulo,
+            coleccion:         colAct,
+            caps:              con.getCaps(colAct),
+            getClave:          con.getCapClave,
+            getLabel:          con.getCapLabel,
+            categoriaDB:       con.zipCatField,
+            ordenDesc:         cfg.ordenDesc,
+            onToggleOrden:     () => { cfg.setOrdenDesc(!cfg.ordenDesc); renderBoveda(); },
+            onBuscarNuevos:    () => con.buscarNuevos(colAct),
+            onVolver:          () => { con.setColActual(null); renderBoveda(); },
+            onVolverLabel:     con.label,
+            iconoCategoria:    con.icon,
+            metaLinea:         con.getMetaLinea(colAct),
+            getDescargarLabel: con.getDescargarLabel,
+            buscarZipFn:       con.buscarZipCap,
+            abrirCapFn:        con.abrirCapFn,
           });
           return;
         }
 
+        // — Vista lista de colecciones —
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
         bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
           + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">📡 ZonaScans</span>';
+          + '<span class="bv-breadcrumb-label">' + con.icon + ' ' + con.label + '</span>';
         contenedor.appendChild(bc);
 
-        const panel = document.createElement('div');
-        panel.className = 'sjz-panel';
-        panel.innerHTML = `
-          <div class="sjz-panel-title">📡 ZONASCANS / ARCHIVIUMBAR</div>
-          <div class="sjz-row">
-            <input id="zsUrl" class="sjz-input" placeholder="https://archiviumbar.com/manga/slug/" style="flex:1">
-            <button class="sjz-btn" onclick="zsBuscarInfo()">🔍</button>
-      </div>
-          <div id="zsInfo" class="sjz-info"></div>
-          <button id="zsBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none" onclick="actualizarStatus('🔍 pendiente: ' + (!!_zsInfoPendiente) + ' · caps: ' + (_zsInfoPendiente?.caps?.length||0)); zsConfirmarDescarga()">➕ Agregar a biblioteca</button>
-        `;
-        contenedor.appendChild(panel);
+        if (cfg.panelHtml) {
+          const panel = document.createElement('div');
+          panel.className = 'sjz-panel';
+          panel.innerHTML = cfg.panelHtml;
+          contenedor.appendChild(panel);
+        }
 
-        const colecciones = await zsListar();
-        colecciones.sort((a,b) => b.fecha.localeCompare(a.fecha));
+        let colecciones;
+        try { colecciones = await con.listar(); } catch(e) { colecciones = []; }
+        colecciones.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+        if (!colecciones.length) {
+          const empty = document.createElement('div');
+          empty.className = 'bv-empty';
+          empty.innerHTML = con.icon + ' Sin colecciones guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
+          contenedor.appendChild(empty);
+          return;
+        }
+
         const grid = document.createElement('div');
         grid.className = 'bv-grid';
-        grid.id = 'zsGrid';
+        if (cfg.gridId) grid.id = cfg.gridId;
         contenedor.appendChild(grid);
 
         colecciones.forEach(col => {
           const { card, ph, img } = crearTarjeta({
-            nombre:      col.nombre,
-            phTexto:     '📖',
-            onTap:       () => { _zsColeccionActual = col; renderZonaScans(contenedor); },
-            onDelete:    async () => { await zsEliminarDB(col.id); card.remove(); },
-            btnSecundario: {
-              texto:   '📦',
-              titulo:  'Exportar colección completa',
-              style:   'top:6px;right:36px',
-              onClick: () => zsExportarZipCompleto(col),
-            },
+            nombre:        col.nombre,
+            phTexto:       con.icon,
+            onTap:         () => { con.setColActual(col); renderBoveda(); },
+            onDelete:      async () => { await con.eliminar(col); card.remove(); },
+            btnSecundario: con.exportar ? {
+              texto: '📦', titulo: 'Exportar colección completa',
+              onClick: () => con.exportar(col),
+            } : null,
           });
           grid.appendChild(card);
-          // Cargar portada del primer capítulo descargado — desde portadas store o slot temp
-          zsBuscarZipPrimero(col.id).then(async reg => {
-            // Intentar portada guardada; si no, buscar en slots temp de esta colección
-            let blob = reg ? await bvCargarPortadaOSlot(reg.id, null) : null;
-            if (!blob) {
-              const slots = await dtListar().catch(() => []);
-              const prefijo = 'zs-' + col.id + '-';
-              const slot = slots.find(s => s.slotId.startsWith(prefijo) && s.imagenes && s.imagenes.length);
-              if (slot) {
-                const ordenadas = slot.imagenes.sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-                blob = ordenadas[0] && ordenadas[0].blob ? ordenadas[0].blob : null;
-              }
-            }
+
+          // Portada desde conector
+          con.getPortada(col).then(blob => {
             if (!blob) return;
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
             ph.style.display  = 'none';
           }).catch(() => {});
+        });
+      }
+
+      async function renderZonaScans(contenedor) {
+        await renderNivel3(contenedor, {
+          cat:         'zonascans',
+          gridId:      'zsGrid',
+          ordenDesc:   _zsOrdenDesc,
+          setOrdenDesc: v => { _zsOrdenDesc = v; },
+          panelHtml:
+            '<div class="sjz-panel-title">📡 ZONASCANS / ARCHIVIUMBAR</div>'
+            + '<div class="sjz-row">'
+            +   '<input id="zsUrl" class="sjz-input" placeholder="https://archiviumbar.com/manga/slug/" style="flex:1">'
+            +   '<button class="sjz-btn" onclick="zsBuscarInfo()">🔍</button>'
+            + '</div>'
+            + '<div id="zsInfo" class="sjz-info"></div>'
+            + '<button id="zsBtnDescargar" class="sjz-btn sjz-btn-primary" style="width:100%;display:none"'
+            + ' onclick="zsConfirmarDescarga()">➕ Agregar a biblioteca</button>',
         });
       }
 
@@ -3949,91 +4101,115 @@
       }
 
       // — Render hitomi —
-      async function renderHitomi(contenedor) {
+      /* =============================================
+         RENDER GENÉRICO NIVEL 2
+         Una tarjeta = un ZIP completo (hitomi, nhentai, mangas)
+         cfg: {
+           cat,          // id de categoría
+           panelHtml,    // string HTML del panel de entrada
+           gridId,       // id opcional para el grid
+           getBtnSec,    // fn(gal, card) → { texto, titulo?, onClick }
+           onTap,        // fn(gal, card) → acción al tocar tarjeta
+         }
+      ============================================= */
+      async function renderNivel2(contenedor, cfg) {
         contenedor.innerHTML = '';
+        const con = CAT_CONECTORES[cfg.cat];
 
+        // Breadcrumb
         const bc = document.createElement('div');
         bc.className = 'bv-breadcrumb';
         bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
           + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">🌸 Hitomi</span>';
+          + '<span class="bv-breadcrumb-label">' + con.icon + ' ' + con.label + '</span>';
         contenedor.appendChild(bc);
 
-        const panel = document.createElement('div');
-        panel.className = 'sjz-panel';
-        panel.innerHTML =
-          '<div class="sjz-panel-title">🌸 hitomi.la</div>'
-          + '<div class="sjz-row">'
-          +   '<input class="sjz-input" id="htUrl" placeholder="https://hitomi.la/.../ID.html" type="url">'
-          +   '<button class="sjz-btn sjz-btn-secondary" onclick="htBuscarInfo()">🔍</button>'
-          + '</div>'
-          + '<div class="sjz-info" id="htInfo"></div>'
-          + '<div id="htBtnDescargar" style="display:none;margin-top:8px">'
-          +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">➕ Agregar a biblioteca</button>'
-          + '</div>';
-        contenedor.appendChild(panel);
+        // Panel de entrada específico de la fuente
+        if (cfg.panelHtml) {
+          const panel = document.createElement('div');
+          panel.className = 'sjz-panel';
+          panel.innerHTML = cfg.panelHtml;
+          contenedor.appendChild(panel);
+        }
 
+        // Cargar lista
         let galerias;
-        try { galerias = await htListar(); } catch(e) { galerias = []; }
+        try { galerias = await con.listar(); } catch(e) { galerias = []; }
+        galerias.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
 
         if (!galerias.length) {
           const empty = document.createElement('div');
           empty.className = 'bv-empty';
-          empty.innerHTML = '🌸 Sin galerías guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
+          empty.innerHTML = con.icon + ' Sin entradas guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
           contenedor.appendChild(empty);
           return;
         }
 
-        galerias.sort((a,b) => b.fecha.localeCompare(a.fecha));
         const grid = document.createElement('div');
         grid.className = 'bv-grid';
+        if (cfg.gridId) grid.id = cfg.gridId;
 
         galerias.forEach(gal => {
           const { card, ph, img } = crearTarjeta({
-            nombre:   gal.nombre,
-            phTexto:  gal.zip_id ? '📖' : '⬇️',
-            onTap:    () => gal.zip_id ? htAbrirEnVisor(gal) : htDescargarGaleria(gal, card),
-            onDelete: async () => {
-              if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
-              await htEliminarDB(gal.id);
-              renderHitomi(contenedor);
-            },
-            btnSecundario: gal.zip_id ? {
-              texto: '🔽', onClick: () => htExportarGaleria(gal)
-            } : {
-              texto: '🔗', titulo: 'Copiar URLs al portapapeles',
-              onClick: async () => {
-                actualizarStatus('⏳ Generando URLs…');
-                try {
-                  let gg;
-                  try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
-                  const lineas = gal.files.map((f, i) => {
-                    const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
-                    return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
-                  });
-                  const blob = new Blob([lineas.join('\n')], { type: 'text/plain' });
-                  const a    = document.createElement('a');
-                  a.href     = URL.createObjectURL(blob);
-                  a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_links.txt';
-                  a.click();
-                  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-                  actualizarStatus('✅ ' + lineas.length + ' URLs descargadas como .txt');
-                } catch(err) { actualizarStatus('❌ ' + err.message); }
-              }
-            }
+            nombre:        gal.nombre,
+            phTexto:       con.tieneZip && con.tieneZip(gal) ? '📖' : '⬇️',
+            onTap:         () => cfg.onTap(gal, card),
+            onDelete:      async () => { await con.eliminar(gal); renderNivel2(contenedor, cfg); },
+            btnSecundario: cfg.getBtnSec(gal, card),
           });
           grid.appendChild(card);
-          const slotHt = 'ht-' + gal.id;
-          bvCargarPortadaOSlot(gal.zip_id, slotHt).then(async blob => {
-            if (blob) {
-              img.src = URL.createObjectURL(blob);
-              img.style.display = 'block';
-              ph.style.display  = 'none';
-              if (gal.zip_id) bvGuardarPortada(gal.zip_id, blob).catch(() => {});
-            }
+
+          // Portada
+          con.getPortada(gal).then(async blob => {
+            if (!blob) return;
+            img.src = URL.createObjectURL(blob);
+            img.style.display = 'block';
+            ph.style.display  = 'none';
+            if (con.guardarPortada) con.guardarPortada(gal, blob);
           }).catch(() => {});
         });
         contenedor.appendChild(grid);
+      }
+
+      async function renderHitomi(contenedor) {
+        await renderNivel2(contenedor, {
+          cat:     'hitomi',
+          gridId:  'htGrid',
+          panelHtml:
+            '<div class="sjz-panel-title">🌸 hitomi.la</div>'
+            + '<div class="sjz-row">'
+            +   '<input class="sjz-input" id="htUrl" placeholder="https://hitomi.la/.../ID.html" type="url">'
+            +   '<button class="sjz-btn sjz-btn-secondary" onclick="htBuscarInfo()">🔍</button>'
+            + '</div>'
+            + '<div class="sjz-info" id="htInfo"></div>'
+            + '<div id="htBtnDescargar" style="display:none;margin-top:8px">'
+            +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="htConfirmarDescarga()">➕ Agregar a biblioteca</button>'
+            + '</div>',
+          onTap: (gal, card) => gal.zip_id ? htAbrirEnVisor(gal) : htDescargarGaleria(gal, card),
+          getBtnSec: (gal) => gal.zip_id ? {
+            texto: '🔽', onClick: () => htExportarGaleria(gal)
+          } : {
+            texto: '🔗', titulo: 'Copiar URLs al portapapeles',
+            onClick: async () => {
+              actualizarStatus('⏳ Generando URLs…');
+              try {
+                let gg;
+                try { gg = await htFetchGG(); } catch(ex) { throw new Error('No se pudo cargar gg.js'); }
+                const lineas = gal.files.map((f, i) => {
+                  const ext = f.hasavif ? 'avif' : (f.haswebp ? 'webp' : 'webp');
+                  return (i + 1) + ': ' + htConstruirUrl(f.hash, ext, gg);
+                });
+                const blob = new Blob([lineas.join('\n')], { type: 'text/plain' });
+                const a    = document.createElement('a');
+                a.href     = URL.createObjectURL(blob);
+                a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '_links.txt';
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                actualizarStatus('✅ ' + lineas.length + ' URLs descargadas como .txt');
+              } catch(err) { actualizarStatus('❌ ' + err.message); }
+            }
+          },
+        });
       }
 
       /* =============================================
@@ -4311,89 +4487,42 @@
 
       // — Render nhentai —
       async function renderNhentai(contenedor) {
-        contenedor.innerHTML = '';
-
-        const bc = document.createElement('div');
-        bc.className = 'bv-breadcrumb';
-        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
-          + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">🪷 nhentai</span>';
-        contenedor.appendChild(bc);
-
-        const panel = document.createElement('div');
-        panel.className = 'sjz-panel';
-        panel.innerHTML =
-          '<div class="sjz-panel-title">🪷 nhentai.net</div>'
-          + '<div class="sjz-row">'
-          +   '<input class="sjz-input" id="nhUrl" placeholder="https://nhentai.net/g/----/" type="url">'
-          +   '<button class="sjz-btn sjz-btn-secondary" onclick="nhBuscarInfo()">🔍</button>'
-          + '</div>'
-          + '<div class="sjz-info" id="nhInfo"></div>'
-          + '<div id="nhBtnDescargar" style="display:none;margin-top:8px">'
-          +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="nhConfirmarDescarga()">⬇️ Descargar</button>'
-          + '</div>';
-        contenedor.appendChild(panel);
-
-        let galerias;
-        try { galerias = await nhListar(); } catch(e) { galerias = []; }
-
-        if (!galerias.length) {
-          const empty = document.createElement('div');
-          empty.className = 'bv-empty';
-          empty.innerHTML = '🪷 Sin galerías guardadas<br><span style="font-size:.8rem">Agrega una con el panel de arriba</span>';
-          contenedor.appendChild(empty);
-          return;
-        }
-
-        galerias.sort((a,b) => b.fecha.localeCompare(a.fecha));
-        const grid = document.createElement('div');
-        grid.className = 'bv-grid';
-        grid.id = 'nhGrid';
-
-        galerias.forEach(gal => {
-          const { card, ph, img } = crearTarjeta({
-            nombre:  gal.nombre,
-            phTexto: gal.zip_id ? '📖' : '⬇️',
-            onTap:   () => nhAbrirEnVisor(gal, card),
-            onDelete: async () => {
-              if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
-              await nhEliminarDB(gal.id);
-              renderNhentai(contenedor);
-            },
-            btnSecundario: gal.zip_id ? {
-              texto: '🔽', onClick: () => nhExportarGaleria(gal)
-            } : {
-              texto: '📎', titulo: 'Exportar links',
-              onClick: async () => {
-                const links = [];
-                for (let i = 0; i < gal.num_pages; i++) {
-                  const path = gal.paths
+        await renderNivel2(contenedor, {
+          cat:    'nhentai',
+          gridId: 'nhGrid',
+          panelHtml:
+            '<div class="sjz-panel-title">🪷 nhentai.net</div>'
+            + '<div class="sjz-row">'
+            +   '<input class="sjz-input" id="nhUrl" placeholder="https://nhentai.net/g/----/" type="url">'
+            +   '<button class="sjz-btn sjz-btn-secondary" onclick="nhBuscarInfo()">🔍</button>'
+            + '</div>'
+            + '<div class="sjz-info" id="nhInfo"></div>'
+            + '<div id="nhBtnDescargar" style="display:none;margin-top:8px">'
+            +   '<button class="sjz-btn sjz-btn-primary" style="width:100%" onclick="nhConfirmarDescarga()">⬇️ Descargar</button>'
+            + '</div>',
+          onTap: (gal, card) => nhAbrirEnVisor(gal, card),
+          getBtnSec: (gal) => gal.zip_id ? {
+            texto: '🔽', onClick: () => nhExportarGaleria(gal)
+          } : {
+            texto: '📎', titulo: 'Exportar links',
+            onClick: async () => {
+              const links = [];
+              for (let i = 0; i < gal.num_pages; i++) {
+                const path = gal.paths
                   ? gal.paths[i]
                   : 'galleries/' + gal.media_id + '/' + (i + 1) + '.webp';
-                  links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
-                }
-                const blob = new Blob([links.join('\n')], { type: 'text/plain' });
-                const a    = document.createElement('a');
-                a.href     = URL.createObjectURL(blob);
-                a.download = gal.nombre.replace(/[\\/:*?"<>|]/g, '_') + '.txt';
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-                actualizarStatus('📎 ' + links.length + ' links exportados');
+                links.push('https://' + NH_CDN[0] + '.nhentai.net/' + path);
               }
+              const blob = new Blob([links.join('\n')], { type: 'text/plain' });
+              const a    = document.createElement('a');
+              a.href     = URL.createObjectURL(blob);
+              a.download = gal.nombre.replace(/[\\/:*?"<>|]/g, '_') + '.txt';
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+              actualizarStatus('📎 ' + links.length + ' links exportados');
             }
-          });
-          grid.appendChild(card);
-          const slotNh = 'nh-' + gal.id;
-          bvCargarPortadaOSlot(gal.zip_id, slotNh).then(async blob => {
-            if (blob) {
-              img.src = URL.createObjectURL(blob);
-              img.style.display = 'block';
-              ph.style.display  = 'none';
-              if (gal.zip_id) bvGuardarPortada(gal.zip_id, blob).catch(() => {});
-            }
-          }).catch(() => {});
+          },
         });
-        contenedor.appendChild(grid);
       }
 
       function bvAbrirCarpeta(id) {
@@ -5155,8 +5284,29 @@
 
       // — Render Samurai —
       async function renderSamurai(contenedor) {
-        contenedor.innerHTML = '';
+        await renderNivel3(contenedor, {
+          cat:          'samurai',
+          gridId:       'sjzGrid',
+          ordenDesc:    _sjzOrdenDesc,
+          setOrdenDesc: v => { _sjzOrdenDesc = v; },
+          panelHtml:
+            '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
+            + '<div class="sjz-row">'
+            +   '<input class="sjz-input" id="sjzUrl" placeholder="https://samurai.j5z.xyz/son/manga-slug/" type="url">'
+            +   '<button class="sjz-btn sjz-btn-secondary" onclick="sjzVerEpisodios()">🔍 Ver</button>'
+            + '</div>'
+            + '<div class="sjz-info" id="sjzInfo"></div>'
+            + '<div class="sjz-row">'
+            +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+            +   '<input class="sjz-input sjz-input-sm" id="sjzInicio" type="number" min="1" placeholder="1">'
+            +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+            +   '<input class="sjz-input sjz-input-sm" id="sjzFinal" type="number" min="1" placeholder="872">'
+            +   '<button class="sjz-btn sjz-btn-primary" onclick="sjzCrearCarpeta()">📁 Crear</button>'
+            + '</div>',
+        });
+        return;
 
+        // — código antiguo eliminado — vista de capítulos y lista ahora en renderNivel3 —
         // Breadcrumb
         const bc = document.createElement('div');
         bc.className = 'bv-breadcrumb';
@@ -5560,139 +5710,25 @@
 
       // — Render Manhwa —
       async function renderManhwa(contenedor) {
-        contenedor.innerHTML = '';
-
-        if (_mwColeccionActual) {
-          // — Vista capítulos —
-          const bc = document.createElement('div');
-          bc.className = 'bv-breadcrumb';
-          bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="_mwColeccionActual=null;renderBoveda()">← Manhwa</button>'
-            + '<span class="bv-breadcrumb-sep">/</span>'
-            + '<span class="bv-breadcrumb-label">📖 ' + _mwColeccionActual.nombre + '</span>'
-            + '<button class="bv-breadcrumb-back" style="margin-left:auto" onclick="mwAgregarEpisodios()" title="Agregar episodios">➕</button>'
-            + '<button class="bv-breadcrumb-back" onclick="_mwOrdenDesc=!_mwOrdenDesc;renderBoveda()" title="Invertir orden">'
-            + (_mwOrdenDesc ? '🔼 Asc' : '🔽 Desc') + '</button>';
-          contenedor.appendChild(bc);
-
-          const meta = document.createElement('div');
-          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px';
-          meta.textContent = _mwColeccionActual.capitulos.length + ' episodios · ' + _mwColeccionActual.slug;
-          contenedor.appendChild(meta);
-
-          let descargados = {};
-          try { descargados = await mwListarDescargados(_mwColeccionActual.id); } catch(e) {}
-
-          const capsOrdenadas = _mwOrdenDesc
-          ? [..._mwColeccionActual.capitulos].reverse()
-          : [..._mwColeccionActual.capitulos];
-
-          const grid = document.createElement('div');
-          grid.className = 'sjz-cap-grid';
-          capsOrdenadas.forEach(cap => {
-            const yaDesc = !!descargados[cap.num];
-            const zipId  = descargados[cap.num];
-            const chip   = document.createElement('div');
-            chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
-            chip.textContent = cap.num;
-            chip.title = yaDesc ? '✅ Cap. ' + cap.num : '⬇️ Cap. ' + cap.num;
-            chip.onclick = () => mwAbrirCapitulo(_mwColeccionActual, cap, chip);
-
-            // Si tiene portada → crecer y mostrar imagen
-            if (yaDesc && zipId) {
-              bvCargarPortada(zipId).then(blob => {
-                if (!blob) return;
-                chip.textContent = '';
-                chip.classList.add('con-portada');
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(blob);
-                const num = document.createElement('div');
-                num.className = 'cap-num';
-                num.textContent = cap.num;
-                const dl = document.createElement('button');
-                dl.textContent = '🔽';
-                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
-                dl.onclick = async e => {
-                  e.stopPropagation();
-                  const reg = await mwBuscarZipCapitulo(_mwColeccionActual.id, cap.num);
-                  if (reg) bovedaDescargar(reg.id, _mwColeccionActual.nombre + ' - Cap ' + cap.num + '.zip');
-                };
-                chip.append(img, num, dl);
-              }).catch(() => {});
-            }
-
-            grid.appendChild(chip);
-          });
-          contenedor.appendChild(grid);
-          return;
-        }
-
-        // — Vista lista de manhwas —
-        const bc = document.createElement('div');
-        bc.className = 'bv-breadcrumb';
-        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
-          + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">📖 Manhwa</span>';
-        contenedor.appendChild(bc);
-
-        const panel = document.createElement('div');
-        panel.className = 'sjz-panel';
-        panel.innerHTML =
-          '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
-          + '<div class="sjz-row">'
-          +   '<input class="sjz-input" id="mwUrl" placeholder="https://manhwaweb.com/manhwa/titulo_id" type="url">'
-          + '</div>'
-          + '<div class="sjz-info" id="mwInfo"></div>'
-          + '<div class="sjz-row">'
-          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
-          +   '<input class="sjz-input sjz-input-sm" id="mwInicio" type="number" min="1" placeholder="1">'
-          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
-          +   '<input class="sjz-input sjz-input-sm" id="mwFinal" type="number" min="1" placeholder="30">'
-          +   '<button class="sjz-btn sjz-btn-primary" onclick="mwCrearCarpeta()">📁 Crear</button>'
-          + '</div>';
-        contenedor.appendChild(panel);
-
-        let colecciones;
-        try { colecciones = await mwListar(); } catch(e) { colecciones = []; }
-
-        if (!colecciones.length) {
-          const empty = document.createElement('div');
-          empty.className = 'bv-empty';
-          empty.innerHTML = '📖 Sin manhwas guardados<br><span style="font-size:.8rem">Agrega uno con el panel de arriba</span>';
-          contenedor.appendChild(empty);
-          return;
-        }
-
-        colecciones.sort((a,b) => b.fecha.localeCompare(a.fecha));
-        const grid = document.createElement('div');
-        grid.className = 'bv-grid';
-
-        colecciones.forEach(col => {
-          const { card, ph, img } = crearTarjeta({
-            nombre:  col.nombre,
-            phTexto: '📖',
-            onTap:   () => { _mwColeccionActual = col; renderManhwa(contenedor); },
-            onDelete: async () => {
-              await mwEliminarDB(col.id);
-              renderManhwa(contenedor);
-            },
-            btnSecundario: {
-              texto: '📦', titulo: 'Exportar colección completa',
-              onClick: () => mwExportarZipCompleto(col)
-            }
-          });
-          grid.appendChild(card);
-
-          mwBuscarZipCapitulo(col.id, 1).then(async reg => {
-            const slotId = 'mw-' + col.id + '-1';
-            const blob   = await bvCargarPortadaOSlot(reg ? reg.id : null, slotId);
-            if (!blob) return;
-            img.src = URL.createObjectURL(blob);
-            img.style.display = 'block';
-            ph.style.display  = 'none';
-            if (reg) bvGuardarPortada(reg.id, blob).catch(() => {});
-          }).catch(() => {});
+        await renderNivel3(contenedor, {
+          cat:          'manhwa',
+          gridId:       'mwGrid',
+          ordenDesc:    _mwOrdenDesc,
+          setOrdenDesc: v => { _mwOrdenDesc = v; },
+          panelHtml:
+            '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
+            + '<div class="sjz-row">'
+            +   '<input class="sjz-input" id="mwUrl" placeholder="https://manhwaweb.com/manhwa/titulo_id" type="url">'
+            + '</div>'
+            + '<div class="sjz-info" id="mwInfo"></div>'
+            + '<div class="sjz-row">'
+            +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+            +   '<input class="sjz-input sjz-input-sm" id="mwInicio" type="number" min="1" placeholder="1">'
+            +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+            +   '<input class="sjz-input sjz-input-sm" id="mwFinal" type="number" min="1" placeholder="30">'
+            +   '<button class="sjz-btn sjz-btn-primary" onclick="mwCrearCarpeta()">📁 Crear</button>'
+            + '</div>',
         });
-        contenedor.appendChild(grid);
       }
 
       // — Render pantalla3 —
