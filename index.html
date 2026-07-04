@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v131❄️
+          PerfectView🪷v135❄️
         </div>
       </header>
 
@@ -3875,19 +3875,17 @@
           });
           grid.appendChild(card);
           if (gal.zip_id) {
-            // Intentar portada — si es .webc y no hay portada mostrar 🔐
-            bvCargarPortada(gal.zip_id).then(blob => {
+            // Mostrar portada y/o candado si es .webc
+            Promise.all([bvCargarPortada(gal.zip_id), bvCargar(gal.zip_id)]).then(([blob, reg]) => {
+              const esCif = reg && reg.nombre && reg.nombre.endsWith('.zip.webc');
               if (blob) {
                 img.src = URL.createObjectURL(blob);
                 img.style.display = 'block';
                 ph.style.display  = 'none';
-              } else {
-                bvCargar(gal.zip_id).then(reg => {
-                  if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
-                    ph.textContent   = '🔐';
-                    ph.style.display = 'block';
-                  }
-                }).catch(() => {});
+              }
+              if (esCif) {
+                ph.textContent   = '🔐';
+                ph.style.display = 'block';
               }
             }).catch(() => {});
           }
@@ -4242,18 +4240,16 @@
           });
           grid.appendChild(card);
           if (gal.zip_id) {
-            bvCargarPortada(gal.zip_id).then(blob => {
+            Promise.all([bvCargarPortada(gal.zip_id), bvCargar(gal.zip_id)]).then(([blob, reg]) => {
+              const esCif = reg && reg.nombre && reg.nombre.endsWith('.zip.webc');
               if (blob) {
                 img.src = URL.createObjectURL(blob);
                 img.style.display = 'block';
                 ph.style.display  = 'none';
-              } else {
-                bvCargar(gal.zip_id).then(reg => {
-                  if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
-                    ph.textContent   = '🔐';
-                    ph.style.display = 'block';
-                  }
-                }).catch(() => {});
+              }
+              if (esCif) {
+                ph.textContent   = '🔐';
+                ph.style.display = 'block';
               }
             }).catch(() => {});
           }
@@ -4934,29 +4930,40 @@
           chip.onclick = () => cfg.abrirCapFn(cfg.coleccion, cap, chip);
 
           if (yaDesc && zipId) {
-            bvCargarPortada(zipId).then(blob => {
-              if (!blob) return;
-              chip.textContent = '';
-              chip.classList.add('con-portada');
-              const img = document.createElement('img');
-              img.src = URL.createObjectURL(blob);
-              const num = document.createElement('div');
-              num.className = 'cap-num';
-              num.textContent = label;
-              const dl = document.createElement('button');
-              dl.textContent = '🔽';
-              dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
-              dl.onclick = async e => {
-                e.stopPropagation();
-                const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
-                if (cfg.buscarZipFn) {
-                  const reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
-                  if (reg) bovedaDescargar(reg.id, nombre);
-                } else if (zipId) {
-                  bovedaDescargar(zipId, nombre);
+            Promise.all([bvCargarPortada(zipId), bvCargar(zipId)]).then(([blob, reg]) => {
+              const esCif = reg && reg.nombre && reg.nombre.endsWith('.zip.webc');
+              if (blob) {
+                chip.textContent = '';
+                chip.classList.add('con-portada');
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(blob);
+                const num = document.createElement('div');
+                num.className = 'cap-num';
+                num.textContent = label;
+                const dl = document.createElement('button');
+                dl.textContent = '🔽';
+                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+                dl.onclick = async e => {
+                  e.stopPropagation();
+                  const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+                  if (cfg.buscarZipFn) {
+                    const reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                    if (reg2) bovedaDescargar(reg2.id, nombre);
+                  } else if (zipId) {
+                    bovedaDescargar(zipId, nombre);
+                  }
+                };
+                if (esCif) {
+                  const lock = document.createElement('span');
+                  lock.textContent = '🔐';
+                  lock.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.65rem;background:rgba(0,0,0,.45);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center';
+                  chip.append(img, num, dl, lock);
+                } else {
+                  chip.append(img, num, dl);
                 }
-              };
-              chip.append(img, num, dl);
+              } else if (esCif) {
+                chip.textContent = '🔐';
+              }
             }).catch(() => {});
           } else if (yaDesc) {
             const dl = document.createElement('span');
