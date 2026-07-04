@@ -4144,11 +4144,10 @@
             phTexto:       con.tieneZip && con.tieneZip(gal) ? '📖' : '⬇️',
             onTap:         () => cfg.onTap(gal, card),
             onDelete:      async () => { await con.eliminar(gal); renderNivel2(contenedor, cfg); },
-            btnSecundario: cfg.getBtnSec(gal, card),
+            btnSecundario: cfg.getBtnSec ? cfg.getBtnSec(gal) : null,
           });
           grid.appendChild(card);
 
-          // Portada
           con.getPortada(gal).then(async blob => {
             if (!blob) return;
             img.src = URL.createObjectURL(blob);
