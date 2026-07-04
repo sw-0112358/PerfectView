@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v120❄️
+          PerfectView🪷v121❄️
         </div>
       </header>
 
@@ -5841,15 +5841,22 @@
 
           const clave = _gfPwdMaestra ? await gfDerivarClave(_gfPwdMaestra) : null;
           for (const o of data.objetos) {
+            // Ignorar link.json — son metadata interna
+            if (o.key.endsWith('/link.json')) continue;
             const row   = document.createElement('div');
             const fecha = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
             let nombreMostrar = o.key;
             if (clave) {
               try {
-                const partes   = o.key.split('/');
-                const filePart = partes[partes.length - 1].replace(/\.webc$/, '');
-                const real     = await gfDescifrarNombre(filePart, clave);
-                nombreMostrar  = (partes.length > 1 ? partes[0] + '/' : '') + real;
+                const partes = o.key.split('/');
+                if (partes.length === 3) {
+                  const manga = await gfDescifrarNombre(partes[1], clave);
+                  const cap   = await gfDescifrarNombre(partes[2].replace(/\.webc$/, ''), clave);
+                  nombreMostrar = partes[0] + '/' + manga + '/' + cap;
+                } else {
+                  const real = await gfDescifrarNombre(partes[partes.length-1].replace(/\.webc$/, ''), clave);
+                  nombreMostrar = (partes.length > 1 ? partes[0] + '/' : '') + real;
+                }
               } catch(e) {}
             }
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
@@ -5857,8 +5864,10 @@
               + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + nombreMostrar + '</span>'
               + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
               + '<span style="font-size:.7rem;color:var(--text-muted);white-space:nowrap">' + fecha + '</span>'
-              + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem" title="Descargar" onclick="gfCloudDescargar(' + JSON.stringify(o.key) + ')">⬇️</button>'
-              + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar" onclick="gfCloudEliminar(' + JSON.stringify(o.key) + ',this.closest(\'div\'))">🗑️</button>';
+              + '<button class="btn-icon btn-dl" style="width:28px;height:28px;font-size:.8rem" title="Descargar">⬇️</button>'
+              + '<button class="btn-icon btn-del" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar">🗑️</button>';
+            row.querySelector('.btn-dl').addEventListener('click', () => gfCloudDescargar(o.key));
+            row.querySelector('.btn-del').addEventListener('click', () => gfCloudEliminar(o.key, row));
             el.appendChild(row);
           }
         } catch(err) {
@@ -5942,13 +5951,19 @@
           const clave = _gfPwdMaestra ? await gfDerivarClave(_gfPwdMaestra) : null;
           const objetos = [];
           for (const o of data.objetos) {
+            if (o.key.endsWith('/link.json')) continue;
             let nombreReal = o.key;
             if (clave) {
               try {
-                const partes   = o.key.split('/');
-                const filePart = partes[partes.length - 1].replace(/\.webc$/, '');
-                const real     = await gfDescifrarNombre(filePart, clave);
-                nombreReal     = (partes.length > 1 ? partes[0] + '/' : '') + real;
+                const partes = o.key.split('/');
+                if (partes.length === 3) {
+                  const manga = await gfDescifrarNombre(partes[1], clave);
+                  const cap   = await gfDescifrarNombre(partes[2].replace(/\.webc$/, ''), clave);
+                  nombreReal  = partes[0] + '/' + manga + '/' + cap;
+                } else {
+                  const real = await gfDescifrarNombre(partes[partes.length-1].replace(/\.webc$/, ''), clave);
+                  nombreReal = (partes.length > 1 ? partes[0] + '/' : '') + real;
+                }
               } catch(e) {}
             }
             objetos.push({ ...o, nombreReal });
