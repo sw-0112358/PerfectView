@@ -6666,6 +6666,10 @@
               await htActualizarZip(yaExiste.id, zipId);
             }
           }
+          // Generar portada desde el ZIP restaurado
+          bvExtraerPortada(blob).then(pb => {
+            if (pb) bvGuardarPortada(zipId, pb).catch(() => {});
+          }).catch(() => {});
           actualizarStatus('✅ Restaurado: ' + itNombre);
 
         } else if (partes.length === 3) {
@@ -6706,6 +6710,10 @@
 
           // Guardar capítulo
           const zipId = await capGuardarZip(itCat, nombreManga + ' - ' + capNom + '.zip', blob, colId, capNom);
+          // Generar portada
+          bvExtraerPortada(blob).then(pb => {
+            if (pb) bvGuardarPortada(zipId, pb).catch(() => {});
+          }).catch(() => {});
           actualizarStatus('✅ Restaurado: ' + nombreManga + ' - ' + capNom);
         }
         renderBoveda();
