@@ -4024,11 +4024,12 @@
           });
           grid.appendChild(card);
           const slotHt = 'ht-' + gal.id;
-          bvCargarPortadaOSlot(gal.zip_id, slotHt).then(blob => {
+          bvCargarPortadaOSlot(gal.zip_id, slotHt).then(async blob => {
             if (blob) {
               img.src = URL.createObjectURL(blob);
               img.style.display = 'block';
               ph.style.display  = 'none';
+              if (gal.zip_id) bvGuardarPortada(gal.zip_id, blob).catch(() => {});
             }
           }).catch(() => {});
         });
@@ -4383,11 +4384,12 @@
           });
           grid.appendChild(card);
           const slotNh = 'nh-' + gal.id;
-          bvCargarPortadaOSlot(gal.zip_id, slotNh).then(blob => {
+          bvCargarPortadaOSlot(gal.zip_id, slotNh).then(async blob => {
             if (blob) {
               img.src = URL.createObjectURL(blob);
               img.style.display = 'block';
               ph.style.display  = 'none';
+              if (gal.zip_id) bvGuardarPortada(gal.zip_id, blob).catch(() => {});
             }
           }).catch(() => {});
         });
@@ -5265,6 +5267,7 @@
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
             placeholder.style.display = 'none';
+            if (reg) bvGuardarPortada(reg.id, blob).catch(() => {});
           }).catch(() => {});
         });
         contenedor.appendChild(grid);
@@ -5686,6 +5689,7 @@
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
             ph.style.display  = 'none';
+            if (reg) bvGuardarPortada(reg.id, blob).catch(() => {});
           }).catch(() => {});
         });
         contenedor.appendChild(grid);
