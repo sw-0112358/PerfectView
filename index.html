@@ -2070,8 +2070,9 @@
         return new Promise((resolve, reject) => {
           const req = db.transaction('zips', 'readonly').objectStore('zips').getAll();
           req.onsuccess = e => {
-            const found = e.target.result.find(
-              r => r[categoria + '_coleccion_id'] === coleccion_id && r[categoria + '_cap_num'] === cap_num
+            const found = e.target.result.find(r =>
+              r[categoria + '_coleccion_id'] === coleccion_id &&
+              String(r[categoria + '_cap_num']) === String(cap_num)
             );
             resolve(found || null);
           };
@@ -2091,7 +2092,7 @@
             const mapa = {};
             e.target.result
               .filter(r => r[categoria + '_coleccion_id'] === coleccion_id)
-              .forEach(r => { mapa[r[categoria + '_cap_num']] = r.id; });
+              .forEach(r => { mapa[String(r[categoria + '_cap_num'])] = r.id; });
             resolve(mapa);
           };
           req.onerror = e => reject(e.target.error);
@@ -7051,18 +7052,44 @@
         const zips = await new Promise(r => { const q = db.transaction('zips','readonly').objectStore('zips').getAll(); q.onsuccess = e => r(e.target.result); });
         const temp = await dtListar();
 
-        console.group('=== DIAGNÓSTICO DB ===');
-        console.log('Total zips en DB:', zips.length);
-        zips.forEach(z => {
-          console.log('ZIP id=' + z.id, '| nombre=' + z.nombre, '| cat=' + z.categoria, '| blob=' + (z.blob ? z.blob.size + 'B' : 'NULL'), '| samurai_coleccion_id=' + z.samurai_coleccion_id, '| samurai_cap_num=' + z.samurai_cap_num, '| manhwa_coleccion_id=' + z.manhwa_coleccion_id, '| manhwa_cap_num=' + z.manhwa_cap_num, '| zonascans_coleccion_id=' + z.zonascans_coleccion_id, '| zonascans_cap_num=' + z.zonascans_cap_num);
-        });
-        console.log('Total slots temp:', temp.length);
-        temp.forEach(s => {
-          console.log('SLOT id=' + s.slotId, '| cat=' + s.categoria, '| imgs=' + (s.imagenes ? s.imagenes.length : 0), '| total=' + s.total);
-        });
-        console.groupEnd();
+        let html = '<div style="position:fixed;inset:0;background:#111;color:#eee;font-family:monospace;font-size:11px;padding:16px;overflow-y:auto;z-index:99999">'
+          + '<button onclick="this.parentNode.remove()" style="position:fixed;top:12px;right:12px;background:#e05050;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px">✕ Cerrar</button>'
+          + '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:#5b7fff">🔬 DIAGNÓSTICO DB</div>';
 
-        actualizarStatus('🔬 Diagnóstico en consola — abre DevTools (F12)');
+        html += '<div style="color:#4a9e6a;margin-bottom:8px">📦 ZIPS (' + zips.length + ' registros)</div>';
+        if (!zips.length) {
+          html += '<div style="color:#e05050;margin-bottom:12px">— Sin registros en store zips —</div>';
+        }
+        zips.forEach(z => {
+          const blobInfo = z.blob ? (z.blob.size + ' B') : '❌ NULL';
+          const color    = z.blob ? '#eee' : '#e05050';
+          html += '<div style="color:' + color + ';border-bottom:1px solid #333;padding:4px 0">'
+            + '🆔 <b>' + z.id + '</b> | ' + (z.nombre || '?') + '<br>'
+            + 'cat=' + (z.categoria||'?')
+            + ' | blob=' + blobInfo
+            + (z.samurai_coleccion_id  !== undefined ? ' | sjz_col=' + z.samurai_coleccion_id  + ' cap=' + z.samurai_cap_num  : '')
+            + (z.manhwa_coleccion_id   !== undefined ? ' | mw_col='  + z.manhwa_coleccion_id   + ' cap=' + z.manhwa_cap_num   : '')
+            + (z.zonascans_coleccion_id !== undefined ? ' | zs_col=' + z.zonascans_coleccion_id + ' cap=' + z.zonascans_cap_num : '')
+            + '</div>';
+        });
+
+        html += '<div style="color:#4a9e6a;margin:12px 0 8px">🗂️ SLOTS TEMP (' + temp.length + ' registros)</div>';
+        if (!temp.length) {
+          html += '<div style="color:#e05050">— Sin slots en descargas_temp —</div>';
+        }
+        temp.forEach(s => {
+          const imgs = s.imagenes ? s.imagenes.length : 0;
+          const completo = s.total && imgs >= s.total;
+          const color = completo ? '#4a9e6a' : '#f5a623';
+          html += '<div style="color:' + color + ';border-bottom:1px solid #333;padding:4px 0">'
+            + '🆔 <b>' + s.slotId + '</b> | cat=' + s.categoria
+            + ' | imgs=' + imgs + '/' + (s.total || '?')
+            + (completo ? ' ✅' : ' ⏳')
+            + '</div>';
+        });
+
+        html += '</div>';
+        document.body.insertAdjacentHTML('beforeend', html);
       }
 
       document.addEventListener("DOMContentLoaded", () => {
