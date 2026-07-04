@@ -6729,29 +6729,56 @@
         _r2Cache = null; // limpiar cache después de subir
       }
 
-      // — Recuperar .zip.webc de R2 → importar a IDB con categoría —
+      // — Recuperar .zip.webc de R2 → importar a IDB — solo los que no están en local —
       async function gfCloudDescargarTodos() {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfCloudItems.length) { actualizarStatus('⚠️ Sin archivos en R2.'); return; }
         const prog  = document.getElementById('gfProgresoDescifrar');
         const base  = CF_WORKER.replace(/\/$/, '');
-        let ok = 0;
-        for (const o of _gfCloudItems) {
+
+        // Construir set de nombreReal locales para filtrar duplicados
+        let localNombresReales = new Set();
+        if (_gfPwdMaestra) {
+          try {
+            const db      = await bvAbrirDB();
+            const locales = await new Promise((res, rej) => {
+              const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+              req.onsuccess = e => res(e.target.result);
+              req.onerror   = e => rej(e.target.error);
+            });
+            const claveLoc = await gfDerivarClave(_gfPwdMaestra);
+            for (const it of locales) {
+              if (!it.nombre || !it.nombre.endsWith('.zip.webc')) continue;
+              try {
+                const r2Info = await gfConstruirR2Key(it, claveLoc);
+                localNombresReales.add(r2Info.nombreReal);
+              } catch(e) {}
+            }
+          } catch(e) {}
+        }
+
+        // Filtrar solo pendientes
+        const pendientes = _gfCloudItems.filter(o => !localNombresReales.has(o.nombreReal));
+        if (!pendientes.length) {
+          prog.textContent = '✅ Todos los archivos ya están en local.';
+          return;
+        }
+
+        let ok = 0, omitidos = _gfCloudItems.length - pendientes.length;
+        for (const o of pendientes) {
           const nombreMostrar = o.nombreReal || o.key;
-          prog.textContent = '⬇️ ' + (ok+1) + '/' + _gfCloudItems.length + ': ' + nombreMostrar;
+          prog.textContent = '⬇️ ' + (ok+1) + '/' + pendientes.length + ': ' + nombreMostrar;
           try {
             const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(o.key));
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blobCifrado = await resp.blob();
-
-            // Guardar cifrado en IDB — el visor descifra al abrir
             await gfRestaurarDesdeEstructura(o.key, nombreMostrar, blobCifrado, true);
             ok++;
           } catch(err) {
             prog.textContent = '❌ Error en ' + nombreMostrar + ': ' + err.message;
           }
         }
-        prog.textContent = '✅ ' + ok + ' archivo(s) recuperado(s) a la bóveda.';
+        prog.textContent = '✅ ' + ok + ' recuperado(s)' + (omitidos ? ' · ⏭️ ' + omitidos + ' ya estaban en local' : '');
         if (ok) renderBoveda();
       }
 
@@ -6975,6 +7002,28 @@
       // — Descargar un archivo individual de R2 a la bóveda —
       async function gfCloudDescargarUno(o) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        // Verificar si ya existe en local
+        if (_gfPwdMaestra) {
+          try {
+            const db      = await bvAbrirDB();
+            const locales = await new Promise((res, rej) => {
+              const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+              req.onsuccess = e => res(e.target.result);
+              req.onerror   = e => rej(e.target.error);
+            });
+            const claveLoc = await gfDerivarClave(_gfPwdMaestra);
+            for (const it of locales) {
+              if (!it.nombre || !it.nombre.endsWith('.zip.webc')) continue;
+              try {
+                const r2Info = await gfConstruirR2Key(it, claveLoc);
+                if (r2Info.nombreReal === o.nombreReal) {
+                  if (!confirm('⚠️ "' + o.nombreReal + '" ya existe en local.\n¿Descargar de todas formas?')) return;
+                  break;
+                }
+              } catch(e) {}
+            }
+          } catch(e) {}
+        }
         actualizarStatus('⏳ Descargando ' + o.nombreReal + '…');
         try {
           const base = CF_WORKER.replace(/\/$/, '');
