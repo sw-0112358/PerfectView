@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v130❄️
+          PerfectView🪷v131❄️
         </div>
       </header>
 
@@ -3875,20 +3875,20 @@
           });
           grid.appendChild(card);
           if (gal.zip_id) {
-            // Verificar si está cifrado para mostrar 🔐
-            bvCargar(gal.zip_id).then(reg => {
-              if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
-                ph.textContent  = '🔐';
-                ph.style.display = 'block';
-                img.style.display = 'none';
-                return null;
+            // Intentar portada — si es .webc y no hay portada mostrar 🔐
+            bvCargarPortada(gal.zip_id).then(blob => {
+              if (blob) {
+                img.src = URL.createObjectURL(blob);
+                img.style.display = 'block';
+                ph.style.display  = 'none';
+              } else {
+                bvCargar(gal.zip_id).then(reg => {
+                  if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
+                    ph.textContent   = '🔐';
+                    ph.style.display = 'block';
+                  }
+                }).catch(() => {});
               }
-              return bvCargarPortada(gal.zip_id);
-            }).then(blob => {
-              if (!blob) return;
-              img.src = URL.createObjectURL(blob);
-              img.style.display = 'block';
-              ph.style.display  = 'none';
             }).catch(() => {});
           }
         });
@@ -4242,19 +4242,19 @@
           });
           grid.appendChild(card);
           if (gal.zip_id) {
-            bvCargar(gal.zip_id).then(reg => {
-              if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
-                ph.textContent   = '🔐';
-                ph.style.display = 'block';
-                img.style.display = 'none';
-                return null;
+            bvCargarPortada(gal.zip_id).then(blob => {
+              if (blob) {
+                img.src = URL.createObjectURL(blob);
+                img.style.display = 'block';
+                ph.style.display  = 'none';
+              } else {
+                bvCargar(gal.zip_id).then(reg => {
+                  if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
+                    ph.textContent   = '🔐';
+                    ph.style.display = 'block';
+                  }
+                }).catch(() => {});
               }
-              return bvCargarPortada(gal.zip_id);
-            }).then(blob => {
-              if (!blob) return;
-              img.src = URL.createObjectURL(blob);
-              img.style.display = 'block';
-              ph.style.display  = 'none';
             }).catch(() => {});
           }
         });
