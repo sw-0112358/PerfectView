@@ -1646,28 +1646,8 @@
          5. DESCARGA Y ZIP
       ============================================= */
 
-      async function downloadFile(url) {
-        try {
-          const resp = await fetch( serverclouddw + url);
-          if (!resp.ok) throw new Error(resp.statusText);
-          const blob = await resp.blob();
-          const nombre = getNombreRef(url) + "/" + url.split("/").pop();
-          archivosDescargados.push({ nombre, blob });
-          const chk = document.getElementById("chkAutoVisor");
-          if (chk && chk.checked) {
-            const visor = document.getElementById("visor");
-            const img = document.createElement("img");
-            img.src = URL.createObjectURL(blob);
-            img.alt = nombre;
-            img.classList.add("mangaImg");
-            img.style.maxWidth = "100%";
-            img.style.margin = "0";
-            if (filtroActivo) img.classList.add(filtroActivo);
-            visor.appendChild(img);
-          }
-          removerCelda(url);
-        } catch (err) { actualizarStatus("Error: " + err.message); }
-      }
+      
+
 
       async function crearZip(nombreZip) {
         const zip = new JSZip();
