@@ -6123,7 +6123,20 @@
               row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
                 + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
                 + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
-                + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600;white-space:nowrap">CIFRADO</span>' : '');
+                + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600;white-space:nowrap">CIFRADO</span>' : '')
+                + '<button class="btn-icon btn-del-local" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar">🗑️</button>';
+              row.querySelector('.btn-del-local').addEventListener('click', async () => {
+                if (!confirm('¿Eliminar "' + (it.nombre || '?') + '"? No se puede deshacer.')) return;
+                try {
+                  await bvEliminarDB(it.id);
+                  await bvEliminarPortada(it.id);
+                  row.style.opacity = '0';
+                  setTimeout(() => { row.remove(); }, 300);
+                  actualizarStatus('✅ Eliminado: ' + it.nombre);
+                } catch(e) {
+                  actualizarStatus('❌ Error al eliminar: ' + e.message);
+                }
+              });
               cuerpo.appendChild(row);
             });
 
