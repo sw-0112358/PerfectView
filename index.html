@@ -5197,124 +5197,7 @@
             +   '<button class="sjz-btn sjz-btn-primary" onclick="sjzCrearCarpeta()">📁 Crear</button>'
             + '</div>',
         });
-        return;
-
-        // — código antiguo eliminado — vista de capítulos y lista ahora en renderNivel3 —
-        // Breadcrumb
-        const bc = document.createElement('div');
-        bc.className = 'bv-breadcrumb';
-
-        if (_sjzColeccionActual) {
-          await renderVistaCapitulos(contenedor, {
-            coleccion:       _sjzColeccionActual,
-            caps:            _sjzColeccionActual.capitulos,
-            getClave:        cap => cap.num,
-            getLabel:        cap => cap.num,
-            categoriaDB:     'samurai',
-            ordenDesc:       _sjzOrdenDesc,
-            onToggleOrden:   () => { _sjzOrdenDesc = !_sjzOrdenDesc; renderBoveda(); },
-            onBuscarNuevos:  sjzBuscarNuevos,
-            onVolver:        () => { _sjzColeccionActual = null; renderBoveda(); },
-            onVolverLabel:   'Samurai',
-            iconoCategoria:  '⚔️',
-            metaLinea:       _sjzColeccionActual.capitulos.length + ' capítulos · ' + _sjzColeccionActual.base_url,
-            getDescargarLabel: (cap, nombre) => nombre + ' - Cap ' + cap.num + '.zip',
-            buscarZipFn:     (colId, num) => capBuscarZip('samurai', colId, Number(num)),
-            abrirCapFn:      sjzAbrirCapitulo,
-          });
-          return;
         }
-
-        // — Vista lista de mangas —
-        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
-          + '<span class="bv-breadcrumb-sep">/</span>'
-          + '<span class="bv-breadcrumb-label">⚔️ Samurai</span>';
-        contenedor.appendChild(bc);
-
-        // Panel de entrada
-        const panel = document.createElement('div');
-        panel.className = 'sjz-panel';
-        panel.innerHTML =
-          '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
-          + '<div class="sjz-row">'
-          +   '<input class="sjz-input" id="sjzUrl" placeholder="https://samurai.j5z.xyz/son/manga-slug/" type="url">'
-          +   '<button class="sjz-btn sjz-btn-secondary" onclick="sjzVerEpisodios()">🔍 Ver</button>'
-          + '</div>'
-          + '<div class="sjz-info" id="sjzInfo"></div>'
-          + '<div class="sjz-row">'
-          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
-          +   '<input class="sjz-input sjz-input-sm" id="sjzInicio" type="number" min="1" placeholder="1">'
-          +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
-          +   '<input class="sjz-input sjz-input-sm" id="sjzFinal" type="number" min="1" placeholder="872">'
-          +   '<button class="sjz-btn sjz-btn-primary" onclick="sjzCrearCarpeta()">📁 Crear</button>'
-          + '</div>';
-        contenedor.appendChild(panel);
-
-        // Lista de colecciones guardadas
-        let colecciones;
-        try { colecciones = await sjzListar(); } catch(e) { colecciones = []; }
-
-        if (!colecciones.length) {
-          const empty = document.createElement('div');
-          empty.className = 'bv-empty';
-          empty.innerHTML = '⚔️ Sin mangas guardados<br><span style="font-size:.8rem">Agrega uno con el panel de arriba</span>';
-          contenedor.appendChild(empty);
-          return;
-        }
-
-        colecciones.sort((a, b) => b.fecha.localeCompare(a.fecha));
-        const grid = document.createElement('div');
-        grid.className = 'bv-grid';
-
-        colecciones.forEach(col => {
-          const card = document.createElement('div');
-          card.className = 'bv-cover-card';
-          card.onclick = () => { _sjzColeccionActual = col; renderSamurai(contenedor); };
-
-          const placeholder = document.createElement('div');
-          placeholder.className = 'bv-cover-placeholder';
-          placeholder.textContent = '⚔️';
-
-          const img = document.createElement('img');
-          img.className = 'bv-cover-img';
-
-          const footer = document.createElement('div');
-          footer.className = 'bv-cover-footer';
-          footer.textContent = col.nombre;
-
-          const delBtn = document.createElement('button');
-          delBtn.className = 'bv-menu-btn';
-          delBtn.textContent = '🗑️';
-          delBtn.onclick = async e => {
-            e.stopPropagation();
-            if (!confirm('¿Eliminar "' + col.nombre + '"?')) return;
-            await sjzEliminarDB(col.id);
-            renderSamurai(contenedor);
-          };
-
-          const dlBtn = document.createElement('button');
-          dlBtn.className = 'bv-menu-btn';
-          dlBtn.textContent = '📦';
-          dlBtn.style.cssText = 'top:6px;right:36px';
-          dlBtn.title = 'Exportar colección completa';
-          dlBtn.onclick = e => { e.stopPropagation(); sjzExportarZipCompleto(col); };
-
-          card.append(placeholder, img, footer, dlBtn, delBtn);
-          grid.appendChild(card);
-
-          // Cargar portada del capítulo 1 — desde portadas store o slot temp
-          sjzBuscarZipCapitulo(col.id, 1).then(async reg => {
-            const slotId = 'sjz-' + col.id + '-1';
-            const blob   = await bvCargarPortadaOSlot(reg ? reg.id : null, slotId);
-            if (!blob) return;
-            img.src = URL.createObjectURL(blob);
-            img.style.display = 'block';
-            placeholder.style.display = 'none';
-            if (reg) bvGuardarPortada(reg.id, blob).catch(() => {});
-          }).catch(() => {});
-        });
-        contenedor.appendChild(grid);
-      }
 
       /* =============================================
          MANHWA — manhwaweb.com
@@ -5624,7 +5507,8 @@
         });
       }
 
-      // renderManhwaLegacy eliminada — reemplazada por renderNivel3 vía renderManhwa
+      
+
       
       // — Render pantalla3 —
       async function renderBoveda() {
