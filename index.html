@@ -6300,9 +6300,11 @@
           try {
             const base = CF_WORKER.replace(/\/$/, '');
             const resp = await fetch(base + '/kv-load?id=' + encodeURIComponent('gf_pwd_' + _clvIdActiva));
-            const valor = await resp.json();
+            const texto = await resp.text();
+            actualizarStatus('KV raw: ' + texto.slice(0, 80));
+            const valor = JSON.parse(texto);
             if (valor !== null && valor !== undefined) kv = typeof valor === 'string' ? valor : JSON.stringify(valor);
-          } catch(e) {}
+          } catch(e) { actualizarStatus('❌ KV error: ' + e.message); }
         }
         document.getElementById('clvParteKV').value = kv;
 
@@ -6391,9 +6393,11 @@
           try {
             const base = CF_WORKER.replace(/\/$/, '');
             const resp = await fetch(base + '/kv-load?id=' + encodeURIComponent('gf_pwd_' + _clvIdActiva));
-            const valor = await resp.json();
+            const texto = await resp.text();
+            actualizarStatus('KV raw: ' + texto.slice(0, 80));
+            const valor = JSON.parse(texto);
             if (valor !== null && valor !== undefined) kv = typeof valor === 'string' ? valor : JSON.stringify(valor);
-          } catch(e) {}
+          } catch(e) { actualizarStatus('❌ KV error: ' + e.message); }
         }
         document.getElementById('clvParteKV').value = kv;
         clvActualizarFinal();
