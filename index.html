@@ -6171,6 +6171,7 @@
               await gfEscanear();
             });
 
+            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
             titulo.innerHTML = '<span class="gf-chevron" style="font-size:.7rem;transition:transform .25s;display:inline-block">▼</span>'
               + gfCatLabel(cat)
               + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
