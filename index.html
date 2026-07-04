@@ -4578,8 +4578,6 @@
         // No descargado → descargar
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
 
-        const slotId = 'sjz-' + coleccion.id + '-' + cap.num;
-
         // Verificar si hay descarga previa interrumpida
         const slotPrevio = await dtCargar(slotId);
         if (slotPrevio && slotPrevio.imagenes.length > 0) {
