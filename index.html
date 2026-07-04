@@ -3542,7 +3542,7 @@
           );
         }
         // Fallback — descomprimir ZIP y guardar en slot para próxima vez
-        const reg = await bvCargar(zipId);
+        const reg = zipId ? await bvCargar(zipId) : null;
         if (!reg) {
           // No hay ZIP — intentar regenerar desde slot completo en descargas_temp
           const slotCompleto = await dtCargar(slotId);
@@ -3550,10 +3550,28 @@
               slotCompleto.imagenes.length >= slotCompleto.total) {
             actualizarStatus('⏳ Regenerando ZIP desde temporales…');
             await gfGenerarZipsDeTemp(slotCompleto.categoria);
-            // Intentar cargar el ZIP recién generado
-            const regNuevo = await bvCargar(zipId);
-            if (!regNuevo) { actualizarStatus('❌ No se pudo regenerar el ZIP'); return null; }
-            return cargarDesdeSlotOZip(slotId, zipId);
+            // Leer el zip_id actualizado desde la galería
+            const prefijo = slotId.split('-')[0];
+            let nuevoZipId = null;
+            if (prefijo === 'ht') {
+              const id = parseInt(slotId.replace('ht-', ''));
+              const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
+              nuevoZipId = gal && gal.zip_id;
+            } else if (prefijo === 'nh') {
+              const id = parseInt(slotId.replace('nh-', ''));
+              const gal = (await nhListar()).find(g => g.id === id);
+              nuevoZipId = gal && gal.zip_id;
+            } else if (['sjz','mw','zs'].includes(prefijo)) {
+              const storeMap = { sjz:'sjz_colecciones', mw:'mw_colecciones', zs:'zs_colecciones' };
+              const partes   = slotId.replace(prefijo + '-','').split('-');
+              const colId    = parseInt(partes[0]);
+              const capNum   = partes.slice(1).join('-');
+              const col      = (await dbListar(storeMap[prefijo])).find(c => c.id === colId);
+              const cap      = col && col.capitulos && col.capitulos.find(c => String(c.num||c.titulo) === String(capNum));
+              nuevoZipId     = cap && cap.zip_id;
+            }
+            if (!nuevoZipId) { actualizarStatus('❌ No se pudo regenerar el ZIP'); return null; }
+            return cargarDesdeSlotOZip(slotId, nuevoZipId);
           }
           return null;
         }
@@ -6140,6 +6158,26 @@
               row.querySelector('.btn-del-local').addEventListener('click', async () => {
                 if (!confirm('¿Eliminar "' + (it.nombre || '?') + '"? No se puede deshacer.')) return;
                 try {
+                  // Limpiar zip_id en la colección correspondiente
+                  const itCat = it.categoria || 'mangas';
+                  if (itCat === 'nhentai') {
+                    const gals = await nhListar();
+                    const gal  = gals.find(g => g.zip_id === it.id);
+                    if (gal) await nhActualizarZip(gal.id, null);
+                  } else if (itCat === 'hitomi') {
+                    const gals = await dbListar('ht_galerias');
+                    const gal  = gals.find(g => g.zip_id === it.id);
+                    if (gal) await htActualizarZip(gal.id, null);
+                  } else if (itCat === 'samurai' || itCat === 'manhwa' || itCat === 'zonascans') {
+                    const storeMap = { samurai:'sjz_colecciones', manhwa:'mw_colecciones', zonascans:'zs_colecciones' };
+                    const cols = await dbListar(storeMap[itCat]);
+                    for (const col of cols) {
+                      if (col.capitulos) {
+                        const cap = col.capitulos.find(c => c.zip_id === it.id);
+                        if (cap) { cap.zip_id = null; await dbActualizar(storeMap[itCat], col); break; }
+                      }
+                    }
+                  }
                   await bvEliminarDB(it.id);
                   await bvEliminarPortada(it.id);
                   row.style.opacity = '0';
