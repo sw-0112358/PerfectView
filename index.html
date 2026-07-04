@@ -1975,11 +1975,9 @@
           await bovedaAbrirEnVisor(sig, ctx.galerias);
         } else if (ctx.tipo === 'zonascans') {
           const dummy = document.createElement('div');
-          dummy.classList = { add: () => {}, remove: () => {} };
           await zsAbrirCapitulo(ctx.coleccion, sig, dummy);
         } else {
           const dummy = document.createElement('div');
-          dummy.classList = { add: () => {}, remove: () => {} };
           if (ctx.tipo === 'manhwa')       await mwAbrirCapitulo(ctx.coleccion, sig, dummy);
           else if (ctx.tipo === 'samurai') await sjzAbrirCapitulo(ctx.coleccion, sig, dummy);
         }
@@ -3334,7 +3332,7 @@
           });
           _zsColeccionActual.caps = nuevasCaps;
           actualizarStatus('✅ ' + nuevas.length + ' capítulos nuevos agregados');
-          renderZonaScans(contenedor || document.getElementById('bvLista'));
+          renderZonaScans(document.getElementById('bvLista'));
         } catch(err) {
           actualizarStatus('❌ ' + err.message);
         }
@@ -4177,7 +4175,7 @@
         _nhInfoPendiente = null;
         document.getElementById('nhUrl').value = '';
         // Agregar solo la nueva tarjeta sin re-renderizar el grid
-        const grid = document.getElementById('zsGrid');
+        const grid = document.getElementById('nhGrid');
         if (grid) {
           const { card, ph, img } = crearTarjeta({
             nombre:  gal.nombre,
@@ -4252,6 +4250,7 @@
         galerias.sort((a,b) => b.fecha.localeCompare(a.fecha));
         const grid = document.createElement('div');
         grid.className = 'bv-grid';
+        grid.id = 'nhGrid';
 
         galerias.forEach(gal => {
           const { card, ph, img } = crearTarjeta({
@@ -6139,6 +6138,7 @@
 
           cats.forEach(cat => {
             const lista = porCategoria[cat];
+            if (!lista || !lista.length) return;
             const seccion = document.createElement('div');
             seccion.style.cssText = 'margin-bottom:14px';
 
