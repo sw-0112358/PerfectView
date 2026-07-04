@@ -5990,19 +5990,7 @@
             const row   = document.createElement('div');
             const fecha = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
             let nombreMostrar = o.key;
-            if (clave) {
-              try {
-                const partes = o.key.split('/');
-                if (partes.length === 3) {
-                  const manga = await gfDescifrarNombre(partes[1], clave);
-                  const cap   = await gfDescifrarNombre(partes[2].replace(/\.webc$/, ''), clave);
-                  nombreMostrar = partes[0] + '/' + manga + '/' + cap;
-                } else {
-                  const real = await gfDescifrarNombre(partes[partes.length-1].replace(/\.webc$/, ''), clave);
-                  nombreMostrar = (partes.length > 1 ? partes[0] + '/' : '') + real;
-                }
-              } catch(e) {}
-            }
+            if (clave) nombreMostrar = await _descifrarKeyR2(o.key, clave);
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
             row.innerHTML = '<span>🔐</span>'
               + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + nombreMostrar + '</span>'
@@ -6097,19 +6085,7 @@
           for (const o of data.objetos) {
             if (o.key.endsWith('/link.json')) continue;
             let nombreReal = o.key;
-            if (clave) {
-              try {
-                const partes = o.key.split('/');
-                if (partes.length === 3) {
-                  const manga = await gfDescifrarNombre(partes[1], clave);
-                  const cap   = await gfDescifrarNombre(partes[2].replace(/\.webc$/, ''), clave);
-                  nombreReal  = partes[0] + '/' + manga + '/' + cap;
-                } else {
-                  const real = await gfDescifrarNombre(partes[partes.length-1].replace(/\.webc$/, ''), clave);
-                  nombreReal = (partes.length > 1 ? partes[0] + '/' : '') + real;
-                }
-              } catch(e) {}
-            }
+            if (clave) nombreReal = await _descifrarKeyR2(o.key, clave);
             objetos.push({ ...o, nombreReal });
           }
           _gfCloudItems = objetos; // guarda con nombreReal incluido
@@ -6520,31 +6496,32 @@
       }
       
       
-      // — Construir key R2 según categoría —
+      // — Construir key R2 cifrando todo el meta de una vez —
+      // Formato interno: catId/nombre  o  catId/nombre/clave
+      // Key resultante: {todoCifrado}.webc — opaco, sin estructura visible
       async function gfConstruirR2Key(it, clave) {
         const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
         const nombreBase = it.nombre.replace(/\.zip\.webc$/i,'').replace(/\.zip$/i,'');
+        let nombreManga  = nombreBase;
+        let capNum       = null;
+
         if (CAT_CONECTORES[itCat] && CAT_CONECTORES[itCat].nivel === 3) {
-          const store      = CAT_CONECTORES[itCat].store;
           const colIdField = itCat + '_coleccion_id';
           const capField   = itCat + '_cap_num';
-          let nombreManga  = nombreBase;
-          let capNum       = '01';
           if (it[colIdField]) {
             try {
-              const cols = await dbListar(store);
+              const cols = await dbListar(CAT_CONECTORES[itCat].store);
               const col  = cols.find(c => c.id === it[colIdField]);
               if (col) nombreManga = col.nombre;
             } catch(e) {}
           }
           if (it[capField]) capNum = String(it[capField]);
-          const mangaCif = await gfCifrarNombre(nombreManga, clave);
-          const capCif   = await gfCifrarNombre(capNum, clave);
-          return { key: itCat + '/' + mangaCif + '/' + capCif + '.webc', nombreManga, capNum, mangaCif };
-        } else {
-          const nomCif = await gfCifrarNombre(nombreBase, clave);
-          return { key: itCat + '/' + nomCif + '.webc', nombreManga: nombreBase, capNum: null, mangaCif: null };
         }
+
+        // Construir meta completo y cifrar todo de una vez
+        const meta    = itCat + '/' + nombreManga + (capNum ? '/' + capNum : '');
+        const cifrado = await gfCifrarNombre(meta, clave);
+        return { key: cifrado + '.webc', nombreManga, capNum, nombreReal: meta };
       }
 
       // — Subir link.json si no existe aún —
@@ -6562,6 +6539,35 @@
         } catch(e) {}
       }
 
+      // — Obtener lista R2 con nombres reales descifrados (cache) —
+      let _r2Cache = null;
+      // — Descifrar key R2 → nombreReal legible —
+      // Formato: {todoCifrado}.webc → descifrar → catId/nombre o catId/nombre/clave
+      async function _descifrarKeyR2(key, clave) {
+        try {
+          const meta = await gfDescifrarNombre(key.replace(/\.webc$/i, ''), clave);
+          return meta;
+        } catch(e) {
+          return key; // no se pudo descifrar — mostrar key opaca
+        }
+      }
+
+      async function _obtenerR2ConNombresReales(base, clave) {
+        if (_r2Cache) return _r2Cache;
+        const resp = await fetch(base + '/r2-list');
+        const data = await resp.json();
+        if (!data.ok) return [];
+        const resultado = [];
+        for (const o of data.objetos) {
+          if (o.key.endsWith('/link.json')) continue;
+          let nombreReal = o.key;
+          if (clave) nombreReal = await _descifrarKeyR2(o.key, clave);
+          resultado.push({ ...o, nombreReal });
+        }
+        _r2Cache = resultado;
+        return resultado;
+      }
+
       // — Subir un solo .zip.webc a R2 conservando categoría —
       async function gfSubirUnoR2(id, btnEl) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
@@ -6574,9 +6580,17 @@
         try {
           const clave      = await gfDerivarClave(_gfPwdMaestra);
           const r2Info     = await gfConstruirR2Key(it, clave);
-          // it.blob ya está cifrado (.zip.webc) — no cifrar de nuevo
           const blobCifrado = it.blob;
           const base       = CF_WORKER.replace(/\/$/, '');
+
+          // Verificar duplicado por nombreReal
+          const r2Items  = await _obtenerR2ConNombresReales(base, clave);
+          const yaExiste = r2Items.find(o => o.nombreReal === r2Info.nombreManga + (r2Info.capNum ? '/' + r2Info.capNum : ''));
+          if (yaExiste) {
+            btnEl.textContent = '✅';
+            actualizarStatus('⚠️ Ya existe en R2: ' + it.nombre);
+            return;
+          }
           // Subir link.json si es colección de 3 niveles
           if (r2Info.mangaCif && r2Info.capNum) {
             const colIdField = itCat + '_coleccion_id';
@@ -6612,12 +6626,19 @@
         const prog  = document.getElementById('gfProgresoDescifrar');
         const base  = CF_WORKER.replace(/\/$/, '');
         const clave = await gfDerivarClave(_gfPwdMaestra);
-        let ok = 0, errores = 0;
+        // Cargar lista R2 una sola vez para verificar duplicados
+        _r2Cache = null;
+        const r2Items = await _obtenerR2ConNombresReales(base, clave);
+        let ok = 0, errores = 0, omitidos = 0;
         for (const it of _gfItems) {
           const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
           const r2Info     = await gfConstruirR2Key(it, clave);
-          // it.blob ya está cifrado (.zip.webc) — no cifrar de nuevo
           const blobCifrado = it.blob;
+
+          // Verificar duplicado por nombreReal antes de subir
+          const nombreRealLocal = itCat + '/' + r2Info.nombreManga + (r2Info.capNum ? '/' + r2Info.capNum : '');
+          const yaExiste = r2Items.find(o => o.nombreReal === nombreRealLocal);
+          if (yaExiste) { omitidos++; continue; }
           // Subir link.json si es colección de 3 niveles
           if (r2Info.mangaCif && r2Info.capNum) {
             const colIdField = itCat + '_coleccion_id';
@@ -6644,7 +6665,8 @@
             prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
           }
         }
-        prog.textContent = '✅ ' + ok + ' subido(s)' + (errores ? ' · ❌ ' + errores + ' error(es)' : '') + ' — R2';
+        prog.textContent = '✅ ' + ok + ' subido(s)' + (omitidos ? ' · ⏭️ ' + omitidos + ' ya existían' : '') + (errores ? ' · ❌ ' + errores + ' error(es)' : '') + ' — R2';
+        _r2Cache = null; // limpiar cache después de subir
       }
 
       // — Recuperar .zip.webc de R2 → importar a IDB con categoría —
