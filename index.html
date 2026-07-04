@@ -4123,7 +4123,11 @@
 
         // Cargar lista
         let galerias;
-        try { galerias = await con.listar(); } catch(e) { galerias = []; }
+        try { galerias = await con.listar(); } catch(e) {
+          galerias = [];
+          actualizarStatus('❌ Error listar ' + cfg.cat + ': ' + e.message);
+        }
+        actualizarStatus('📋 ' + cfg.cat + ': ' + galerias.length + ' entradas');
         galerias.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
 
         if (!galerias.length) {
