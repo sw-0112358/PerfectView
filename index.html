@@ -1245,6 +1245,9 @@
           </div>
 
           <div id="bvToolbar" class="bv-toolbar" style="display:none">
+            <button class="action-btn" onclick="bvVolverMenu()">
+              <span class="icon">←</span> Menú
+            </button>
             <button class="action-btn" onclick="importarZipBoveda()">
               <span class="icon">📂</span> Importar ZIP
             </button>
@@ -2890,10 +2893,9 @@
         }
 
         // 4. Guardar blob cifrado — igual que gfRestaurarDesdeEstructura
-        actualizarStatus('⏳ Leyendo archivo…');
+        actualizarStatus('⏳ Importando ' + archivo.name + '…');
         try {
-          const blobReal = await new Response(archivo).blob();
-          // Nombre limpio para guardar en zips store
+          // File es subclase de Blob — no necesita conversión
           const nombreLimpio = nombreCol
             ? (con.nivel === 3 && clave
                 ? nombreCol + ' - ' + clave + '.zip.webc'
@@ -2901,22 +2903,18 @@
             : archivo.name;
 
           if (con.nivel === 3 && colId && clave) {
-            // Nivel 3 — usar capGuardarZip igual que R2
-            const zipId = await capGuardarZip(catId, nombreLimpio, blobReal, colId, clave);
-            actualizarStatus('✅ Importado en ' + con.icon + ' ' + con.label + ' · ' + nombreCol + ' - ' + clave);
+            // Nivel 3 — capGuardarZip igual que R2
+            await capGuardarZip(catId, nombreLimpio, archivo, colId, clave);
           } else {
-            // Nivel 2 — usar bvGuardar igual que R2
-            const zipId = await bvGuardar(nombreLimpio, blobReal, catId);
+            // Nivel 2 — bvGuardar igual que R2
+            const zipId    = await bvGuardar(nombreLimpio, archivo, catId);
             const lista    = await con.listar().catch(() => []);
             const yaExiste = lista.find(g => g.nombre === nombreCol);
             if (yaExiste) {
               await con.actualizarZip(yaExiste.id, zipId);
             } else {
-              await dbGuardar(con.store, {
-                nombre: nombreCol, zip_id: zipId
-              });
+              await dbGuardar(con.store, { nombre: nombreCol, zip_id: zipId });
             }
-            actualizarStatus('✅ Importado en ' + con.icon + ' ' + con.label + ' · ' + nombreCol);
           }
 
           actualizarStatus('✅ Importado en ' + con.icon + ' ' + con.label + (clave ? ' · ' + nombreCol + ' - ' + clave : ''));
