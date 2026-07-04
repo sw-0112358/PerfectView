@@ -2286,7 +2286,12 @@
       }
 
       async function bvLimpiarTodo() {
-        const stores = ['zips', 'portadas', 'sjz_colecciones', 'mw_colecciones', 'nh_galerias', 'ht_galerias', 'zs_colecciones', 'descargas_temp'];
+        const stores = [
+          'zips', 'portadas', 'descargas_temp',
+          ...Object.values(CAT_CONECTORES)
+            .map(c => c.store)
+            .filter((s, i, arr) => s !== 'zips' && arr.indexOf(s) === i)
+        ];
         for (const s of stores) {
           try { await bvClearStore(s); } catch(e) {}
         }
@@ -2503,7 +2508,7 @@
             if (yaExiste) {
               await nhActualizarZip(yaExiste.id, zipId);
             } else {
-              const galId = await dbGuardar('nh_galerias', {
+              const galId = await dbGuardar(CAT_CONECTORES.nhentai.store, {
                 nombre: meta.nombre, nh_id: meta.nh_id||0, media_id: meta.media_id||'',
                 num_pages: meta.num_pages||0, paths: meta.paths||[],
                 zip_id: zipId, fecha: meta.fecha || new Date().toISOString()
@@ -2511,13 +2516,13 @@
             }
             actualizarStatus('✅ nhentai restaurado: ' + meta.nombre);
           } else if (meta.tipo === 'hitomi') {
-            const lista    = await dbListar('ht_galerias');
+            const lista    = await dbListar(CAT_CONECTORES.hitomi.store);
             const yaExiste = lista.find(g => g.nombre === meta.nombre);
             const zipId    = await bvGuardar(meta.nombre + '.zip', blob, 'hitomi');
             if (yaExiste) {
               await htActualizarZip(yaExiste.id, zipId);
             } else {
-              await dbGuardar('ht_galerias', {
+              await dbGuardar(CAT_CONECTORES.hitomi.store, {
                 nombre: meta.nombre, media_id: meta.media_id||'',
                 num_pages: meta.num_pages||0, files: meta.files||[],
                 zip_id: zipId, fecha: meta.fecha || new Date().toISOString()
@@ -3006,6 +3011,7 @@
             if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
             await nhEliminarDB(gal.id);
           },
+          actualizarZip:   (id, zip_id) => nhActualizarZip(id, zip_id),
           abrirEnVisor:    gal => nhAbrirEnVisor(gal),
           descargar:       (gal, cardEl) => nhDescargarGaleria(gal, cardEl),
           getPortada:      gal => bvCargarPortadaOSlot(gal.zip_id, 'nh-' + gal.id),
@@ -3022,6 +3028,7 @@
             if (gal.zip_id) { await bvEliminarDB(gal.zip_id); await bvEliminarPortada(gal.zip_id); }
             await htEliminarDB(gal.id);
           },
+          actualizarZip:   (id, zip_id) => htActualizarZip(id, zip_id),
           abrirEnVisor:    gal => htAbrirEnVisor(gal),
           descargar:       (gal, cardEl) => htDescargarGaleria(gal, cardEl),
           getPortada:      gal => bvCargarPortadaOSlot(gal.zip_id, 'ht-' + gal.id),
@@ -3410,12 +3417,12 @@
           // Actualizar en DB
           const db = await bvAbrirDB();
           await new Promise((res, rej) => {
-            const tx  = db.transaction('zs_colecciones','readwrite');
-            const req = tx.objectStore('zs_colecciones').get(_zsColeccionActual.id);
+            const tx  = db.transaction(CAT_CONECTORES.zonascans.store,'readwrite');
+            const req = tx.objectStore(CAT_CONECTORES.zonascans.store).get(_zsColeccionActual.id);
             req.onsuccess = e => {
               const reg = e.target.result;
               reg.caps  = nuevasCaps;
-              tx.objectStore('zs_colecciones').put(reg);
+              tx.objectStore(CAT_CONECTORES.zonascans.store).put(reg);
               tx.oncomplete = () => res();
               tx.onerror    = e => rej(e.target.error);
             };
@@ -3669,18 +3676,18 @@
             let nuevoZipId = null;
             if (prefijo === 'ht') {
               const id = parseInt(slotId.replace('ht-', ''));
-              const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
+              const gal = (await dbListar(CAT_CONECTORES.hitomi.store)).find(g => g.id === id);
               nuevoZipId = gal && gal.zip_id;
             } else if (prefijo === 'nh') {
               const id = parseInt(slotId.replace('nh-', ''));
               const gal = (await nhListar()).find(g => g.id === id);
               nuevoZipId = gal && gal.zip_id;
             } else if (['sjz','mw','zs'].includes(prefijo)) {
-              const storeMap = { sjz:'sjz_colecciones', mw:'mw_colecciones', zs:'zs_colecciones' };
+              const conPref  = Object.values(CAT_CONECTORES).find(c => c.slotPrefix === prefijo);
               const partes   = slotId.replace(prefijo + '-','').split('-');
               const colId    = parseInt(partes[0]);
               const capNum   = partes.slice(1).join('-');
-              const col      = (await dbListar(storeMap[prefijo])).find(c => c.id === colId);
+              const col      = (await dbListar(conPref.store)).find(c => c.id === colId);
               const cap      = col && col.capitulos && col.capitulos.find(c => String(c.num||c.titulo) === String(capNum));
               nuevoZipId     = cap && cap.zip_id;
             }
@@ -4564,7 +4571,7 @@
       }
 
       // — Actualizar colección en IndexedDB —
-      const sjzActualizarColeccion = (id, caps) => dbActualizarCampo('sjz_colecciones', id, 'capitulos', caps);
+      const sjzActualizarColeccion = (id, caps) => dbActualizarCampo(CAT_CONECTORES.samurai.store, id, 'capitulos', caps);
 
       // — Buscar nuevos episodios —
       async function sjzBuscarNuevos() {
@@ -6075,21 +6082,17 @@
                 try {
                   // Limpiar zip_id en la colección correspondiente
                   const itCat = it.categoria || 'mangas';
-                  if (itCat === 'nhentai') {
-                    const gals = await nhListar();
+                  if (CAT_CONECTORES[itCat] && CAT_CONECTORES[itCat].nivel === 2) {
+                    const gals = await CAT_CONECTORES[itCat].listar();
                     const gal  = gals.find(g => g.zip_id === it.id);
-                    if (gal) await nhActualizarZip(gal.id, null);
-                  } else if (itCat === 'hitomi') {
-                    const gals = await dbListar('ht_galerias');
-                    const gal  = gals.find(g => g.zip_id === it.id);
-                    if (gal) await htActualizarZip(gal.id, null);
-                  } else if (itCat === 'samurai' || itCat === 'manhwa' || itCat === 'zonascans') {
-                    const storeMap = { samurai:'sjz_colecciones', manhwa:'mw_colecciones', zonascans:'zs_colecciones' };
-                    const cols = await dbListar(storeMap[itCat]);
+                    if (gal) await CAT_CONECTORES[itCat].actualizarZip(gal.id, null);
+                  } else if (CAT_CONECTORES[itCat]) {
+                    const store = CAT_CONECTORES[itCat].store;
+                    const cols  = await dbListar(store);
                     for (const col of cols) {
                       if (col.capitulos) {
                         const cap = col.capitulos.find(c => c.zip_id === it.id);
-                        if (cap) { cap.zip_id = null; await dbActualizar(storeMap[itCat], col); break; }
+                        if (cap) { cap.zip_id = null; await dbActualizar(store, col); break; }
                       }
                     }
                   }
@@ -6348,15 +6351,15 @@
       async function gfConstruirR2Key(it, clave) {
         const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
         const nombreBase = it.nombre.replace(/\.zip\.webc$/i,'').replace(/\.zip$/i,'');
-        if (itCat === 'samurai' || itCat === 'manhwa' || itCat === 'zonascans') {
-          const storeMap   = { samurai:'sjz_colecciones', manhwa:'mw_colecciones', zonascans:'zs_colecciones' };
+        if (CAT_CONECTORES[itCat] && CAT_CONECTORES[itCat].nivel === 3) {
+          const store      = CAT_CONECTORES[itCat].store;
           const colIdField = itCat + '_coleccion_id';
           const capField   = itCat + '_cap_num';
           let nombreManga  = nombreBase;
           let capNum       = '01';
           if (it[colIdField]) {
             try {
-              const cols = await dbListar(storeMap[itCat]);
+              const cols = await dbListar(store);
               const col  = cols.find(c => c.id === it[colIdField]);
               if (col) nombreManga = col.nombre;
             } catch(e) {}
@@ -6403,11 +6406,10 @@
           const base       = CF_WORKER.replace(/\/$/, '');
           // Subir link.json si es colección de 3 niveles
           if (r2Info.mangaCif && r2Info.capNum) {
-            const storeMap   = { samurai:'sjz_colecciones', manhwa:'mw_colecciones', zonascans:'zs_colecciones' };
             const colIdField = itCat + '_coleccion_id';
             let urlCol = '';
-            if (it[colIdField]) {
-              const cols = await dbListar(storeMap[itCat] || 'sjz_colecciones').catch(() => []);
+            if (it[colIdField] && CAT_CONECTORES[itCat]) {
+              const cols = await dbListar(CAT_CONECTORES[itCat].store).catch(() => []);
               const col  = cols.find(c => c.id === it[colIdField]);
               if (col) urlCol = col.base_url || col.url || col.slug || '';
             }
@@ -6445,11 +6447,10 @@
           const blobCifrado = it.blob;
           // Subir link.json si es colección de 3 niveles
           if (r2Info.mangaCif && r2Info.capNum) {
-            const storeMap   = { samurai:'sjz_colecciones', manhwa:'mw_colecciones', zonascans:'zs_colecciones' };
             const colIdField = itCat + '_coleccion_id';
             let urlCol = '';
-            if (it[colIdField]) {
-              const cols = await dbListar(storeMap[itCat] || 'sjz_colecciones').catch(() => []);
+            if (it[colIdField] && CAT_CONECTORES[itCat]) {
+              const cols = await dbListar(CAT_CONECTORES[itCat].store).catch(() => []);
               const col  = cols.find(c => c.id === it[colIdField]);
               if (col) urlCol = col.base_url || col.url || col.slug || '';
             }
@@ -6656,28 +6657,16 @@
           // categoria/nombre → nhentai, hitomi, mangas
           const itNombre = partes[1];
           const zipId    = await bvGuardar(itNombre + ext, blob, itCat);
-          if (itCat === 'nhentai') {
-            const lista    = await nhListar();
+          if (CAT_CONECTORES[itCat] && CAT_CONECTORES[itCat].nivel === 2) {
+            const con      = CAT_CONECTORES[itCat];
+            const lista    = await con.listar();
             const yaExiste = lista.find(g => g.nombre === itNombre);
             if (!yaExiste) {
-              await dbGuardar('nh_galerias', {
-                nombre: itNombre, nh_id: 0, media_id: '',
-                num_pages: 0, paths: [], zip_id: zipId,
-                fecha: new Date().toISOString()
+              await dbGuardar(con.store, {
+                nombre: itNombre, zip_id: zipId, fecha: new Date().toISOString()
               });
             } else if (!yaExiste.zip_id) {
-              await nhActualizarZip(yaExiste.id, zipId);
-            }
-          } else if (itCat === 'hitomi') {
-            const lista    = await dbListar('ht_galerias');
-            const yaExiste = lista.find(g => g.nombre === itNombre);
-            if (!yaExiste) {
-              await dbGuardar('ht_galerias', {
-                nombre: itNombre, media_id: '', num_pages: 0,
-                files: [], zip_id: zipId, fecha: new Date().toISOString()
-              });
-            } else if (!yaExiste.zip_id) {
-              await htActualizarZip(yaExiste.id, zipId);
+              await con.actualizarZip(yaExiste.id, zipId);
             }
           }
           if (!esCifrado) {
@@ -6691,8 +6680,7 @@
           // categoria/nombreManga/capitulo → samurai, manhwa, zonascans
           const nombreManga = partes[1];
           const capNom      = partes[2];
-          const storeMap    = { samurai:'sjz_colecciones', manhwa:'mw_colecciones', zonascans:'zs_colecciones' };
-          const store       = storeMap[itCat];
+          const store = CAT_CONECTORES[itCat] ? CAT_CONECTORES[itCat].store : null;
 
           // Intentar leer link.json para obtener URL
           let urlCol = '';
@@ -6755,125 +6743,65 @@
    
       // — Generar ZIPs desde descargas_temp para slots completos sin ZIP —
       async function gfGenerarZipsDeTemp(cat) {
-        const slots = await dtListar();
-        const deCat = slots.filter(s => s.categoria === cat && s.categoria !== 'cache');
-        const sinZip = [];
-        for (const s of deCat) {
-          if (s.imagenes && s.total && s.imagenes.length >= s.total) {
-            const id  = parseInt(s.slotId.replace('ht-','').replace('nh-',''));
-            const gals = cat === 'hitomi' ? await dbListar('ht_galerias') : await nhListar();
-            const gal  = gals.find(g => g.id === id);
-            if (!gal || !gal.zip_id) sinZip.push(s.slotId);
-          }
-        }
-        actualizarStatus('🔍 ' + cat + ': ' + deCat.length + ' slots, ' + sinZip.length + ' sin ZIP — ' + sinZip.join(', '));
-        const completos = slots.filter(s =>
-          s.categoria === cat &&
-          s.imagenes && s.total &&
-          s.imagenes.length >= s.total &&
-          s.categoria !== 'cache'
-        );
-        if (!completos.length) { actualizarStatus('⚠️ No hay descargas completas sin ZIP en ' + cat); return; }
+        const con     = CAT_CONECTORES[cat];
+        const slots   = await dtListar();
+        const deCat   = slots.filter(s => s.categoria === cat && s.categoria !== 'cache');
+        const completos = deCat.filter(s => s.imagenes && s.total && s.imagenes.length >= s.total);
+
+        actualizarStatus('🔍 ' + cat + ': ' + deCat.length + ' slots, ' + completos.length + ' completos');
+        if (!completos.length) { actualizarStatus('⚠️ No hay descargas completas en ' + cat); return; }
 
         let generados = 0;
         for (const slot of completos) {
           try {
-            // Verificar si ya tiene ZIP según categoría
-            let yaExiste = false;
-            if (cat === 'nhentai') {
-              const id  = parseInt(slot.slotId.replace('nh-', ''));
-              const gal = (await nhListar()).find(g => g.id === id);
-              if (gal && gal.zip_id) {
-                const reg = await bvCargar(gal.zip_id);
-                if (!reg || !reg.blob || reg.blob.size < 100) await nhActualizarZip(gal.id, null);
-                else yaExiste = true;
-              }
-            } else if (cat === 'hitomi') {
-              const id  = parseInt(slot.slotId.replace('ht-', ''));
-              const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
-              if (gal && gal.zip_id) {
-                const reg = await bvCargar(gal.zip_id);
-                if (!reg || !reg.blob || reg.blob.size < 100) await htActualizarZip(gal.id, null);
-                else yaExiste = true;
-              }
-            } else if (cat === 'samurai') {
-              const partes  = slot.slotId.replace('sjz-','').split('-');
-              const colId   = parseInt(partes[0]);
-              const capNum  = partes.slice(1).join('-');
-              const cols    = await sjzListar();
-              const col     = cols.find(c => c.id === colId);
-              yaExiste      = !!(col && col.capitulos && col.capitulos.find(c => String(c.num) === String(capNum) && c.zip_id));
-            } else if (cat === 'manhwa') {
-              const partes  = slot.slotId.replace('mw-','').split('-');
-              const colId   = parseInt(partes[0]);
-              const capNum  = partes.slice(1).join('-');
-              const cols    = await mwListar();
-              const col     = cols.find(c => c.id === colId);
-              yaExiste      = !!(col && col.capitulos && col.capitulos.find(c => String(c.num) === String(capNum) && c.zip_id));
-            } else if (cat === 'zonascans') {
-              const partes  = slot.slotId.replace('zs-','').split('-');
-              const colId   = parseInt(partes[0]);
-              const capTit  = partes.slice(1).join('-');
-              const cols    = await zsListar();
-              const col     = cols.find(c => c.id === colId);
-              yaExiste      = !!(col && col.capitulos && col.capitulos.find(c => String(c.titulo) === String(capTit) && c.zip_id));
-            }
-
-            if (yaExiste) continue;
-
-            actualizarStatus('⏳ Generando ZIP: ' + slot.nombre);
             const archivos = slot.imagenes.sort((a,b) =>
               (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric: true })
             );
-            const zip = new JSZip();
-            archivos.forEach(a => zip.file(a.nombre, a.blob));
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-            // Guardar según categoría
-            if (cat === 'nhentai') {
-              const id  = parseInt(slot.slotId.replace('nh-', ''));
-              const gal = (await nhListar()).find(g => g.id === id);
-              if (gal) {
-                const zipId = await bvGuardar(gal.nombre + '.zip', zipBlob, 'nhentai');
-                await nhActualizarZip(gal.id, zipId);
-                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+            if (con.nivel === 2) {
+              // nhentai / hitomi — una galería = un ZIP
+              const prefix = con.slotPrefix + '-';
+              const id     = parseInt(slot.slotId.replace(prefix, ''));
+              const gals   = await con.listar();
+              const gal    = gals.find(g => g.id === id);
+              if (!gal) continue;
+
+              // Verificar si ya tiene ZIP válido
+              if (gal.zip_id) {
+                const reg = await bvCargar(gal.zip_id);
+                if (reg && reg.blob && reg.blob.size >= 100) continue; // ya existe
+                await con.actualizarZip(gal.id, null); // limpiar referencia rota
               }
-            } else if (cat === 'hitomi') {
-              const id  = parseInt(slot.slotId.replace('ht-', ''));
-              const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
-              if (gal) {
-                const zipId = await bvGuardar(gal.nombre + '.zip', zipBlob, 'hitomi');
-                await htActualizarZip(gal.id, zipId);
-                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
-              }
-            } else if (cat === 'samurai') {
-              const partes = slot.slotId.replace('sjz-','').split('-');
-              const colId  = parseInt(partes[0]);
-              const capNum = partes.slice(1).join('-');
-              const col    = (await sjzListar()).find(c => c.id === colId);
-              if (col) {
-                const zipId = await sjzGuardarCapitulo(col.nombre + ' - Cap ' + capNum + '.zip', zipBlob, colId, capNum);
-                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
-              }
-            } else if (cat === 'manhwa') {
-              const partes = slot.slotId.replace('mw-','').split('-');
-              const colId  = parseInt(partes[0]);
-              const capNum = partes.slice(1).join('-');
-              const col    = (await mwListar()).find(c => c.id === colId);
-              if (col) {
-                const zipId = await mwGuardarCapitulo(col.nombre + ' - Cap ' + capNum + '.zip', zipBlob, colId, capNum);
-                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
-              }
-            } else if (cat === 'zonascans') {
-              const partes = slot.slotId.replace('zs-','').split('-');
-              const colId  = parseInt(partes[0]);
-              const capTit = partes.slice(1).join('-');
-              const col    = (await zsListar()).find(c => c.id === colId);
-              if (col) {
-                const zsNombre = col.nombre + ' - ' + capTit + '.zip';
-                const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, colId, capTit);
-                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
-              }
+
+              actualizarStatus('⏳ Generando ZIP: ' + slot.nombre);
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const zipId   = await bvGuardar(gal.nombre + '.zip', zipBlob, cat);
+              await con.actualizarZip(gal.id, zipId);
+              bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+
+            } else {
+              // samurai / manhwa / zonascans — colección/capítulo
+              const prefix  = con.slotPrefix + '-';
+              const partes  = slot.slotId.replace(prefix, '').split('-');
+              const colId   = parseInt(partes[0]);
+              const clave   = partes.slice(1).join('-');
+              const cols    = await con.listar();
+              const col     = cols.find(c => c.id === colId);
+              if (!col) continue;
+
+              // Verificar si ya tiene ZIP
+              const zipExistente = await capBuscarZip(cat, colId, isNaN(Number(clave)) ? clave : Number(clave));
+              if (zipExistente) continue;
+
+              actualizarStatus('⏳ Generando ZIP: ' + slot.nombre);
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const zipBlob  = await zip.generateAsync({ type: 'blob' });
+              const nombre   = con.getDescargarLabel({ num: clave, titulo: clave }, col.nombre);
+              const zipId    = await capGuardarZip(cat, nombre, zipBlob, colId, isNaN(Number(clave)) ? clave : Number(clave));
+              bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
             }
             generados++;
           } catch(e) {
