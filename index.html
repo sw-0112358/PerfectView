@@ -5486,11 +5486,27 @@
           actualizarStatus('⏳ Cargando desde bóveda…');
           const registro = await bvCargar(id);
           if (!registro) { actualizarStatus('❌ Archivo no encontrado'); return; }
+
+          // — Si está cifrado (.zip.webc) pedir contraseña y descifrar —
+          let blobFinal = registro.blob;
+          if (registro.nombre && registro.nombre.endsWith('.zip.webc')) {
+            const pwd = prompt('🔐 Contraseña para descifrar:', '🪷🌸💠');
+            if (pwd === null) { actualizarStatus('⚠️ Cancelado'); return; }
+            try {
+              actualizarStatus('⏳ Descifrando…');
+              const clave = await gfDerivarClave(pwd);
+              blobFinal   = await gfDescifrarBlob(blobFinal, clave);
+            } catch(e) {
+              actualizarStatus('❌ Contraseña incorrecta o archivo dañado');
+              return;
+            }
+          }
+
           archivosDescargados.length = 0;
-          const zip      = await JSZip.loadAsync(registro.blob);
+          const zip      = await JSZip.loadAsync(blobFinal);
           const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
-          .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            .filter(f => !f.dir)
+            .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           for (const entrada of entradas) {
             const blob = await entrada.async('blob');
             archivosDescargados.push({ nombre: entrada.name, blob });
