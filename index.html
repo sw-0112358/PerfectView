@@ -3553,13 +3553,19 @@
           const blob = await e.async('blob');
           imagenes.push({ nombre: e.name, blob });
         }
-        // Guardar en descargas_temp para reutilizar (solo si no estaba cifrado,
-        // para no cachear datos descifrados en IDB)
         if (!reg.nombre || !reg.nombre.endsWith('.zip.webc')) {
+          // Cachear en descargas_temp solo si no está cifrado
           await dtCrear(slotId, { categoria: 'cache', nombre: slotId, total: imagenes.length });
           for (const img of imagenes) {
             await dtAgregarImagen(slotId, img);
           }
+        } else {
+          // Cifrado: guardar solo la portada si no existe aún
+          bvCargarPortada(zipId).then(pb => {
+            if (!pb && imagenes.length) {
+              bvGuardarPortada(zipId, imagenes[0].blob).catch(() => {});
+            }
+          }).catch(() => {});
         }
         return imagenes;
       }
