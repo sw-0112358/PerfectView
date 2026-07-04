@@ -2548,6 +2548,82 @@
         if (categoriaActual === 'nhentai') renderBoveda();
       }
 
+      // — Importar ZIP con meta.json interno → restaurar en su categoría —
+      async function importarDesdeMeta(meta, blob, nombreArchivo) {
+        actualizarStatus('⏳ Restaurando ' + meta.nombre + ' (' + meta.tipo + ')…');
+        try {
+          if (meta.tipo === 'nhentai') {
+            const lista    = await nhListar();
+            const yaExiste = lista.find(g => g.nombre === meta.nombre);
+            const zipId    = await bvGuardar(meta.nombre + '.zip', blob, 'nhentai');
+            if (yaExiste) {
+              await nhActualizarZip(yaExiste.id, zipId);
+            } else {
+              const galId = await dbGuardar('nh_galerias', {
+                nombre: meta.nombre, nh_id: meta.nh_id||0, media_id: meta.media_id||'',
+                num_pages: meta.num_pages||0, paths: meta.paths||[],
+                zip_id: zipId, fecha: meta.fecha || new Date().toISOString()
+              });
+            }
+            actualizarStatus('✅ nhentai restaurado: ' + meta.nombre);
+          } else if (meta.tipo === 'hitomi') {
+            const lista    = await dbListar('ht_galerias');
+            const yaExiste = lista.find(g => g.nombre === meta.nombre);
+            const zipId    = await bvGuardar(meta.nombre + '.zip', blob, 'hitomi');
+            if (yaExiste) {
+              await htActualizarZip(yaExiste.id, zipId);
+            } else {
+              await dbGuardar('ht_galerias', {
+                nombre: meta.nombre, media_id: meta.media_id||'',
+                num_pages: meta.num_pages||0, files: meta.files||[],
+                zip_id: zipId, fecha: meta.fecha || new Date().toISOString()
+              });
+            }
+            actualizarStatus('✅ Hitomi restaurado: ' + meta.nombre);
+          } else if (meta.tipo === 'samurai') {
+            const lista    = await sjzListar();
+            const yaExiste = lista.find(c => c.nombre === meta.nombre);
+            let colId;
+            if (yaExiste) {
+              colId = yaExiste.id;
+            } else {
+              colId = await sjzGuardar(meta.nombre, meta.base_url||'', meta.capitulos||[]);
+            }
+            await sjzGuardarCapitulo(meta.nombre + ' - Cap ' + meta.cap_num + '.zip', blob, colId, meta.cap_num);
+            actualizarStatus('✅ Samurai restaurado: ' + meta.nombre + ' Cap ' + meta.cap_num);
+          } else if (meta.tipo === 'manhwa') {
+            const lista    = await mwListar();
+            const yaExiste = lista.find(c => c.nombre === meta.nombre);
+            let colId;
+            if (yaExiste) {
+              colId = yaExiste.id;
+            } else {
+              colId = await mwGuardar(meta.nombre, meta.base_url||'', meta.slug||'', meta.capitulos||[]);
+            }
+            await mwGuardarCapitulo(meta.nombre + ' - Cap ' + meta.cap_num + '.zip', blob, colId, meta.cap_num);
+            actualizarStatus('✅ Manhwa restaurado: ' + meta.nombre + ' Cap ' + meta.cap_num);
+          } else if (meta.tipo === 'zonascans') {
+            const lista    = await zsListar();
+            const yaExiste = lista.find(c => c.nombre === meta.nombre);
+            let colId;
+            if (yaExiste) {
+              colId = yaExiste.id;
+            } else {
+              colId = await zsGuardar({ nombre: meta.nombre, url: meta.url||'', capitulos: meta.capitulos||[], fecha: new Date().toISOString() });
+            }
+            await capGuardarZip('zonascans', meta.nombre + ' - ' + meta.cap_num + '.zip', blob, colId, meta.cap_num);
+            actualizarStatus('✅ ZonaScans restaurado: ' + meta.nombre + ' - ' + meta.cap_num);
+          } else {
+            // Tipo desconocido → importar como manga
+            const id = await bvGuardar(nombreArchivo, blob, 'mangas');
+            actualizarStatus('✅ Importado como manga: ' + nombreArchivo);
+          }
+          renderBoveda();
+        } catch(err) {
+          actualizarStatus('❌ Error al restaurar: ' + err.message);
+        }
+      }
+
       // — Detectar tipo de ZIP e importar correctamente —
       async function detectarYImportarZip(archivo) {
         actualizarStatus('⏳ Analizando ' + archivo.name + '…');
@@ -2555,11 +2631,18 @@
           const zip = await JSZip.loadAsync(archivo);
 
           // ¿Contiene coleccion.json o galeria.json?
-          const jsonFile = zip.file('coleccion.json') || zip.file('galeria.json');
+          const jsonFile = zip.file('meta.json') || zip.file('coleccion.json') || zip.file('galeria.json');
           if (jsonFile) {
             const jsonStr = await jsonFile.async('string');
             const meta    = JSON.parse(jsonStr);
 
+            // meta.json interno (ZIP de imágenes directo) — restaurar registro + blob
+            if (meta.tipo && jsonFile.name === 'meta.json') {
+              const blobCompleto = archivo instanceof File ? archivo : new File([archivo], archivo.name);
+              await importarDesdeMeta(meta, blobCompleto, archivo.name);
+              return;
+            }
+            // coleccion.json / galeria.json (ZIP maestro con sub-ZIPs)
             if (meta.tipo === 'samurai') {
               await importarColeccionSamurai(zip, meta, archivo.name);
               return;
