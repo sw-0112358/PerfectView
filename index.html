@@ -2414,15 +2414,31 @@
         const nombre = prompt('📦 Nombre para guardar en Bóveda:', getnombrePrevio() || 'manga');
         if (nombre === null || !nombre.trim()) return;
         try {
+          // Verificar si ya existe un .zip o .zip.webc con ese nombre
+          const db    = await bvAbrirDB();
+          const todos = await new Promise((res, rej) => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+          });
+          const nombreBase  = nombre.trim();
+          const yaExiste    = todos.find(r =>
+            r.nombre === nombreBase + '.zip' ||
+            r.nombre === nombreBase + '.zip.webc'
+          );
+          if (yaExiste) {
+            actualizarStatus('⚠️ Ya existe "' + nombreBase + '" en la bóveda');
+            return;
+          }
           actualizarStatus('⏳ Generando ZIP para bóveda…');
           const zip = new JSZip();
           archivosDescargados.forEach(a => zip.file(a.nombre, a.blob));
           const blob = await zip.generateAsync({ type: 'blob' });
-          const id = await bvGuardar(nombre.trim() + '.zip', blob, categoriaActual);
+          const id = await bvGuardar(nombreBase + '.zip', blob, categoriaActual);
           bvExtraerPortada(blob)
             .then(pb => pb && bvGuardarPortada(id, pb))
             .catch(() => {});
-          actualizarStatus('✅ Guardado en Bóveda: ' + nombre.trim());
+          actualizarStatus('✅ Guardado en Bóveda: ' + nombreBase);
         } catch(err) {
           actualizarStatus('❌ Error al guardar: ' + err.message);
         }
@@ -5437,9 +5453,13 @@
         items.sort((a,b) => b.fecha.localeCompare(a.fecha));
 
         for (const item of items) {
+          const esCifrado = item.nombre && item.nombre.endsWith('.zip.webc');
+          const nombreMostrar = item.nombre
+            .replace(/\.zip\.webc$/i, '')
+            .replace(/\.zip$/i, '');
           const { card, ph: placeholder, img, footer } = crearTarjeta({
-            nombre:      item.nombre.replace(/\.zip$/i, ''),
-            phTexto:     '📖',
+            nombre:      nombreMostrar + (esCifrado ? ' 🔐' : ''),
+            phTexto:     esCifrado ? '🔐' : '📖',
             onRenombrar: (footerEl) => bvRenombrar(item, footerEl),
             onDelete:    (btnEl, cardEl, footerEl) => bvAbrirDropdown(btnEl, item, cardEl, footerEl),
             btnMenu:     '···',
@@ -5451,6 +5471,7 @@
           grid.appendChild(card);
 
           // Lazy load: solo cargar portada cuando la tarjeta entre al viewport
+          // Si está cifrado no intentar extraer portada del blob
           if (_bvPortadas[item.id]) {
             img.src = _bvPortadas[item.id];
             img.style.display = 'block';
@@ -5460,6 +5481,7 @@
               try {
                 let blob = await bvCargarPortada(item.id);
                 if (!blob) {
+                  if (esCifrado) return; // no intentar abrir blob cifrado
                   const reg = await bvCargar(item.id);
                   if (!reg) return;
                   blob = await bvExtraerPortada(reg.blob);
