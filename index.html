@@ -5995,10 +5995,12 @@
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
             row.innerHTML = '<span>🔐</span>'
               + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.nombreReal + '</span>'
-              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(o.size) + '</span>';
+              + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
+              + '<button class="btn-icon btn-dl-r2" style="width:28px;height:28px;font-size:.8rem" title="Descargar a bóveda">⬇️</button>';
+            row.querySelector('.btn-dl-r2').addEventListener('click', () => gfCloudDescargarUno(o));
             el.appendChild(row);
           });
-          document.querySelector('#gfPanelDescifrar .action-btn:last-of-type').textContent = '☁️ Descargar de R2';
+          document.querySelector('#gfPanelDescifrar .action-btn:last-of-type').textContent = '☁️ Descargar todos a bóveda';
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
         }
@@ -6737,6 +6739,23 @@
         renderBoveda();
       }
 
+      
+      // — Descargar un archivo individual de R2 a la bóveda —
+      async function gfCloudDescargarUno(o) {
+        if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        actualizarStatus('⏳ Descargando ' + o.nombreReal + '…');
+        try {
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(o.key));
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const blobCifrado = await resp.blob();
+          await gfRestaurarDesdeEstructura(o.key, o.nombreReal, blobCifrado, true);
+          actualizarStatus('✅ Restaurado: ' + o.nombreReal);
+          renderBoveda();
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+        }
+      }
    
       
       /* =============================================
