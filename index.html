@@ -6206,8 +6206,9 @@
         btnEl.disabled    = true;
         try {
           const base = CF_WORKER.replace(/\/$/, '');
-          const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(r2Key), {
+          const resp = await fetch(base + '/r2-upload', {
             method: 'POST',
+            headers: { 'X-R2-Key': encodeURIComponent(r2Key) },
             body:   it.blob,
           });
           const data = await resp.json();
@@ -6233,8 +6234,9 @@
           const r2Key = itCat + '/' + it.nombre;
           prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + it.nombre;
           try {
-            const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(r2Key), {
+            const resp = await fetch(base + '/r2-upload', {
               method: 'POST',
+              headers: { 'X-R2-Key': encodeURIComponent(r2Key) },
               body:   it.blob,
             });
             const data = await resp.json();
