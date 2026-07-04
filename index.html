@@ -3193,11 +3193,19 @@
       const zsBuscarZip = (colId, capTitulo) => capBuscarZip('zonascans', colId, capTitulo);
 
       async function zsAbrirCapitulo(col, cap, chipEl) {
-        // Ya descargado → abrir desde ZIP
+        const slotId    = 'zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-');
         const existente = await zsBuscarZip(col.id, cap.titulo);
-        if (existente) {
+        if (!existente) {
+          const slot = await dtCargar(slotId);
+          if (slot && slot.imagenes && slot.total && slot.imagenes.length >= slot.total) {
+            actualizarStatus('⏳ Generando ZIP de ' + cap.titulo + '…');
+            await gfGenerarZipsDeTemp('zonascans');
+          }
+        }
+        const zipReg = existente || await zsBuscarZip(col.id, cap.titulo);
+        if (zipReg) {
           actualizarStatus('⏳ Cargando ' + cap.titulo + '…');
-          const imagenes = await cargarDesdeSlotOZip('zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-'), existente.id ?? existente);
+          const imagenes = await cargarDesdeSlotOZip(slotId, zipReg.id ?? zipReg);
           if (imagenes) {
             archivosDescargados.length = 0;
             imagenes.forEach(a => archivosDescargados.push(a));
@@ -3209,7 +3217,6 @@
         }
 
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
-        const slotId = 'zs-' + col.id + '-' + cap.titulo.replace(/[^a-zA-Z0-9]/g, '-');
 
         // Verificar slot previo
         const slotPrevio = await dtCargar(slotId);
@@ -4545,11 +4552,20 @@
       // — Abrir capítulo: descarga o carga desde DB —
       async function sjzAbrirCapitulo(coleccion, cap, chipEl) {
         // Ya descargado → cargar directo desde IndexedDB
+        const slotId   = 'sjz-' + coleccion.id + '-' + cap.num;
         const existente = await sjzBuscarZipCapitulo(coleccion.id, cap.num);
-        if (existente) {
+        // Si no hay ZIP pero sí hay slot completo → generar ZIP primero
+        if (!existente) {
+          const slot = await dtCargar(slotId);
+          if (slot && slot.imagenes && slot.total && slot.imagenes.length >= slot.total) {
+            actualizarStatus('⏳ Generando ZIP del cap. ' + cap.num + '…');
+            await gfGenerarZipsDeTemp('samurai');
+          }
+        }
+        const zipReg = existente || await sjzBuscarZipCapitulo(coleccion.id, cap.num);
+        if (zipReg) {
           actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
-          const slotId = 'sjz-' + coleccion.id + '-' + cap.num;
-          const imagenes = await cargarDesdeSlotOZip(slotId, existente.id);
+          const imagenes = await cargarDesdeSlotOZip(slotId, zipReg.id);
           if (!imagenes) { actualizarStatus('❌ No se pudo cargar'); return; }
           archivosDescargados.length = 0;
           imagenes.forEach(a => archivosDescargados.push(a));
@@ -5317,11 +5333,19 @@
 
       // — Abrir capítulo Manhwa —
       async function mwAbrirCapitulo(coleccion, cap, chipEl) {
+        const slotId    = 'mw-' + coleccion.id + '-' + cap.num;
         const existente = await mwBuscarZipCapitulo(coleccion.id, cap.num);
-        if (existente) {
+        if (!existente) {
+          const slot = await dtCargar(slotId);
+          if (slot && slot.imagenes && slot.total && slot.imagenes.length >= slot.total) {
+            actualizarStatus('⏳ Generando ZIP del cap. ' + cap.num + '…');
+            await gfGenerarZipsDeTemp('manhwa');
+          }
+        }
+        const zipReg = existente || await mwBuscarZipCapitulo(coleccion.id, cap.num);
+        if (zipReg) {
           actualizarStatus('⏳ Cargando cap. ' + cap.num + '…');
-          const slotId = 'mw-' + coleccion.id + '-' + cap.num;
-          const imagenes = await cargarDesdeSlotOZip(slotId, existente.id);
+          const imagenes = await cargarDesdeSlotOZip(slotId, zipReg.id);
           if (!imagenes) { actualizarStatus('❌ No se pudo cargar'); return; }
           archivosDescargados.length = 0;
           imagenes.forEach(a => archivosDescargados.push(a));
@@ -5331,8 +5355,6 @@
           return;
         }
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
-
-        const slotId = 'mw-' + coleccion.id + '-' + cap.num;
 
         // Verificar slot previo
         const slotPrevio = await dtCargar(slotId);
