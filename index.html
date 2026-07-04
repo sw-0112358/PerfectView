@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v121❄️
+          PerfectView🪷v125❄️
         </div>
       </header>
 
@@ -6471,21 +6471,19 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blobCifrado = await resp.blob();
 
-            // Descifrar el blob
-            let blobFinal = blobCifrado;
-            if (_gfPwdMaestra) {
-              try {
-                const clave = await gfDerivarClave(_gfPwdMaestra);
-                blobFinal   = await gfDescifrarBlob(blobCifrado, clave);
-              } catch(e) {
-                prog.textContent = '❌ Error al descifrar: ' + nombreMostrar;
-                continue;
-              }
+            // Descifrar el blob — requiere clave maestra activa
+            if (!_gfPwdMaestra) {
+              prog.textContent = '⚠️ Activa la clave maestra en 🧬 primero';
+              return;
             }
-
-            // Nombre real del archivo
-            const partesReal = nombreMostrar.split('/');
-            const itNombre   = partesReal[partesReal.length - 1];
+            let blobFinal;
+            try {
+              const clave = await gfDerivarClave(_gfPwdMaestra);
+              blobFinal   = await gfDescifrarBlob(blobCifrado, clave);
+            } catch(e) {
+              prog.textContent = '❌ Error al descifrar ' + nombreMostrar + ': contraseña incorrecta o archivo dañado';
+              continue;
+            }
 
             // Restaurar según estructura de carpetas
             await gfRestaurarDesdeEstructura(o.key, nombreMostrar, blobFinal);
