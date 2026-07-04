@@ -5700,7 +5700,7 @@
       let _gfItems   = []; // cache del último escaneo
 
       function abrirGestorArchivos() {
-        if (!_gfPwdMaestra) {
+        if (typeof _gfPwdMaestra === 'undefined' || !_gfPwdMaestra) {
           const id = prompt('🧬 Ingresa tu ID para activar la clave maestra:', '🪷🌸💠');
           if (id === null) return;
           _clvIdActiva = id.trim();
@@ -5760,15 +5760,14 @@
           for (const o of data.objetos) {
             const row   = document.createElement('div');
             const fecha = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
-            // Descifrar nombre: extraer la parte entre categoria/ y .webc
             let nombreMostrar = o.key;
             if (clave) {
               try {
-                const partes    = o.key.split('/');
-                const filePart  = partes[partes.length - 1].replace(/\.webc$/, '');
-                const nombreReal = await gfDescifrarNombre(filePart, clave);
-                nombreMostrar   = (partes.length > 1 ? partes[0] + '/' : '') + nombreReal;
-              } catch(e) { /* nombre no descifrable — mostrar opaco */ }
+                const partes   = o.key.split('/');
+                const filePart = partes[partes.length - 1].replace(/\.webc$/, '');
+                const real     = await gfDescifrarNombre(filePart, clave);
+                nombreMostrar  = (partes.length > 1 ? partes[0] + '/' : '') + real;
+              } catch(e) {}
             }
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
             row.innerHTML = '<span>🔐</span>'
@@ -6220,14 +6219,14 @@
         if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         const it = _gfItems.find(i => i.id === id);
         if (!it) return;
-        const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+        const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
         btnEl.textContent = '⏳';
         btnEl.disabled    = true;
         try {
-          const clave      = await gfDerivarClave(_gfPwdMaestra);
-          const nombreCif  = await gfCifrarNombre(it.nombre, clave);
-          const r2Key      = itCat + '/' + nombreCif + '.webc';
-          const base       = CF_WORKER.replace(/\/$/, '');
+          const clave     = await gfDerivarClave(_gfPwdMaestra);
+          const nombreCif = await gfCifrarNombre(it.nombre, clave);
+          const r2Key     = itCat + '/' + nombreCif + '.webc';
+          const base      = CF_WORKER.replace(/\/$/, '');
           const resp = await fetch(base + '/r2-upload', {
             method:  'POST',
             headers: { 'X-R2-Key': encodeURIComponent(r2Key) },
@@ -6236,7 +6235,7 @@
           const data = await resp.json();
           if (!data.ok) throw new Error(data.error);
           btnEl.textContent = '✅';
-          actualizarStatus('✅ Subido a R2: ' + itCat + '/' + it.nombre);
+          actualizarStatus('✅ Subido: ' + itCat + '/' + it.nombre);
         } catch(err) {
           btnEl.textContent = '❌';
           btnEl.disabled    = false;
@@ -6249,22 +6248,15 @@
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         if (!_gfItems.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
-        const base    = CF_WORKER.replace(/\/$/, '');
-        const total   = _gfItems.length;
-        const clave   = await gfDerivarClave(_gfPwdMaestra);
+        const prog  = document.getElementById('gfProgresoDescifrar');
+        const base  = CF_WORKER.replace(/\/$/, '');
+        const clave = await gfDerivarClave(_gfPwdMaestra);
         let ok = 0, errores = 0;
-
         for (const it of _gfItems) {
-          const actual  = ok + errores + 1;
-          const pct     = Math.round((actual - 1) / total * 100);
-          const itCat   = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+          const itCat     = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
           const nombreCif = await gfCifrarNombre(it.nombre, clave);
           const r2Key     = itCat + '/' + nombreCif + '.webc';
-          gfProgActualizar('Desc',
-            pct,
-            '☁️ ' + actual + '/' + total + ' — ' + it.nombre.slice(0, 28) + (it.nombre.length > 28 ? '…' : ''),
-            gfFmtSize(it.tamaño)
-          );
+          prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + it.nombre;
           try {
             const resp = await fetch(base + '/r2-upload', {
               method:  'POST',
@@ -6276,10 +6268,11 @@
             ok++;
           } catch(err) {
             errores++;
-            gfProgActualizar('Desc', Math.round(actual / total * 100),
-              '❌ Error: ' + it.nombre.slice(0, 24), err.message, 'err');
+            prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
           }
         }
+        prog.textContent = '✅ ' + ok + ' subido(s)' + (errores ? ' · ❌ ' + errores + ' error(es)' : '') + ' — R2';
+      }
 
       // — Recuperar .zip.webc de R2 → importar a IDB con categoría —
       async function gfCloudDescargarTodos() {
@@ -6295,19 +6288,17 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blob = await resp.blob();
             // Extraer categoría y nombre de la key: "categoria/nombre.zip.webc"
-              
-            const partes    = o.key.split('/');
-            const itCat     = partes.length > 1 ? partes[0] : 'mangas';
-            const filePart  = partes[partes.length - 1].replace(/\.webc$/, '');
-            let itNombre    = partes[partes.length - 1];
+            const partes   = o.key.split('/');
+            const itCat    = partes.length > 1 ? partes[0] : 'mangas';
+            const filePart = partes[partes.length - 1].replace(/\.webc$/, '');
+            let itNombre   = partes[partes.length - 1];
             if (_gfPwdMaestra) {
               try {
-                const clave  = await gfDerivarClave(_gfPwdMaestra);
-                itNombre     = await gfDescifrarNombre(filePart, clave);
-              } catch(e) { /* usar nombre opaco si falla */ }
+                const clave = await gfDerivarClave(_gfPwdMaestra);
+                itNombre    = await gfDescifrarNombre(filePart, clave);
+              } catch(e) {}
             }
             await bvGuardar(itNombre, blob, itCat);
-            
             ok++;
           } catch(err) {
             prog.textContent = '❌ Error en ' + o.key + ': ' + err.message;
@@ -6436,6 +6427,7 @@
         }
       }
       
+      
       // — Cifrar filename → base64url —
       async function gfCifrarNombre(nombre, clave) {
         const iv  = crypto.getRandomValues(new Uint8Array(12));
@@ -6444,7 +6436,6 @@
           clave,
           new TextEncoder().encode(nombre)
         );
-        // iv + datos → base64url
         const buf = new Uint8Array(12 + enc.byteLength);
         buf.set(iv, 0);
         buf.set(new Uint8Array(enc), 12);
@@ -6454,14 +6445,14 @@
 
       // — Descifrar base64url → filename —
       async function gfDescifrarNombre(b64url, clave) {
-        const b64  = b64url.replace(/-/g, '+').replace(/_/g, '/');
-        const buf  = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-        const iv   = buf.slice(0, 12);
-        const dat  = buf.slice(12);
-        const dec  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, clave, dat);
+        const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+        const buf = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const iv  = buf.slice(0, 12);
+        const dat = buf.slice(12);
+        const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, clave, dat);
         return new TextDecoder().decode(dec);
       }
-      
+    
       
       /* =============================================
          10. INIT
