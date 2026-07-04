@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v105❄️
+          PerfectView🪷v107❄️
         </div>
       </header>
 
@@ -6300,8 +6300,8 @@
           try {
             const base = CF_WORKER.replace(/\/$/, '');
             const resp = await fetch(base + '/kv-load?id=' + encodeURIComponent('gf_pwd_' + _clvIdActiva));
-            const data = await resp.json();
-            if (data.ok && data.data !== undefined) kv = data.data;
+            const valor = await resp.json();
+            if (valor !== null && valor !== undefined) kv = typeof valor === 'string' ? valor : JSON.stringify(valor);
           } catch(e) {}
         }
         document.getElementById('clvParteKV').value = kv;
@@ -6352,7 +6352,7 @@
             const resp = await fetch(base + '/kv-save', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: 'gf_pwd_' + _clvIdActiva, data: kv })
+              body: JSON.stringify({ id: 'gf_pwd_' + _clvIdActiva, data: kv || ' ' })
             });
             const data = await resp.json();
             if (!data.ok) throw new Error(data.error || 'Error KV');
@@ -6391,8 +6391,8 @@
           try {
             const base = CF_WORKER.replace(/\/$/, '');
             const resp = await fetch(base + '/kv-load?id=' + encodeURIComponent('gf_pwd_' + _clvIdActiva));
-            const data = await resp.json();
-            if (data.ok && data.data !== undefined) kv = data.data;
+            const valor = await resp.json();
+            if (valor !== null && valor !== undefined) kv = typeof valor === 'string' ? valor : JSON.stringify(valor);
           } catch(e) {}
         }
         document.getElementById('clvParteKV').value = kv;
