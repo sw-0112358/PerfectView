@@ -6977,11 +6977,19 @@
             if (cat === 'nhentai') {
               const id  = parseInt(slot.slotId.replace('nh-', ''));
               const gal = (await nhListar()).find(g => g.id === id);
-              yaExiste  = !!(gal && gal.zip_id);
+              if (gal && gal.zip_id) {
+                const reg = await bvCargar(gal.zip_id);
+                if (!reg || !reg.blob || reg.blob.size < 100) await nhActualizarZip(gal.id, null);
+                else yaExiste = true;
+              }
             } else if (cat === 'hitomi') {
               const id  = parseInt(slot.slotId.replace('ht-', ''));
               const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
-              yaExiste  = !!(gal && gal.zip_id);
+              if (gal && gal.zip_id) {
+                const reg = await bvCargar(gal.zip_id);
+                if (!reg || !reg.blob || reg.blob.size < 100) await htActualizarZip(gal.id, null);
+                else yaExiste = true;
+              }
             } else if (cat === 'samurai') {
               const partes  = slot.slotId.replace('sjz-','').split('-');
               const colId   = parseInt(partes[0]);
