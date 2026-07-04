@@ -3172,10 +3172,10 @@
       }
 
       // — ZonaScans aliases —
-      const zsListar      = ()         => dbListar('zs_colecciones');
-      const zsEliminarDB  = id         => dbEliminar('zs_colecciones', id);
+      const zsListar      = ()         => dbListar(CAT_CONECTORES.zonascans.store);
+      const zsEliminarDB  = id         => dbEliminar(CAT_CONECTORES.zonascans.store, id);
       async function zsGuardar(info) {
-        return dbGuardar('zs_colecciones', info);
+        return dbGuardar(CAT_CONECTORES.zonascans.store, info);
       }
 
       function zsExtraerCapitulos(html) {
@@ -3586,11 +3586,11 @@
       }
 
       // — Hitomi aliases —
-      const htListar     = ()              => dbListar('ht_galerias');
-      const htEliminarDB = id              => dbEliminar('ht_galerias', id);
-      const htActualizarZip = (id, zip_id) => dbActualizarCampo('ht_galerias', id, 'zip_id', zip_id);
+      const htListar     = ()              => dbListar(CAT_CONECTORES.hitomi.store);
+      const htEliminarDB = id              => dbEliminar(CAT_CONECTORES.hitomi.store, id);
+      const htActualizarZip = (id, zip_id) => dbActualizarCampo(CAT_CONECTORES.hitomi.store, id, 'zip_id', zip_id);
       async function htGuardar(info) {
-        return dbGuardar('ht_galerias', { ...info, zip_id: null });
+        return dbGuardar(CAT_CONECTORES.hitomi.store, { ...info, zip_id: null });
       }
 
       // — Fetch info desde galleries/{id}.js —
@@ -4109,11 +4109,11 @@
       const NH_CDN = ['i3', 'i1', 'i2'];
 
       // — nhentai aliases —
-      const nhListar        = ()              => dbListar('nh_galerias');
-      const nhEliminarDB    = id              => dbEliminar('nh_galerias', id);
-      const nhActualizarZip = (id, zip_id)    => dbActualizarCampo('nh_galerias', id, 'zip_id', zip_id);
+      const nhListar        = ()              => dbListar(CAT_CONECTORES.nhentai.store);
+      const nhEliminarDB    = id              => dbEliminar(CAT_CONECTORES.nhentai.store, id);
+      const nhActualizarZip = (id, zip_id)    => dbActualizarCampo(CAT_CONECTORES.nhentai.store, id, 'zip_id', zip_id);
       async function nhGuardar(info) {
-        return dbGuardar('nh_galerias', { ...info, zip_id: null });
+        return dbGuardar(CAT_CONECTORES.nhentai.store, { ...info, zip_id: null });
       }
 
       // — Fetch info desde la página del lector (JSON embebido por SvelteKit) —
@@ -4474,18 +4474,11 @@
       // — CRUD IndexedDB —
 
       // — Samurai aliases —
-      const sjzListar     = ()  => dbListar('sjz_colecciones');
-      const sjzEliminarDB = id  => dbEliminar('sjz_colecciones', id);
+      const sjzListar     = ()  => dbListar(CAT_CONECTORES.samurai.store);
+      const sjzEliminarDB = id  => dbEliminar(CAT_CONECTORES.samurai.store, id);
 
       async function sjzGuardar(nombre, base_url, capitulos) {
-        const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction('sjz_colecciones', 'readwrite');
-          const req = tx.objectStore('sjz_colecciones')
-          .add({ nombre, base_url, capitulos, fecha: new Date().toISOString() });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-        });
+        return dbGuardar(CAT_CONECTORES.samurai.store, { nombre, base_url, capitulos });
       }
 
       // — Obtener capítulos vía fetch —
@@ -5203,11 +5196,11 @@
       let _mwOrdenDesc       = true;
 
       // — Manhwa aliases —
-      const mwListar              = ()         => dbListar('mw_colecciones');
-      const mwEliminarDB          = id         => dbEliminar('mw_colecciones', id);
-      const mwActualizarColeccion = (id, caps) => dbActualizarCampo('mw_colecciones', id, 'capitulos', caps);
+      const mwListar              = ()         => dbListar(CAT_CONECTORES.manhwa.store);
+      const mwEliminarDB          = id         => dbEliminar(CAT_CONECTORES.manhwa.store, id);
+      const mwActualizarColeccion = (id, caps) => dbActualizarCampo(CAT_CONECTORES.manhwa.store, id, 'capitulos', caps);
       async function mwGuardar(nombre, base_url, slug, capitulos) {
-        return dbGuardar('mw_colecciones', { nombre, base_url, slug, capitulos });
+        return dbGuardar(CAT_CONECTORES.manhwa.store, { nombre, base_url, slug, capitulos });
       }
 
       // — Crear carpeta Manhwa —
