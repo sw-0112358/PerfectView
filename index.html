@@ -3526,6 +3526,7 @@
             const urlsMap = {};
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+            zip.file('meta.json', JSON.stringify({ version:1, tipo:'hitomi', nombre:galeria.nombre, media_id:galeria.media_id, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
             await htActualizarZip(galeria.id, zipId);
@@ -3560,6 +3561,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('meta.json', JSON.stringify({ version:1, tipo:'hitomi', nombre:galeria.nombre, media_id:galeria.media_id, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
           await htActualizarZip(galeria.id, zipId);
@@ -3956,6 +3958,7 @@
             const urlsMap = {};
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+            zip.file('meta.json', JSON.stringify({ version:1, tipo:'nhentai', nombre:galeria.nombre, nh_id:galeria.nh_id, media_id:galeria.media_id, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
             await nhActualizarZip(galeria.id, zipId);
@@ -3996,6 +3999,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('meta.json', JSON.stringify({ version:1, tipo:'nhentai', nombre:galeria.nombre, nh_id:galeria.nh_id, media_id:galeria.media_id, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
@@ -4533,6 +4537,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('meta.json', JSON.stringify({ version:1, tipo:'samurai', nombre:coleccion.nombre, base_url:coleccion.base_url||'', capitulo:cap.num, cap_num:cap.num, capitulos:coleccion.capitulos||[] }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
 
           // 4. Guardar en IndexedDB
