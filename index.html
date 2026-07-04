@@ -6349,7 +6349,13 @@
           await fetch(base + '/r2-upload', {
             method:  'POST',
             headers: { 'X-R2-Key': encodeURIComponent(linkKey) },
-            body:    new Blob([JSON.stringify({ nombre: nombreManga, url: urlCol || '' })], { type: 'application
+            body:    new Blob([JSON.stringify({ nombre: nombreManga, url: urlCol || '' })], { type: 'application/json' }),
+          });
+        } catch(e) {}
+      }
+
+      // — Subir un solo .zip.webc a R2 conservando categoría —
+      async function gfSubirUnoR2(id, btnEl) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         const it = _gfItems.find(i => i.id === id);
