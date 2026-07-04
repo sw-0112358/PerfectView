@@ -5700,6 +5700,14 @@
       let _gfItems   = []; // cache del último escaneo
 
       function abrirGestorArchivos() {
+        if (!_gfPwdMaestra) {
+          const id = prompt('🧬 Ingresa tu ID para activar la clave maestra:', '🪷🌸💠');
+          if (id === null) return;
+          _clvIdActiva = id.trim();
+          document.getElementById('clvIdActiva').textContent = _clvIdActiva;
+          _clvCargarYAbrir();
+          return;
+        }
         bvNavegar('pantalla4');
         gfEscanear();
       }
@@ -6402,20 +6410,8 @@
       }
 
       // — Abrir Gestor: pide clave maestra si no existe —
-      const _abrirGestorOriginal = abrirGestorArchivos;
-      function abrirGestorArchivos() {
-        if (!_gfPwdMaestra) {
-          const id = prompt('🧬 Ingresa tu ID para activar la clave maestra:', '🪷🌸💠');
-          if (id === null) return;
-          _clvIdActiva = id.trim();
-          document.getElementById('clvIdActiva').textContent = _clvIdActiva;
-          // Cargar partes y luego abrir gestor
-          _clvCargarYAbrir();
-          return;
-        }
-        bvNavegar('pantalla4');
-        gfEscanear();
-      }
+      
+
 
       async function _clvCargarYAbrir() {
         const local = localStorage.getItem('gf_pwd_' + _clvIdActiva) || '';
