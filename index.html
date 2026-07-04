@@ -5849,22 +5849,38 @@
         const el = document.getElementById('gfListaDescifrar');
         el.textContent = '⏳ Consultando R2…';
         try {
-          const base = CF_WORKER.replace(/\/$/, '');
-          const resp = await fetch(base + '/r2-list');
-          const data = await resp.json();
+          const base  = CF_WORKER.replace(/\/$/, '');
+          const resp  = await fetch(base + '/r2-list');
+          const data  = await resp.json();
           if (!data.ok) throw new Error(data.error);
-          _gfCloudItems = data.objetos;
           if (!data.objetos.length) { el.textContent = '☁️ No hay archivos en R2.'; return; }
+
+          // Descifrar nombres y enriquecer objetos con nombreReal
+          const clave = _gfPwdMaestra ? await gfDerivarClave(_gfPwdMaestra) : null;
+          const objetos = [];
+          for (const o of data.objetos) {
+            let nombreReal = o.key;
+            if (clave) {
+              try {
+                const partes   = o.key.split('/');
+                const filePart = partes[partes.length - 1].replace(/\.webc$/, '');
+                const real     = await gfDescifrarNombre(filePart, clave);
+                nombreReal     = (partes.length > 1 ? partes[0] + '/' : '') + real;
+              } catch(e) {}
+            }
+            objetos.push({ ...o, nombreReal });
+          }
+          _gfCloudItems = objetos; // guarda con nombreReal incluido
+
           el.innerHTML = '';
-          data.objetos.forEach(o => {
+          objetos.forEach(o => {
             const row = document.createElement('div');
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
             row.innerHTML = '<span>🔐</span>'
-              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.key + '</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.nombreReal + '</span>'
               + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(o.size) + '</span>';
             el.appendChild(row);
           });
-          // Cambiar botón a "Descargar de R2"
           document.querySelector('#gfPanelDescifrar .action-btn:last-of-type').textContent = '☁️ Descargar de R2';
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
@@ -6290,14 +6306,10 @@
             // Extraer categoría y nombre de la key: "categoria/nombre.zip.webc"
             const partes   = o.key.split('/');
             const itCat    = partes.length > 1 ? partes[0] : 'mangas';
-            const filePart = partes[partes.length - 1].replace(/\.webc$/, '');
-            let itNombre   = partes[partes.length - 1];
-            if (_gfPwdMaestra) {
-              try {
-                const clave = await gfDerivarClave(_gfPwdMaestra);
-                itNombre    = await gfDescifrarNombre(filePart, clave);
-              } catch(e) {}
-            }
+            // nombreReal ya fue descifrado en gfCloudCargarDescargar
+            const nombreConCat = o.nombreReal || o.key;
+            const partesReal   = nombreConCat.split('/');
+            const itNombre     = partesReal[partesReal.length - 1];
             await bvGuardar(itNombre, blob, itCat);
             ok++;
           } catch(err) {
