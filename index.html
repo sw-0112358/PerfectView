@@ -6461,22 +6461,8 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blobCifrado = await resp.blob();
 
-            // Descifrar el blob — requiere clave maestra activa
-            if (!_gfPwdMaestra) {
-              prog.textContent = '⚠️ Activa la clave maestra en 🧬 primero';
-              return;
-            }
-            let blobFinal;
-            try {
-              const clave = await gfDerivarClave(_gfPwdMaestra);
-              blobFinal   = await gfDescifrarBlob(blobCifrado, clave);
-            } catch(e) {
-              prog.textContent = '❌ Error al descifrar ' + nombreMostrar + ': contraseña incorrecta o archivo dañado';
-              continue;
-            }
-
-            // Restaurar según estructura de carpetas
-            await gfRestaurarDesdeEstructura(o.key, nombreMostrar, blobFinal);
+            // Guardar cifrado en IDB — el visor descifra al abrir
+            await gfRestaurarDesdeEstructura(o.key, nombreMostrar, blobCifrado, true);
             ok++;
           } catch(err) {
             prog.textContent = '❌ Error en ' + nombreMostrar + ': ' + err.message;
@@ -6633,15 +6619,16 @@
     
       
       // — Restaurar blob desde estructura de carpetas R2 —
-      async function gfRestaurarDesdeEstructura(keyOpaca, nombreReal, blob) {
-        actualizarStatus('🔍 Restaurando: ' + nombreReal + ' (cat: ' + nombreReal.split('/')[0] + ')');
+      async function gfRestaurarDesdeEstructura(keyOpaca, nombreReal, blob, esCifrado = false) {
+        actualizarStatus('⏳ Restaurando: ' + nombreReal);
         const partes = nombreReal.split('/');
         const itCat  = partes[0];
+        const ext    = esCifrado ? '.zip.webc' : '.zip';
 
         if (partes.length === 2) {
           // categoria/nombre → nhentai, hitomi, mangas
           const itNombre = partes[1];
-          const zipId    = await bvGuardar(itNombre + '.zip', blob, itCat);
+          const zipId    = await bvGuardar(itNombre + ext, blob, itCat);
           if (itCat === 'nhentai') {
             const lista    = await nhListar();
             const yaExiste = lista.find(g => g.nombre === itNombre);
@@ -6709,7 +6696,7 @@
           }
 
           // Guardar capítulo
-          const zipId = await capGuardarZip(itCat, nombreManga + ' - ' + capNom + '.zip', blob, colId, capNom);
+          const zipId = await capGuardarZip(itCat, nombreManga + ' - ' + capNom + ext, blob, colId, capNom);
           // Generar portada
           bvExtraerPortada(blob).then(pb => {
             if (pb) bvGuardarPortada(zipId, pb).catch(() => {});
