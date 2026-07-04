@@ -5748,18 +5748,29 @@
           + '<span style="background:var(--surface2);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">💾 ' + gfFmtSize(totalSize) + '</span>';
           el.appendChild(resumen);
 
-          data.objetos.forEach(o => {
-            const row = document.createElement('div');
+          const clave = _gfPwdMaestra ? await gfDerivarClave(_gfPwdMaestra) : null;
+          for (const o of data.objetos) {
+            const row   = document.createElement('div');
             const fecha = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
+            // Descifrar nombre: extraer la parte entre categoria/ y .webc
+            let nombreMostrar = o.key;
+            if (clave) {
+              try {
+                const partes    = o.key.split('/');
+                const filePart  = partes[partes.length - 1].replace(/\.webc$/, '');
+                const nombreReal = await gfDescifrarNombre(filePart, clave);
+                nombreMostrar   = (partes.length > 1 ? partes[0] + '/' : '') + nombreReal;
+              } catch(e) { /* nombre no descifrable — mostrar opaco */ }
+            }
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
             row.innerHTML = '<span>🔐</span>'
-              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.key + '</span>'
+              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + nombreMostrar + '</span>'
               + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
               + '<span style="font-size:.7rem;color:var(--text-muted);white-space:nowrap">' + fecha + '</span>'
               + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem" title="Descargar" onclick="gfCloudDescargar(' + JSON.stringify(o.key) + ')">⬇️</button>'
               + '<button class="btn-icon" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar" onclick="gfCloudEliminar(' + JSON.stringify(o.key) + ',this.closest(\'div\'))">🗑️</button>';
             el.appendChild(row);
-          });
+          }
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
         }
@@ -6198,26 +6209,29 @@
       // — Subir un solo .zip.webc a R2 conservando categoría —
       async function gfSubirUnoR2(id, btnEl) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         const it = _gfItems.find(i => i.id === id);
         if (!it) return;
-        const itCat  = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
-        const r2Key  = itCat + '/' + it.nombre;
+        const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
         btnEl.textContent = '⏳';
         btnEl.disabled    = true;
         try {
-          const base = CF_WORKER.replace(/\/$/, '');
+          const clave      = await gfDerivarClave(_gfPwdMaestra);
+          const nombreCif  = await gfCifrarNombre(it.nombre, clave);
+          const r2Key      = itCat + '/' + nombreCif + '.webc';
+          const base       = CF_WORKER.replace(/\/$/, '');
           const resp = await fetch(base + '/r2-upload', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'X-R2-Key': encodeURIComponent(r2Key) },
-            body:   it.blob,
+            body:    it.blob,
           });
           const data = await resp.json();
           if (!data.ok) throw new Error(data.error);
           btnEl.textContent = '✅';
-          actualizarStatus('✅ Subido a R2: ' + r2Key);
+          actualizarStatus('✅ Subido a R2: ' + itCat + '/' + it.nombre);
         } catch(err) {
-          btnEl.textContent  = '❌';
-          btnEl.disabled     = false;
+          btnEl.textContent = '❌';
+          btnEl.disabled    = false;
           actualizarStatus('❌ Error al subir: ' + err.message);
         }
       }
@@ -6225,30 +6239,39 @@
       // — Subir todos los .zip.webc de la lista a R2 —
       async function gfSubirTodosR2() {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
+        if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         if (!_gfItems.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
-        const prog = document.getElementById('gfProgresoDescifrar');
-        const base = CF_WORKER.replace(/\/$/, '');
+        const base    = CF_WORKER.replace(/\/$/, '');
+        const total   = _gfItems.length;
+        const clave   = await gfDerivarClave(_gfPwdMaestra);
         let ok = 0, errores = 0;
+
         for (const it of _gfItems) {
-          const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
-          const r2Key = itCat + '/' + it.nombre;
-          prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + it.nombre;
+          const actual  = ok + errores + 1;
+          const pct     = Math.round((actual - 1) / total * 100);
+          const itCat   = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+          const nombreCif = await gfCifrarNombre(it.nombre, clave);
+          const r2Key     = itCat + '/' + nombreCif + '.webc';
+          gfProgActualizar('Desc',
+            pct,
+            '☁️ ' + actual + '/' + total + ' — ' + it.nombre.slice(0, 28) + (it.nombre.length > 28 ? '…' : ''),
+            gfFmtSize(it.tamaño)
+          );
           try {
             const resp = await fetch(base + '/r2-upload', {
-              method: 'POST',
+              method:  'POST',
               headers: { 'X-R2-Key': encodeURIComponent(r2Key) },
-              body:   it.blob,
+              body:    it.blob,
             });
             const data = await resp.json();
             if (!data.ok) throw new Error(data.error);
             ok++;
           } catch(err) {
             errores++;
-            prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
+            gfProgActualizar('Desc', Math.round(actual / total * 100),
+              '❌ Error: ' + it.nombre.slice(0, 24), err.message, 'err');
           }
         }
-        prog.textContent = '✅ ' + ok + ' subido(s)' + (errores ? ' · ❌ ' + errores + ' error(es)' : '') + ' — R2';
-      }
 
       // — Recuperar .zip.webc de R2 → importar a IDB con categoría —
       async function gfCloudDescargarTodos() {
@@ -6264,10 +6287,19 @@
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blob = await resp.blob();
             // Extraer categoría y nombre de la key: "categoria/nombre.zip.webc"
-            const partes  = o.key.split('/');
-            const itCat   = partes.length > 1 ? partes[0] : 'mangas';
-            const itNombre = partes[partes.length - 1];
+              
+            const partes    = o.key.split('/');
+            const itCat     = partes.length > 1 ? partes[0] : 'mangas';
+            const filePart  = partes[partes.length - 1].replace(/\.webc$/, '');
+            let itNombre    = partes[partes.length - 1];
+            if (_gfPwdMaestra) {
+              try {
+                const clave  = await gfDerivarClave(_gfPwdMaestra);
+                itNombre     = await gfDescifrarNombre(filePart, clave);
+              } catch(e) { /* usar nombre opaco si falla */ }
+            }
             await bvGuardar(itNombre, blob, itCat);
+            
             ok++;
           } catch(err) {
             prog.textContent = '❌ Error en ' + o.key + ': ' + err.message;
@@ -6406,6 +6438,32 @@
           actualizarStatus('⚠️ No se encontró clave para esa ID — configura en 🧬');
           bvNavegar('pantalla5');
         }
+      }
+      
+      // — Cifrar filename → base64url —
+      async function gfCifrarNombre(nombre, clave) {
+        const iv  = crypto.getRandomValues(new Uint8Array(12));
+        const enc = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv },
+          clave,
+          new TextEncoder().encode(nombre)
+        );
+        // iv + datos → base64url
+        const buf = new Uint8Array(12 + enc.byteLength);
+        buf.set(iv, 0);
+        buf.set(new Uint8Array(enc), 12);
+        return btoa(String.fromCharCode(...buf))
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      }
+
+      // — Descifrar base64url → filename —
+      async function gfDescifrarNombre(b64url, clave) {
+        const b64  = b64url.replace(/-/g, '+').replace(/_/g, '/');
+        const buf  = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const iv   = buf.slice(0, 12);
+        const dat  = buf.slice(12);
+        const dec  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, clave, dat);
+        return new TextDecoder().decode(dec);
       }
       
       
