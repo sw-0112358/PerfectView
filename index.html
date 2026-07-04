@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v138❄️
+          PerfectView🪷v140❄️
         </div>
       </header>
 
@@ -3543,7 +3543,20 @@
         }
         // Fallback — descomprimir ZIP y guardar en slot para próxima vez
         const reg = await bvCargar(zipId);
-        if (!reg) return null;
+        if (!reg) {
+          // No hay ZIP — intentar regenerar desde slot completo en descargas_temp
+          const slotCompleto = await dtCargar(slotId);
+          if (slotCompleto && slotCompleto.imagenes && slotCompleto.total &&
+              slotCompleto.imagenes.length >= slotCompleto.total) {
+            actualizarStatus('⏳ Regenerando ZIP desde temporales…');
+            await gfGenerarZipsDeTemp(slotCompleto.categoria);
+            // Intentar cargar el ZIP recién generado
+            const regNuevo = await bvCargar(zipId);
+            if (!regNuevo) { actualizarStatus('❌ No se pudo regenerar el ZIP'); return null; }
+            return cargarDesdeSlotOZip(slotId, zipId);
+          }
+          return null;
+        }
 
         // — Detectar si está cifrado y pedir contraseña —
         let blobFinal = reg.blob;
