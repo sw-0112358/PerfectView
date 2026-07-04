@@ -6124,8 +6124,6 @@
             const seccion = document.createElement('div');
             seccion.style.cssText = 'margin-bottom:14px';
 
-            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
-
             // Contenedor de items (colapsable)
             const cuerpo = document.createElement('div');
             cuerpo.style.cssText = 'overflow:hidden;transition:max-height .25s ease;max-height:2000px';
@@ -6157,8 +6155,6 @@
             // Título clickeable
             const titulo = document.createElement('div');
             titulo.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none';
-            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
-
             // Botón 🔄 generar ZIPs desde temporales
             const btnGen = document.createElement('button');
             btnGen.className = 'btn-icon';
