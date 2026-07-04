@@ -1151,7 +1151,8 @@
           </div>
           <div style="margin-top:8px">
             <button class="btn-ghost btn-sm" style="width:100%;color:var(--danger);border-color:var(--border)" onclick="limpiarLinks()">🗑️ Limpiar lista</button>
-            <button class="btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="diagnosticarDB()">🔬 Diagnóstico DB</button>
+            
+
           </div>
         </div>
 
@@ -1287,9 +1288,14 @@
           <div id="gfPanelScan">
             <div class="card" style="margin-bottom:10px">
               <div class="card-title">Archivos en PerfectViewBoveda</div>
-              <button class="action-btn" style="width:100%;justify-content:center;margin-bottom:10px" onclick="gfEscanear()">
-                <span class="icon">🔍</span> Escanear ahora
-              </button>
+              <div style="display:flex;gap:8px;margin-bottom:10px">
+                <button class="action-btn" style="flex:1;justify-content:center" onclick="gfEscanear()">
+                  <span class="icon">🔍</span> Escanear ahora
+                </button>
+                <button class="action-btn" style="flex:1;justify-content:center" onclick="diagnosticarDB()">
+                  <span class="icon">🔬</span> Diagnóstico DB
+                </button>
+              </div>
               <div id="gfScanLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear para ver los archivos.</div>
             </div>
           </div>
@@ -2098,10 +2104,7 @@
           req.onerror = e => reject(e.target.error);
         });
       }
-
-      const sjzListarDescargados = cid => capListarDescargados('samurai', cid);
-      const mwListarDescargados  = cid => capListarDescargados('manhwa',  cid);
-
+ 
       // ── descargas_temp — persistencia de progreso ──
       async function dtCrear(slotId, meta) {
         const db = await bvAbrirDB();
@@ -2395,89 +2398,7 @@
         });
       }
 
-      // — PIN (SHA-256 en localStorage) —
-      let bovedaDesbloqueada = false;
-
-      async function sha256hex(texto) {
-        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-      }
-
-      async function bvVerificarPIN(pin) {
-        const hash = localStorage.getItem('_bv_pin_hash');
-        if (!hash) return true;
-        return (await sha256hex(pin)) === hash;
-      }
-
-      async function bvConfigurarPIN(pin) {
-        localStorage.setItem('_bv_pin_hash', await sha256hex(pin));
-      }
-
-      // — Modal PIN —
-      function bvMostrarModalPIN(callback) {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)';
-
-        const card = document.createElement('div');
-        card.style.cssText = 'background:var(--surface);border-radius:var(--radius-lg);padding:32px 28px;width:min(320px,90vw);text-align:center;box-shadow:var(--shadow-lg)';
-
-        const titulo = document.createElement('div');
-        titulo.textContent = '🔒 Bóveda bloqueada';
-        titulo.style.cssText = 'font-size:1.15rem;font-weight:600;margin-bottom:6px;color:var(--text)';
-
-        const sub = document.createElement('div');
-        sub.textContent = 'Ingresa tu contraseña para continuar';
-        sub.style.cssText = 'font-size:.85rem;color:var(--text-muted);margin-bottom:20px';
-
-        const input = document.createElement('input');
-        input.type = 'password';
-        input.placeholder = 'Contraseña';
-        input.style.cssText = 'width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;text-align:left;letter-spacing:2px;background:var(--surface2);color:var(--text);outline:none;margin-bottom:8px';
-
-        const errEl = document.createElement('div');
-        errEl.style.cssText = 'color:var(--danger);font-size:.8rem;min-height:18px;margin-bottom:14px';
-
-        const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display:flex;gap:10px';
-
-        const btnCancelar = document.createElement('button');
-        btnCancelar.textContent = 'Cancelar';
-        btnCancelar.className = 'btn-ghost';
-        btnCancelar.style.cssText = 'flex:1;padding:10px';
-        btnCancelar.onclick = () => overlay.remove();
-
-        const btnEntrar = document.createElement('button');
-        btnEntrar.textContent = 'Entrar';
-        btnEntrar.className = 'action-btn';
-        btnEntrar.style.cssText = 'flex:1;padding:10px';
-        btnEntrar.onclick = async () => {
-          const pin = input.value.trim();
-          if (!pin) { errEl.textContent = 'Ingresa el PIN'; return; }
-          const ok = await bvVerificarPIN(pin);
-          if (ok) {
-            bovedaDesbloqueada = true;
-            bvActualizarIcono();
-            solicitarPersistencia();
-            overlay.remove();
-            callback();
-          } else {
-            errEl.textContent = '❌ PIN incorrecto';
-            input.value = '';
-            input.focus();
-          }
-        };
-
-        input.addEventListener('keydown', e => { if (e.key === 'Enter') btnEntrar.click(); });
-        btnRow.append(btnCancelar, btnEntrar);
-        card.append(titulo, sub, input, errEl, btnRow);
-        overlay.appendChild(card);
-        document.body.appendChild(overlay);
-        setTimeout(() => input.focus(), 80);
-      }
-
       // — Navegación a la Bóveda —
-
-
 
       async function solicitarPersistencia() {
         if (!navigator.storage || !navigator.storage.persist) return;
@@ -2487,29 +2408,10 @@
         if (granted) actualizarStatus('✅ Almacenamiento persistente activado');
       }
 
-      function bvPrimerAcceso() {
-        const pin = prompt('🔒 Configura una contraseña para la Bóveda\n(deja vacío para acceso sin contraseña):');
-        if (pin === null) return;
-        const accion = () => { bovedaDesbloqueada = true; bvActualizarIcono(); solicitarPersistencia(); bvNavegar('pantalla3'); renderBoveda(); };
-        if (pin.trim()) {
-          bvConfigurarPIN(pin.trim()).then(accion);
-        } else {
-          accion();
-        }
-      }
-
-      function bvActualizarIcono() {
-        const ic  = document.getElementById('iconBoveda');
-        const btn = document.getElementById('btnEnviarBoveda');
-        if (ic)  ic.textContent      = bovedaDesbloqueada ? '°': '•';
-        if (btn) btn.style.display   = bovedaDesbloqueada ? ''   : 'none';
-      }
-
       function bvBloquear() {
-        bovedaDesbloqueada = false;
         _bvMaestra = false;
+        _bvDesbloqueada = false;
         document.getElementById('PanelAdmi').style.display = 'none';
-        bvActualizarIcono();
         bvNavegar('pantalla1');
       }
 
