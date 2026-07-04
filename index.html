@@ -3102,7 +3102,7 @@
 
         // ── Nivel 2: una tarjeta = un ZIP completo ──
         mangas: {
-          nivel: 2, icon: '📚', label: 'Mangas',
+          nivel: 2, icon: '📚', label: 'Mangas', enMenu: false, enAdm: true,
           store: 'zips', slotPrefix: null, zipCatField: 'mangas',
           listar:          () => bvListar('mangas'),
           eliminar:        async item => { await bvEliminarDB(item.id); await bvEliminarPortada(item.id); },
@@ -3112,7 +3112,7 @@
         },
 
         nhentai: {
-          nivel: 2, icon: '🪷', label: 'nhentai',
+          nivel: 2, icon: '🪷', label: 'nhentai', enMenu: false, enAdm: true,
           store: 'nh_galerias', slotPrefix: 'nh', zipCatField: 'nhentai',
           listar:          () => nhListar(),
           eliminar:        async gal => {
@@ -3128,7 +3128,7 @@
         },
 
         hitomi: {
-          nivel: 2, icon: '🌸', label: 'Hitomi',
+          nivel: 2, icon: '🌸', label: 'Hitomi', enMenu: false, enAdm: true,
           store: 'ht_galerias', slotPrefix: 'ht', zipCatField: 'hitomi',
           listar:          () => htListar(),
           eliminar:        async gal => {
@@ -3145,7 +3145,7 @@
 
         // ── Nivel 3: una tarjeta = colección, dentro tiene capítulos ──
         samurai: {
-          nivel: 3, icon: '⚔️', label: 'Samurai',
+          nivel: 3, icon: '⚔️', label: 'Samurai', enMenu: true, enAdm: false,
           store: 'sjz_colecciones', slotPrefix: 'sjz', zipCatField: 'samurai',
           listar:          () => sjzListar(),
           eliminar:        async col => sjzEliminarDB(col.id),
@@ -3170,7 +3170,7 @@
         },
 
         manhwa: {
-          nivel: 3, icon: '📖', label: 'Manhwa',
+          nivel: 3, icon: '📖', label: 'Manhwa', enMenu: true, enAdm: false,
           store: 'mw_colecciones', slotPrefix: 'mw', zipCatField: 'manhwa',
           listar:          () => mwListar(),
           eliminar:        async col => mwEliminarDB(col.id),
@@ -3195,7 +3195,7 @@
         },
 
         zonascans: {
-          nivel: 3, icon: '📡', label: 'ZonaScans',
+          nivel: 3, icon: '📡', label: 'ZonaScans', enMenu: true, enAdm: false,
           store: 'zs_colecciones', slotPrefix: 'zs', zipCatField: 'zonascans',
           listar:          () => zsListar(),
           eliminar:        async col => zsEliminarDB(col.id),
@@ -5710,6 +5710,28 @@
 
       // — Render Manhwa —
       async function renderManhwa(contenedor) {
+        await renderNivel3(contenedor, {
+          cat:          'manhwa',
+          gridId:       'mwGrid',
+          ordenDesc:    _mwOrdenDesc,
+          setOrdenDesc: v => { _mwOrdenDesc = v; },
+          panelHtml:
+            '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
+            + '<div class="sjz-row">'
+            +   '<input class="sjz-input" id="mwUrl" placeholder="https://manhwaweb.com/manhwa/titulo_id" type="url">'
+            + '</div>'
+            + '<div class="sjz-info" id="mwInfo"></div>'
+            + '<div class="sjz-row">'
+            +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Inicio</span>'
+            +   '<input class="sjz-input sjz-input-sm" id="mwInicio" type="number" min="1" placeholder="1">'
+            +   '<span style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Final</span>'
+            +   '<input class="sjz-input sjz-input-sm" id="mwFinal" type="number" min="1" placeholder="30">'
+            +   '<button class="sjz-btn sjz-btn-primary" onclick="mwCrearCarpeta()">📁 Crear</button>'
+            + '</div>',
+        });
+      }
+
+      async function renderManhwaLegacy(contenedor) {
         contenedor.innerHTML = '';
 
         if (_mwColeccionActual) {
@@ -5858,14 +5880,16 @@
           adm.innerHTML = '';
           adm.style.display = _bvMaestra ? 'flex' : 'none';
           if (!_bvMaestra) { adm.style.marginBottom = '0'; }
-          BV_CARPETAS_ADM.forEach(c => {
-            const btn = document.createElement('button');
-            btn.className = 'action-btn';
-            btn.style.cssText = 'flex:1;min-width:80px;justify-content:center';
-            btn.innerHTML = c.icon + ' ' + c.label;
-            btn.onclick = () => bvAbrirCarpeta(c.id);
-            adm.appendChild(btn);
-          });
+          Object.entries(CAT_CONECTORES)
+            .filter(([, c]) => c.enAdm)
+            .forEach(([id, c]) => {
+              const btn = document.createElement('button');
+              btn.className = 'action-btn';
+              btn.style.cssText = 'flex:1;min-width:80px;justify-content:center';
+              btn.innerHTML = c.icon + ' ' + c.label;
+              btn.onclick = () => bvAbrirCarpeta(id);
+              adm.appendChild(btn);
+            });
         }
 
         // — Vista Menú —
@@ -5874,7 +5898,6 @@
 
           _bvActualizarPill();
 
-          // Botón cambiar combinación
           const btnCombo = document.createElement('button');
           btnCombo.className   = 'btn-ghost btn-sm';
           btnCombo.style.cssText = 'margin-bottom:12px;font-size:.78rem;color:var(--text-muted);width:100%';
@@ -5885,53 +5908,27 @@
           const folderGrid = document.createElement('div');
           folderGrid.className = 'bv-folder-grid';
 
-          BV_CARPETAS.forEach(c => {
-            const card = document.createElement('div');
-            card.className = 'bv-folder-card';
-            card.innerHTML = '<div class="bv-folder-icon">' + c.icon + '</div>'
-              + '<div class="bv-folder-name">' + c.label + '</div>';
-            card.onclick = () => bvAbrirCarpeta(c.id);
-            folderGrid.appendChild(card);
-          });
+          Object.entries(CAT_CONECTORES)
+            .filter(([, c]) => c.enMenu)
+            .forEach(([id, c]) => {
+              const card = document.createElement('div');
+              card.className = 'bv-folder-card';
+              card.innerHTML = '<div class="bv-folder-icon">' + c.icon + '</div>'
+                + '<div class="bv-folder-name">' + c.label + '</div>';
+              card.onclick = () => bvAbrirCarpeta(id);
+              folderGrid.appendChild(card);
+            });
 
           contenedor.appendChild(folderGrid);
           return;
         }
 
-        // — Vista Carpeta —
-        const carpeta = BV_CARPETAS.find(c => c.id === categoriaActual);
+        // — Vista Carpeta — despachar via CAT_CONECTORES —
+        const con = CAT_CONECTORES[categoriaActual];
         if (toolbar) toolbar.style.display = categoriaActual === 'mangas' ? '' : 'none';
 
-        // Samurai tiene su propio render
-        if (categoriaActual === 'samurai') {
-          _sjzColeccionActual = null;
-          renderSamurai(contenedor);
-          return;
-        }
-
-        // Manhwa tiene su propio render
-        if (categoriaActual === 'manhwa') {
-          _mwColeccionActual = null;
-          renderManhwa(contenedor);
-          return;
-        }
-
-        // nhentai tiene su propio render
-        if (categoriaActual === 'nhentai') {
-          renderNhentai(contenedor);
-          return;
-        }
-
-        // hitomi tiene su propio render
-        if (categoriaActual === 'hitomi') {
-          renderHitomi(contenedor);
-          return;
-        }
-
-        // zonascans tiene su propio render
-        if (categoriaActual === 'zonascans') {
-          _zsColeccionActual = null;
-          renderZonaScans(contenedor);
+        if (con) {
+          con.render(contenedor);
           return;
         }
 
