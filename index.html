@@ -2206,6 +2206,46 @@
         });
       }
 
+      // — Regenerar blob de un ZIP desde el slot de descargas_temp —
+      async function bvRegenerarZip(zipId, slotId) {
+        const slot = await dtCargar(slotId);
+        if (!slot || !slot.imagenes || !slot.imagenes.length) {
+          actualizarStatus('❌ No hay imágenes en cache para regenerar');
+          return false;
+        }
+        actualizarStatus('⏳ Regenerando ZIP desde cache…');
+        const archivos = slot.imagenes.sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
+        );
+        const zip = new JSZip();
+        archivos.forEach(a => zip.file(a.nombre, a.blob));
+        const urlsMap = {};
+        archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+        if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+        // Leer registro existente y reemplazar solo el blob
+        const db  = await bvAbrirDB();
+        const reg = await bvCargar(zipId);
+        if (!reg) { actualizarStatus('❌ Registro no encontrado en DB'); return false; }
+        reg.blob   = zipBlob;
+        reg.tamaño = zipBlob.size;
+        await new Promise((res, rej) => {
+          const tx = db.transaction('zips', 'readwrite');
+          tx.objectStore('zips').put(reg);
+          tx.oncomplete = () => res();
+          tx.onerror    = e => rej(e.target.error);
+        });
+
+        // Regenerar portada si no existe
+        bvCargarPortada(zipId).then(pb => {
+          if (!pb && archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+        }).catch(() => {});
+
+        actualizarStatus('✅ ZIP regenerado correctamente');
+        return true;
+      }
+
       async function bvClearStore(storeName) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -5005,17 +5045,20 @@
                 dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
                 dl.onclick = async e => {
                   e.stopPropagation();
-                  const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+                  const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+                  const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                                  + '-' + cfg.coleccion.id + '-' + clave;
                   if (cfg.buscarZipFn) {
-                    let reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
-                    if (!reg2) {
-                      // ZIP no existe aún — generarlo desde slot
-                      actualizarStatus('⏳ Generando ZIP para descargar…');
-                      await gfGenerarZipsDeTemp(cfg.categoriaDB);
-                      reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                    const reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                    if (reg2) {
+                      const regCompleto = await bvCargar(reg2.id);
+                      if (!regCompleto || !regCompleto.blob || regCompleto.blob.size < 100) {
+                        await bvRegenerarZip(reg2.id, slotKey);
+                      }
+                      bovedaDescargar(reg2.id, nombre);
+                    } else {
+                      actualizarStatus('❌ ZIP no encontrado — abre el capítulo primero para generarlo');
                     }
-                    if (reg2) bovedaDescargar(reg2.id, nombre);
-                    else actualizarStatus('❌ ZIP no encontrado — abre el capítulo primero');
                   } else if (zipId) {
                     bovedaDescargar(zipId, nombre);
                   }
@@ -5038,16 +5081,20 @@
             dl.style.cssText = 'font-size:.6rem;cursor:pointer';
             dl.onclick = async e => {
               e.stopPropagation();
-              const nombre = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+              const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
+              const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                              + '-' + cfg.coleccion.id + '-' + clave;
               if (cfg.buscarZipFn) {
-                let reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
-                if (!reg) {
-                  actualizarStatus('⏳ Generando ZIP para descargar…');
-                  await gfGenerarZipsDeTemp(cfg.categoriaDB);
-                  reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                const reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
+                if (reg) {
+                  const regCompleto = await bvCargar(reg.id);
+                  if (!regCompleto || !regCompleto.blob || regCompleto.blob.size < 100) {
+                    await bvRegenerarZip(reg.id, slotKey);
+                  }
+                  bovedaDescargar(reg.id, nombre);
+                } else {
+                  actualizarStatus('❌ ZIP no encontrado — abre el capítulo primero para generarlo');
                 }
-                if (reg) bovedaDescargar(reg.id, nombre);
-                else actualizarStatus('❌ ZIP no encontrado — abre el capítulo primero');
               } else if (zipId) {
                 bovedaDescargar(zipId, nombre);
               }
