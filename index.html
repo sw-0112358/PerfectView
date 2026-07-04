@@ -2862,6 +2862,26 @@
         });
       }
 
+      // — Cargar portada desde portadas store o como fallback desde descargas_temp —
+      async function bvCargarPortadaOSlot(zipId, slotId) {
+        // Intentar portada guardada primero
+        if (zipId) {
+          const blob = await bvCargarPortada(zipId).catch(() => null);
+          if (blob) return blob;
+        }
+        // Fallback: primera imagen del slot temp
+        if (slotId) {
+          const slot = await dtCargar(slotId).catch(() => null);
+          if (slot && slot.imagenes && slot.imagenes.length) {
+            const ordenadas = slot.imagenes.sort((a, b) =>
+              a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
+            );
+            if (ordenadas[0] && ordenadas[0].blob) return ordenadas[0].blob;
+          }
+        }
+        return null;
+      }
+
       async function bvCargarPortada(id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -3453,11 +3473,19 @@
             },
           });
           grid.appendChild(card);
-          // Cargar portada del primer capítulo descargado
-          zsBuscarZipPrimero(col.id).then(reg => {
-            if (!reg) return;
-            return bvCargarPortada(reg.id);
-          }).then(blob => {
+          // Cargar portada del primer capítulo descargado — desde portadas store o slot temp
+          zsBuscarZipPrimero(col.id).then(async reg => {
+            // Intentar portada guardada; si no, buscar en slots temp de esta colección
+            let blob = reg ? await bvCargarPortadaOSlot(reg.id, null) : null;
+            if (!blob) {
+              const slots = await dtListar().catch(() => []);
+              const prefijo = 'zs-' + col.id + '-';
+              const slot = slots.find(s => s.slotId.startsWith(prefijo) && s.imagenes && s.imagenes.length);
+              if (slot) {
+                const ordenadas = slot.imagenes.sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+                blob = ordenadas[0] && ordenadas[0].blob ? ordenadas[0].blob : null;
+              }
+            }
             if (!blob) return;
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
@@ -3995,21 +4023,14 @@
             }
           });
           grid.appendChild(card);
-          if (gal.zip_id) {
-            // Mostrar portada y/o candado si es .webc
-            Promise.all([bvCargarPortada(gal.zip_id), bvCargar(gal.zip_id)]).then(([blob, reg]) => {
-              const esCif = reg && reg.nombre && reg.nombre.endsWith('.zip.webc');
-              if (blob) {
-                img.src = URL.createObjectURL(blob);
-                img.style.display = 'block';
-                ph.style.display  = 'none';
-              }
-              if (esCif) {
-                ph.textContent   = '🔐';
-                ph.style.display = 'block';
-              }
-            }).catch(() => {});
-          }
+          const slotHt = 'ht-' + gal.id;
+          bvCargarPortadaOSlot(gal.zip_id, slotHt).then(blob => {
+            if (blob) {
+              img.src = URL.createObjectURL(blob);
+              img.style.display = 'block';
+              ph.style.display  = 'none';
+            }
+          }).catch(() => {});
         });
         contenedor.appendChild(grid);
       }
@@ -4361,20 +4382,14 @@
             }
           });
           grid.appendChild(card);
-          if (gal.zip_id) {
-            Promise.all([bvCargarPortada(gal.zip_id), bvCargar(gal.zip_id)]).then(([blob, reg]) => {
-              const esCif = reg && reg.nombre && reg.nombre.endsWith('.zip.webc');
-              if (blob) {
-                img.src = URL.createObjectURL(blob);
-                img.style.display = 'block';
-                ph.style.display  = 'none';
-              }
-              if (esCif) {
-                ph.textContent   = '🔐';
-                ph.style.display = 'block';
-              }
-            }).catch(() => {});
-          }
+          const slotNh = 'nh-' + gal.id;
+          bvCargarPortadaOSlot(gal.zip_id, slotNh).then(blob => {
+            if (blob) {
+              img.src = URL.createObjectURL(blob);
+              img.style.display = 'block';
+              ph.style.display  = 'none';
+            }
+          }).catch(() => {});
         });
         contenedor.appendChild(grid);
       }
@@ -5242,11 +5257,10 @@
           card.append(placeholder, img, footer, dlBtn, delBtn);
           grid.appendChild(card);
 
-          // Cargar portada del capítulo 1
-          sjzBuscarZipCapitulo(col.id, 1).then(reg => {
-            if (!reg) return;
-            return bvCargarPortada(reg.id);
-          }).then(blob => {
+          // Cargar portada del capítulo 1 — desde portadas store o slot temp
+          sjzBuscarZipCapitulo(col.id, 1).then(async reg => {
+            const slotId = 'sjz-' + col.id + '-1';
+            const blob   = await bvCargarPortadaOSlot(reg ? reg.id : null, slotId);
             if (!blob) return;
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
@@ -5665,10 +5679,9 @@
           });
           grid.appendChild(card);
 
-          mwBuscarZipCapitulo(col.id, 1).then(reg => {
-            if (!reg) return;
-            return bvCargarPortada(reg.id);
-          }).then(blob => {
+          mwBuscarZipCapitulo(col.id, 1).then(async reg => {
+            const slotId = 'mw-' + col.id + '-1';
+            const blob   = await bvCargarPortadaOSlot(reg ? reg.id : null, slotId);
             if (!blob) return;
             img.src = URL.createObjectURL(blob);
             img.style.display = 'block';
