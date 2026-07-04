@@ -2516,13 +2516,20 @@
       // — Importar galería Hitomi —
       async function importarGaleriaHitomi(zip, meta) {
         actualizarStatus('⏳ Restaurando galería Hitomi: ' + meta.nombre);
+        // Soporta formato antiguo (images.zip) y nuevo (imágenes directas)
         const imagesFile = zip.file('images.zip');
-        if (!imagesFile) throw new Error('No se encontró images.zip dentro del archivo');
-        const imagesBlob = await imagesFile.async('blob');
+        let imagesBlob;
+        if (imagesFile) {
+          imagesBlob = await imagesFile.async('blob');
+        } else {
+          const subZip   = new JSZip();
+          const entradas = Object.values(zip.files).filter(f => !f.dir && f.name !== 'galeria.json' && f.name !== 'urls.json');
+          for (const e of entradas) subZip.file(e.name, await e.async('blob'));
+          imagesBlob = await subZip.generateAsync({ type: 'blob' });
+        }
         const id    = await htGuardar({ ht_id: meta.ht_id, media_id: meta.media_id, nombre: meta.nombre, num_pages: meta.num_pages, files: meta.files || [], paths: meta.paths || [] });
         const zipId = await bvGuardar(meta.nombre + '.zip', imagesBlob, 'hitomi');
         await htActualizarZip(id, zipId);
-        // Portada desde primera imagen
         JSZip.loadAsync(imagesBlob).then(iz => {
           const imgs = Object.values(iz.files).filter(f => !f.dir).sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           if (imgs.length) imgs[0].async('blob').then(pb => bvGuardarPortada(zipId, pb)).catch(() => {});
@@ -2535,8 +2542,15 @@
       async function importarGaleriaNhentai(zip, meta) {
         actualizarStatus('⏳ Restaurando galería nhentai: ' + meta.nombre);
         const imagesFile = zip.file('images.zip');
-        if (!imagesFile) throw new Error('No se encontró images.zip dentro del archivo');
-        const imagesBlob = await imagesFile.async('blob');
+        let imagesBlob;
+        if (imagesFile) {
+          imagesBlob = await imagesFile.async('blob');
+        } else {
+          const subZip   = new JSZip();
+          const entradas = Object.values(zip.files).filter(f => !f.dir && f.name !== 'galeria.json' && f.name !== 'urls.json');
+          for (const e of entradas) subZip.file(e.name, await e.async('blob'));
+          imagesBlob = await subZip.generateAsync({ type: 'blob' });
+        }
         const id    = await nhGuardar({ nh_id: meta.nh_id, media_id: meta.media_id, nombre: meta.nombre, num_pages: meta.num_pages, paths: meta.paths || [] });
         const zipId = await bvGuardar(meta.nombre + '.zip', imagesBlob, 'nhentai');
         await nhActualizarZip(id, zipId);
@@ -3609,6 +3623,7 @@
             const urlsMap = {};
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+            zip.file('galeria.json', JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
             await htActualizarZip(galeria.id, zipId);
@@ -3643,6 +3658,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('galeria.json', JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
           await htActualizarZip(galeria.id, zipId);
@@ -3743,29 +3759,15 @@
         }
       }
 
-      // — Exportar galería Hitomi como ZIP maestro —
+      // — Exportar galería Hitomi —
       async function htExportarGaleria(gal) {
         if (!gal.zip_id) { actualizarStatus('⚠️ Descarga la galería primero'); return; }
         actualizarStatus('⏳ Preparando exportación…');
         try {
           const reg = await bvCargar(gal.zip_id);
           if (!reg) throw new Error('ZIP no encontrado');
-          const masterZip = new JSZip();
-          const meta = {
-            version:   1,
-            tipo:      'hitomi',
-            ht_id:     gal.ht_id,
-            media_id:  gal.media_id,
-            nombre:    gal.nombre,
-            num_pages: gal.num_pages,
-            files:     gal.files,
-            fecha:     gal.fecha,
-          };
-          masterZip.file('galeria.json', JSON.stringify(meta, null, 2));
-          masterZip.file('images.zip', reg.blob);
-          const blob = await masterZip.generateAsync({ type: 'blob' });
-          const url  = URL.createObjectURL(blob);
-          const a    = document.createElement('a');
+          const url = URL.createObjectURL(reg.blob);
+          const a   = document.createElement('a');
           a.href = url;
           a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
           a.click();
@@ -3774,29 +3776,15 @@
         } catch(err) { actualizarStatus('❌ ' + err.message); }
       }
 
-      // — Exportar galería nhentai como ZIP maestro —
+      // — Exportar galería nhentai —
       async function nhExportarGaleria(gal) {
         if (!gal.zip_id) { actualizarStatus('⚠️ Descarga la galería primero'); return; }
         actualizarStatus('⏳ Preparando exportación…');
         try {
           const reg = await bvCargar(gal.zip_id);
           if (!reg) throw new Error('ZIP no encontrado');
-          const masterZip = new JSZip();
-          const meta = {
-            version:   1,
-            tipo:      'nhentai',
-            nh_id:     gal.nh_id,
-            media_id:  gal.media_id,
-            nombre:    gal.nombre,
-            num_pages: gal.num_pages,
-            paths:     gal.paths,
-            fecha:     gal.fecha,
-          };
-          masterZip.file('galeria.json', JSON.stringify(meta, null, 2));
-          masterZip.file('images.zip', reg.blob);
-          const blob = await masterZip.generateAsync({ type: 'blob' });
-          const url  = URL.createObjectURL(blob);
-          const a    = document.createElement('a');
+          const url = URL.createObjectURL(reg.blob);
+          const a   = document.createElement('a');
           a.href = url;
           a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
           a.click();
@@ -4039,6 +4027,7 @@
             const urlsMap = {};
             archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
             if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+            zip.file('galeria.json', JSON.stringify({ version:1, tipo:'nhentai', nh_id:galeria.nh_id, media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }, null, 2));
             const zipBlob = await zip.generateAsync({ type: 'blob' });
             const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
             await nhActualizarZip(galeria.id, zipId);
@@ -4079,6 +4068,7 @@
           const urlsMap = {};
           archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
           if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+          zip.file('galeria.json', JSON.stringify({ version:1, tipo:'nhentai', nh_id:galeria.nh_id, media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }, null, 2));
           const zipBlob = await zip.generateAsync({ type: 'blob' });
           const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
