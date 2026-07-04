@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v143❄️
+          PerfectView🪷v144❄️
         </div>
       </header>
 
@@ -6803,8 +6803,17 @@
       // — Generar ZIPs desde descargas_temp para slots completos sin ZIP —
       async function gfGenerarZipsDeTemp(cat) {
         const slots = await dtListar();
-        const deCat = slots.filter(s => s.categoria === cat);
-        actualizarStatus('🔍 Slots en ' + cat + ': ' + deCat.length + ' — ' + deCat.map(s => s.slotId + '(imgs:' + (s.imagenes||[]).length + '/total:' + s.total + ')').join(', '));
+        const deCat = slots.filter(s => s.categoria === cat && s.categoria !== 'cache');
+        const sinZip = [];
+        for (const s of deCat) {
+          if (s.imagenes && s.total && s.imagenes.length >= s.total) {
+            const id  = parseInt(s.slotId.replace('ht-','').replace('nh-',''));
+            const gals = cat === 'hitomi' ? await dbListar('ht_galerias') : await nhListar();
+            const gal  = gals.find(g => g.id === id);
+            if (!gal || !gal.zip_id) sinZip.push(s.slotId);
+          }
+        }
+        actualizarStatus('🔍 ' + cat + ': ' + deCat.length + ' slots, ' + sinZip.length + ' sin ZIP — ' + sinZip.join(', '));
         const completos = slots.filter(s =>
           s.categoria === cat &&
           s.imagenes && s.total &&
