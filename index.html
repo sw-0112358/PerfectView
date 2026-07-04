@@ -6025,19 +6025,59 @@
             const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
             return cat === 'todas' || itCat === cat;
           });
-          _gfItems = filtrados;
-          if (!filtrados.length) { el.textContent = 'No hay archivos .zip.webc para subir en esta categoría.'; return; }
+          // Obtener nombres reales de R2 para detectar los que ya tienen backup
+          let r2NombresReales = new Set();
+          if (CF_WORKER && _gfPwdMaestra) {
+            try {
+              const base  = CF_WORKER.replace(/\/$/, '');
+              const clave = await gfDerivarClave(_gfPwdMaestra);
+              _r2Cache = null;
+              const r2Items = await _obtenerR2ConNombresReales(base, clave);
+              r2Items.forEach(o => r2NombresReales.add(o.nombreReal));
+            } catch(e) {}
+          }
+
+          // Filtrar solo los que NO tienen backup en R2
+          const sinBackup = [];
+          const conBackup = [];
+          for (const it of filtrados) {
+            let enR2 = false;
+            if (r2NombresReales.size > 0 && _gfPwdMaestra) {
+              try {
+                const clave  = await gfDerivarClave(_gfPwdMaestra);
+                const r2Info = await gfConstruirR2Key(it, clave);
+                enR2 = r2NombresReales.has(r2Info.nombreReal);
+              } catch(e) {}
+            }
+            if (enR2) conBackup.push(it); else sinBackup.push(it);
+          }
+
+          // Solo subir los sin backup
+          _gfItems = sinBackup;
+
+          if (!filtrados.length) { el.textContent = 'No hay archivos .zip.webc en esta categoría.'; return; }
           el.innerHTML = '';
+
+          // Pill resumen
+          const resR2 = document.createElement('div');
+          resR2.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px';
+          resR2.innerHTML =
+            '<span style="background:rgba(74,158,106,.12);color:var(--success);padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:600">☁️ ' + conBackup.length + ' en R2</span>'
+          + '<span style="background:var(--accent-lt);color:var(--accent);padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:600">⬆️ ' + sinBackup.length + ' pendientes</span>';
+          el.appendChild(resR2);
+
           filtrados.forEach(it => {
+            const enR2 = conBackup.includes(it);
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
-            row.innerHTML = '<span>🔐</span>'
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1.5px solid ' + (enR2 ? 'var(--success)' : 'var(--border)') + ';margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>' + (enR2 ? '☁️' : '🔐') + '</span>'
               + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + it.nombre + '</span>'
-              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(it.tamaño) + '</span>';
+              + '<span style="font-size:.72rem;color:var(--text-muted)">' + gfFmtSize(it.tamaño) + '</span>'
+              + (enR2 ? '<span style="font-size:.7rem;color:var(--success);font-weight:600;white-space:nowrap">EN R2</span>' : '');
             el.appendChild(row);
           });
-          // Cambiar botón a "Subir a R2"
-          document.querySelector('#gfPanelCifrar .action-btn:last-of-type').textContent = '☁️ Subir a R2';
+          // Cambiar botón a "Subir pendientes a R2"
+          document.querySelector('#gfPanelCifrar .action-btn:last-of-type').textContent = '☁️ Subir ' + sinBackup.length + ' pendientes a R2';
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
         }
@@ -6088,20 +6128,54 @@
             if (clave) nombreReal = await _descifrarKeyR2(o.key, clave);
             objetos.push({ ...o, nombreReal });
           }
-          _gfCloudItems = objetos; // guarda con nombreReal incluido
+          _gfCloudItems = objetos;
+
+          // Cargar nombres reales locales para detectar duplicados
+          let localNombresReales = new Set();
+          if (_gfPwdMaestra) {
+            try {
+              const db       = await bvAbrirDB();
+              const locales  = await new Promise((res, rej) => {
+                const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+                req.onsuccess = e => res(e.target.result);
+                req.onerror   = e => rej(e.target.error);
+              });
+              const claveLoc = await gfDerivarClave(_gfPwdMaestra);
+              for (const it of locales) {
+                if (!it.nombre || !it.nombre.endsWith('.zip.webc')) continue;
+                try {
+                  const r2Info = await gfConstruirR2Key(it, claveLoc);
+                  localNombresReales.add(r2Info.nombreReal);
+                } catch(e) {}
+              }
+            } catch(e) {}
+          }
 
           el.innerHTML = '';
+          let enLocal = 0;
           objetos.forEach(o => {
+            const yaLocal = localNombresReales.has(o.nombreReal);
+            if (yaLocal) enLocal++;
             const row = document.createElement('div');
-            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
-            row.innerHTML = '<span>🔐</span>'
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1.5px solid ' + (yaLocal ? '#f5a623' : 'var(--border)') + ';margin-bottom:4px;background:var(--surface2)';
+            row.innerHTML = '<span>' + (yaLocal ? '📱' : '🔐') + '</span>'
               + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + o.nombreReal + '</span>'
               + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
+              + (yaLocal ? '<span style="font-size:.7rem;color:#f5a623;font-weight:600;white-space:nowrap">LOCAL</span>' : '')
               + '<button class="btn-icon btn-dl-r2" style="width:28px;height:28px;font-size:.8rem" title="Descargar a bóveda">⬇️</button>';
             row.querySelector('.btn-dl-r2').addEventListener('click', () => gfCloudDescargarUno(o));
             el.appendChild(row);
           });
-          document.querySelector('#gfPanelDescifrar .action-btn:last-of-type').textContent = '☁️ Descargar todos a bóveda';
+
+          // Pills resumen
+          const resLocal = document.createElement('div');
+          resLocal.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px';
+          resLocal.innerHTML =
+            '<span style="background:rgba(245,166,35,.12);color:#f5a623;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:600">📱 ' + enLocal + ' en local</span>'
+          + '<span style="background:var(--accent-lt);color:var(--accent);padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:600">⬇️ ' + (objetos.length - enLocal) + ' pendientes</span>';
+          el.insertBefore(resLocal, el.firstChild);
+
+          document.querySelector('#gfPanelDescifrar .action-btn:last-of-type').textContent = '☁️ Descargar ' + (objetos.length - enLocal) + ' pendientes a bóveda';
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
         }
@@ -6173,6 +6247,17 @@
           _gfItems = items;
           if (!items.length) { el.textContent = 'No hay archivos en la bóveda.'; return; }
 
+          // Obtener nombres reales de R2 para marcar los que ya tienen copia
+          let r2NombresReales = new Set();
+          if (CF_WORKER && _gfPwdMaestra) {
+            try {
+              const base  = CF_WORKER.replace(/\/$/, '');
+              const clave = await gfDerivarClave(_gfPwdMaestra);
+              const r2Items = await _obtenerR2ConNombresReales(base, clave);
+              r2Items.forEach(o => r2NombresReales.add(o.nombreReal));
+            } catch(e) {}
+          }
+
           // Resumen total
           const total     = items.length;
           const cifrados  = items.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
@@ -6217,10 +6302,19 @@
             const cuerpo = document.createElement('div');
             cuerpo.style.cssText = 'overflow:hidden;transition:max-height .25s ease;max-height:2000px';
 
-            lista.forEach(it => {
+            lista.forEach(async it => {
               const row = document.createElement('div');
               const esCifrado = it.nombre && it.nombre.endsWith('.zip.webc');
-              row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
+              // Verificar si tiene copia en R2
+              let enR2 = false;
+              if (esCifrado && r2NombresReales.size > 0 && _gfPwdMaestra) {
+                try {
+                  const clave      = await gfDerivarClave(_gfPwdMaestra);
+                  const r2Info     = await gfConstruirR2Key(it, clave);
+                  enR2 = r2NombresReales.has(r2Info.nombreReal);
+                } catch(e) {}
+              }
+              row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1.5px solid ' + (enR2 ? 'var(--success)' : 'var(--border)') + ';margin-bottom:4px;background:var(--surface2)';
               row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
                 + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
                 + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
@@ -6524,20 +6618,8 @@
         return { key: cifrado + '.webc', nombreManga, capNum, nombreReal: meta };
       }
 
-      // — Subir link.json si no existe aún —
-      async function gfSubirLinkJson(itCat, mangaCif, nombreManga, urlCol, base) {
-        const linkKey = itCat + '/' + mangaCif + '/link.json';
-        try {
-          const listed = await fetch(base + '/r2-list?prefix=' + encodeURIComponent(itCat + '/' + mangaCif + '/link'));
-          const ldata  = await listed.json();
-          if (ldata.ok && ldata.objetos.some(o => o.key === linkKey)) return;
-          await fetch(base + '/r2-upload', {
-            method:  'POST',
-            headers: { 'X-R2-Key': encodeURIComponent(linkKey) },
-            body:    new Blob([JSON.stringify({ nombre: nombreManga, url: urlCol || '' })], { type: 'application/json' }),
-          });
-        } catch(e) {}
-      }
+      
+
 
       // — Obtener lista R2 con nombres reales descifrados (cache) —
       let _r2Cache = null;
@@ -6591,17 +6673,6 @@
             actualizarStatus('⚠️ Ya existe en R2: ' + it.nombre);
             return;
           }
-          // Subir link.json si es colección de 3 niveles
-          if (r2Info.mangaCif && r2Info.capNum) {
-            const colIdField = itCat + '_coleccion_id';
-            let urlCol = '';
-            if (it[colIdField] && CAT_CONECTORES[itCat]) {
-              const cols = await dbListar(CAT_CONECTORES[itCat].store).catch(() => []);
-              const col  = cols.find(c => c.id === it[colIdField]);
-              if (col) urlCol = col.base_url || col.url || col.slug || '';
-            }
-            await gfSubirLinkJson(itCat, r2Info.mangaCif, r2Info.nombreManga, urlCol, base);
-          }
           const resp = await fetch(base + '/r2-upload', {
             method:  'POST',
             headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
@@ -6610,7 +6681,7 @@
           const data = await resp.json();
           if (!data.ok) throw new Error(data.error);
           btnEl.textContent = '✅';
-          actualizarStatus('✅ Subido: ' + itCat + '/' + it.nombre);
+          actualizarStatus('✅ Subido: ' + r2Info.nombreReal);
         } catch(err) {
           btnEl.textContent = '❌';
           btnEl.disabled    = false;
@@ -6639,18 +6710,7 @@
           const nombreRealLocal = itCat + '/' + r2Info.nombreManga + (r2Info.capNum ? '/' + r2Info.capNum : '');
           const yaExiste = r2Items.find(o => o.nombreReal === nombreRealLocal);
           if (yaExiste) { omitidos++; continue; }
-          // Subir link.json si es colección de 3 niveles
-          if (r2Info.mangaCif && r2Info.capNum) {
-            const colIdField = itCat + '_coleccion_id';
-            let urlCol = '';
-            if (it[colIdField] && CAT_CONECTORES[itCat]) {
-              const cols = await dbListar(CAT_CONECTORES[itCat].store).catch(() => []);
-              const col  = cols.find(c => c.id === it[colIdField]);
-              if (col) urlCol = col.base_url || col.url || col.slug || '';
-            }
-            await gfSubirLinkJson(itCat, r2Info.mangaCif, r2Info.nombreManga, urlCol, base);
-          }
-          prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + it.nombre;
+          prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + r2Info.nombreReal;
           try {
             const resp = await fetch(base + '/r2-upload', {
               method:  'POST',
