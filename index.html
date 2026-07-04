@@ -5890,11 +5890,17 @@
           archivosDescargados.length = 0;
           const zip      = await JSZip.loadAsync(blobFinal);
           const entradas = Object.values(zip.files)
-            .filter(f => !f.dir)
+            .filter(f => !f.dir && /\.(jpe?g|png|webp|gif|avif)$/i.test(f.name))
             .sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
           for (const entrada of entradas) {
             const blob = await entrada.async('blob');
             archivosDescargados.push({ nombre: entrada.name, blob });
+          }
+          // Guardar portada de la primera imagen si no existe aún
+          if (archivosDescargados.length) {
+            bvCargarPortada(id).then(pb => {
+              if (!pb) bvGuardarPortada(id, archivosDescargados[0].blob).catch(() => {});
+            }).catch(() => {});
           }
           // Contexto para navegación entre mangas
           if (todos && typeof item === 'object') {
