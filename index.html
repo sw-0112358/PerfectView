@@ -3730,7 +3730,16 @@
           });
           grid.appendChild(card);
           if (gal.zip_id) {
-            bvCargarPortada(gal.zip_id).then(blob => {
+            // Verificar si está cifrado para mostrar 🔐
+            bvCargar(gal.zip_id).then(reg => {
+              if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
+                ph.textContent  = '🔐';
+                ph.style.display = 'block';
+                img.style.display = 'none';
+                return null;
+              }
+              return bvCargarPortada(gal.zip_id);
+            }).then(blob => {
               if (!blob) return;
               img.src = URL.createObjectURL(blob);
               img.style.display = 'block';
@@ -4086,7 +4095,15 @@
           });
           grid.appendChild(card);
           if (gal.zip_id) {
-            bvCargarPortada(gal.zip_id).then(blob => {
+            bvCargar(gal.zip_id).then(reg => {
+              if (reg && reg.nombre && reg.nombre.endsWith('.zip.webc')) {
+                ph.textContent   = '🔐';
+                ph.style.display = 'block';
+                img.style.display = 'none';
+                return null;
+              }
+              return bvCargarPortada(gal.zip_id);
+            }).then(blob => {
               if (!blob) return;
               img.src = URL.createObjectURL(blob);
               img.style.display = 'block';
