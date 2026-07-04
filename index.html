@@ -3436,8 +3436,8 @@
         // — Detectar si está cifrado y pedir contraseña —
         let blobFinal = reg.blob;
         if (reg.nombre && reg.nombre.endsWith('.zip.webc')) {
-          const pwd = prompt('🔐 Contraseña para descifrar:', '🪷🌸💠');
-          if (pwd === null) return null;
+          const pwd = _gfPwdMaestra || prompt('🔐 Contraseña para descifrar (o activa 🧬):', '🪷🌸💠');
+          if (!pwd) return;      
           try {
             actualizarStatus('⏳ Descifrando…');
             const clave = await gfDerivarClave(pwd);
@@ -5618,8 +5618,8 @@
           // — Si está cifrado (.zip.webc) pedir contraseña y descifrar —
           let blobFinal = registro.blob;
           if (registro.nombre && registro.nombre.endsWith('.zip.webc')) {
-            const pwd = prompt('🔐 Contraseña para descifrar:', '🪷🌸💠');
-            if (pwd === null) { actualizarStatus('⚠️ Cancelado'); return; }
+            const pwd = _gfPwdMaestra || prompt('🔐 Contraseña para descifrar (o activa 🧬):', '🪷🌸💠');
+            if (!pwd) { actualizarStatus('⚠️ Cancelado'); return; }
             try {
               actualizarStatus('⏳ Descifrando…');
               const clave = await gfDerivarClave(pwd);
