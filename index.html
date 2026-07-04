@@ -3357,25 +3357,44 @@
         const slot = await dtCargar(slotId);
         if (slot && slot.imagenes && slot.imagenes.length > 0) {
           return slot.imagenes.sort((a, b) =>
-                                    a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
-                                   );
+            a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
+          );
         }
         // Fallback — descomprimir ZIP y guardar en slot para próxima vez
         const reg = await bvCargar(zipId);
         if (!reg) return null;
-        const zip      = await JSZip.loadAsync(reg.blob);
+
+        // — Detectar si está cifrado y pedir contraseña —
+        let blobFinal = reg.blob;
+        if (reg.nombre && reg.nombre.endsWith('.zip.webc')) {
+          const pwd = prompt('🔐 Contraseña para descifrar:', '🪷🌸💠');
+          if (pwd === null) return null;
+          try {
+            actualizarStatus('⏳ Descifrando…');
+            const clave = await gfDerivarClave(pwd);
+            blobFinal   = await gfDescifrarBlob(blobFinal, clave);
+          } catch(e) {
+            actualizarStatus('❌ Contraseña incorrecta o archivo dañado');
+            return null;
+          }
+        }
+
+        const zip      = await JSZip.loadAsync(blobFinal);
         const entradas = Object.values(zip.files)
-        .filter(f => !f.dir)
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+          .filter(f => !f.dir)
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         const imagenes = [];
         for (const e of entradas) {
           const blob = await e.async('blob');
           imagenes.push({ nombre: e.name, blob });
         }
-        // Guardar en descargas_temp para reutilizar
-        await dtCrear(slotId, { categoria: 'cache', nombre: slotId, total: imagenes.length });
-        for (const img of imagenes) {
-          await dtAgregarImagen(slotId, img);
+        // Guardar en descargas_temp para reutilizar (solo si no estaba cifrado,
+        // para no cachear datos descifrados en IDB)
+        if (!reg.nombre || !reg.nombre.endsWith('.zip.webc')) {
+          await dtCrear(slotId, { categoria: 'cache', nombre: slotId, total: imagenes.length });
+          for (const img of imagenes) {
+            await dtAgregarImagen(slotId, img);
+          }
         }
         return imagenes;
       }
