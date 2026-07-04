@@ -2973,11 +2973,27 @@
       }
 
       function bvAcceder() {
-        _bvDesbloqueada     = !_bvMaestra;
-        _bvSeleccion        = [];
+        _bvDesbloqueada      = !_bvMaestra;
+        _bvSeleccion         = [];
         _bvCeldaSeleccionada = null;
         document.getElementById('bvEmojiOverlay').style.display = 'none';
         document.getElementById('PanelAdmi').style.display = _bvMaestra ? '' : 'none';
+
+        if (!_gfPwdMaestra) {
+          const id = prompt('🧬 Ingresa tu ID para activar la clave maestra:', _clvIdActiva || '🪷🌸💠');
+          if (!id || !id.trim()) {
+            bvNavegar('pantalla3');
+            renderBoveda();
+            return;
+          }
+          _clvIdActiva = id.trim();
+          document.getElementById('clvIdActiva').textContent = _clvIdActiva;
+          _clvCargarYAbrir().then(() => {
+            bvNavegar('pantalla3');
+            renderBoveda();
+          });
+          return;
+        }
         bvNavegar('pantalla3');
         renderBoveda();
       }
