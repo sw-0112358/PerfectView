@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v137❄️
+          PerfectView🪷v138❄️
         </div>
       </header>
 
@@ -6091,17 +6091,18 @@
           // Agrupar por categoria normalizada
           const ORDEN_CAT = ['mangas','samurai','manhwa','nhentai','hitomi','zonascans'];
           const porCategoria = {};
+          // Inicializar todas las categorías con array vacío
+          ORDEN_CAT.forEach(c => porCategoria[c] = []);
           items.forEach(it => {
             let cat = it.categoria || '';
-            // Registros viejos sin categoria van a 'mangas'
             if (!cat || cat === 'boveda1') cat = 'mangas';
             if (!porCategoria[cat]) porCategoria[cat] = [];
             porCategoria[cat].push(it);
           });
 
-          // Renderizar en orden conocido primero, luego cualquier otro
+          // Renderizar siempre en orden fijo + cualquier categoría extra
           const cats = [
-            ...ORDEN_CAT.filter(c => porCategoria[c]),
+            ...ORDEN_CAT,
             ...Object.keys(porCategoria).filter(c => !ORDEN_CAT.includes(c))
           ];
 
@@ -6143,10 +6144,29 @@
             // Título clickeable
             const titulo = document.createElement('div');
             titulo.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none';
+            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
+
+            // Botón 🔄 generar ZIPs desde temporales
+            const btnGen = document.createElement('button');
+            btnGen.className = 'btn-icon';
+            btnGen.style.cssText = 'width:22px;height:22px;font-size:.7rem;margin-left:auto;flex-shrink:0';
+            btnGen.title   = 'Generar ZIPs desde descargas temporales';
+            btnGen.textContent = '🔄';
+            btnGen.addEventListener('click', async e => {
+              e.stopPropagation();
+              btnGen.textContent = '⏳';
+              btnGen.disabled    = true;
+              await gfGenerarZipsDeTemp(cat);
+              btnGen.textContent = '🔄';
+              btnGen.disabled    = false;
+              await gfEscanear();
+            });
+
             titulo.innerHTML = '<span class="gf-chevron" style="font-size:.7rem;transition:transform .25s;display:inline-block">▼</span>'
               + gfCatLabel(cat)
               + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
               + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
+            titulo.appendChild(btnGen);
 
             let abierto = false;
             cuerpo.style.maxHeight = '0';
@@ -6159,7 +6179,7 @@
 
             seccion.appendChild(titulo);
             seccion.appendChild(cuerpo);
-            el.appendChild(seccion);
+            el.appendChild(seccion);        
           });
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
@@ -6770,6 +6790,117 @@
         }
       }
    
+      // — Generar ZIPs desde descargas_temp para slots completos sin ZIP —
+      async function gfGenerarZipsDeTemp(cat) {
+        const slots = await dtListar();
+        const completos = slots.filter(s =>
+          s.categoria === cat &&
+          s.imagenes && s.total &&
+          s.imagenes.length >= s.total &&
+          s.categoria !== 'cache'
+        );
+        if (!completos.length) { actualizarStatus('⚠️ No hay descargas completas sin ZIP en ' + cat); return; }
+
+        let generados = 0;
+        for (const slot of completos) {
+          try {
+            // Verificar si ya tiene ZIP según categoría
+            let yaExiste = false;
+            if (cat === 'nhentai') {
+              const id  = parseInt(slot.slotId.replace('nh-', ''));
+              const gal = (await nhListar()).find(g => g.id === id);
+              yaExiste  = !!(gal && gal.zip_id);
+            } else if (cat === 'hitomi') {
+              const id  = parseInt(slot.slotId.replace('ht-', ''));
+              const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
+              yaExiste  = !!(gal && gal.zip_id);
+            } else if (cat === 'samurai') {
+              const partes  = slot.slotId.replace('sjz-','').split('-');
+              const colId   = parseInt(partes[0]);
+              const capNum  = partes.slice(1).join('-');
+              const cols    = await sjzListar();
+              const col     = cols.find(c => c.id === colId);
+              yaExiste      = !!(col && col.capitulos && col.capitulos.find(c => String(c.num) === String(capNum) && c.zip_id));
+            } else if (cat === 'manhwa') {
+              const partes  = slot.slotId.replace('mw-','').split('-');
+              const colId   = parseInt(partes[0]);
+              const capNum  = partes.slice(1).join('-');
+              const cols    = await mwListar();
+              const col     = cols.find(c => c.id === colId);
+              yaExiste      = !!(col && col.capitulos && col.capitulos.find(c => String(c.num) === String(capNum) && c.zip_id));
+            } else if (cat === 'zonascans') {
+              const partes  = slot.slotId.replace('zs-','').split('-');
+              const colId   = parseInt(partes[0]);
+              const capTit  = partes.slice(1).join('-');
+              const cols    = await zsListar();
+              const col     = cols.find(c => c.id === colId);
+              yaExiste      = !!(col && col.capitulos && col.capitulos.find(c => String(c.titulo) === String(capTit) && c.zip_id));
+            }
+
+            if (yaExiste) continue;
+
+            actualizarStatus('⏳ Generando ZIP: ' + slot.nombre);
+            const archivos = slot.imagenes.sort((a,b) =>
+              (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric: true })
+            );
+            const zip = new JSZip();
+            archivos.forEach(a => zip.file(a.nombre, a.blob));
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+            // Guardar según categoría
+            if (cat === 'nhentai') {
+              const id  = parseInt(slot.slotId.replace('nh-', ''));
+              const gal = (await nhListar()).find(g => g.id === id);
+              if (gal) {
+                const zipId = await bvGuardar(gal.nombre + '.zip', zipBlob, 'nhentai');
+                await nhActualizarZip(gal.id, zipId);
+                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              }
+            } else if (cat === 'hitomi') {
+              const id  = parseInt(slot.slotId.replace('ht-', ''));
+              const gal = (await dbListar('ht_galerias')).find(g => g.id === id);
+              if (gal) {
+                const zipId = await bvGuardar(gal.nombre + '.zip', zipBlob, 'hitomi');
+                await htActualizarZip(gal.id, zipId);
+                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              }
+            } else if (cat === 'samurai') {
+              const partes = slot.slotId.replace('sjz-','').split('-');
+              const colId  = parseInt(partes[0]);
+              const capNum = partes.slice(1).join('-');
+              const col    = (await sjzListar()).find(c => c.id === colId);
+              if (col) {
+                const zipId = await sjzGuardarCapitulo(col.nombre + ' - Cap ' + capNum + '.zip', zipBlob, colId, capNum);
+                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              }
+            } else if (cat === 'manhwa') {
+              const partes = slot.slotId.replace('mw-','').split('-');
+              const colId  = parseInt(partes[0]);
+              const capNum = partes.slice(1).join('-');
+              const col    = (await mwListar()).find(c => c.id === colId);
+              if (col) {
+                const zipId = await mwGuardarCapitulo(col.nombre + ' - Cap ' + capNum + '.zip', zipBlob, colId, capNum);
+                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              }
+            } else if (cat === 'zonascans') {
+              const partes = slot.slotId.replace('zs-','').split('-');
+              const colId  = parseInt(partes[0]);
+              const capTit = partes.slice(1).join('-');
+              const col    = (await zsListar()).find(c => c.id === colId);
+              if (col) {
+                const zsNombre = col.nombre + ' - ' + capTit + '.zip';
+                const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, colId, capTit);
+                bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              }
+            }
+            generados++;
+          } catch(e) {
+            actualizarStatus('❌ Error en ' + slot.nombre + ': ' + e.message);
+          }
+        }
+        actualizarStatus('✅ ' + generados + ' ZIP(s) generados en ' + cat);
+      }
+      
       
       /* =============================================
          10. INIT
