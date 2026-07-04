@@ -3665,9 +3665,36 @@
       }
 
       async function htAbrirEnVisor(galeria) {
+        const slotId = 'ht-' + galeria.id;
+        // Si no hay zip_id o el blob fue borrado → regenerar desde slot o descargar
+        if (galeria.zip_id) {
+          const reg = await bvCargar(galeria.zip_id);
+          if (!reg || !reg.blob || reg.blob.size < 100) {
+            // ZIP borrado — limpiar referencia y regenerar desde slot si hay imágenes
+            await htActualizarZip(galeria.id, null);
+            galeria.zip_id = null;
+            const slot = await dtCargar(slotId);
+            if (slot && slot.imagenes && slot.imagenes.length > 0) {
+              actualizarStatus('⏳ Regenerando ZIP desde cache…');
+              const archivos = slot.imagenes.sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
+              const zip = new JSZip();
+              archivos.forEach(a => zip.file(a.nombre, a.blob));
+              const urlsMap = {};
+              archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+              if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
+              zip.file('galeria.json', JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
+              const zipBlob = await zip.generateAsync({ type: 'blob' });
+              const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
+              await htActualizarZip(galeria.id, zipId);
+              galeria.zip_id = zipId;
+              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+              actualizarStatus('✅ ZIP regenerado — cargando…');
+            }
+          }
+        }
         if (!galeria.zip_id) { htDescargarGaleria(galeria, null); return; }
         actualizarStatus('⏳ Cargando…');
-        const imagenes = await cargarDesdeSlotOZip('ht-' + galeria.id, galeria.zip_id);
+        const imagenes = await cargarDesdeSlotOZip(slotId, galeria.zip_id);
         if (!imagenes) { actualizarStatus('❌ ZIP no encontrado'); return; }
         archivosDescargados.length = 0;
         imagenes.forEach(a => archivosDescargados.push(a));
