@@ -2902,12 +2902,14 @@
                 : nombreCol + '.zip.webc')
             : archivo.name;
 
+          // Forzar tipo binario — File.type puede estar vacío si el OS no reconoce .webc
+          const blobFijo = new Blob([archivo], { type: 'application/octet-stream' });
           if (con.nivel === 3 && colId && clave) {
             // Nivel 3 — capGuardarZip igual que R2
-            await capGuardarZip(catId, nombreLimpio, archivo, colId, clave);
+            await capGuardarZip(catId, nombreLimpio, blobFijo, colId, clave);
           } else {
             // Nivel 2 — bvGuardar igual que R2
-            const zipId    = await bvGuardar(nombreLimpio, archivo, catId);
+            const zipId    = await bvGuardar(nombreLimpio, blobFijo, catId);
             const lista    = await con.listar().catch(() => []);
             const yaExiste = lista.find(g => g.nombre === nombreCol);
             if (yaExiste) {
