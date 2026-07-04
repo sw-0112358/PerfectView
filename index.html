@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v155❄️
+          PerfectView🪷v157❄️
         </div>
       </header>
 
@@ -1151,6 +1151,7 @@
           </div>
           <div style="margin-top:8px">
             <button class="btn-ghost btn-sm" style="width:100%;color:var(--danger);border-color:var(--border)" onclick="limpiarLinks()">🗑️ Limpiar lista</button>
+            <button class="btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="diagnosticarDB()">🔬 Diagnóstico DB</button>
           </div>
         </div>
 
@@ -7044,6 +7045,25 @@
       /* =============================================
          10. INIT
       ============================================= */
+
+      async function diagnosticarDB() {
+        const db   = await bvAbrirDB();
+        const zips = await new Promise(r => { const q = db.transaction('zips','readonly').objectStore('zips').getAll(); q.onsuccess = e => r(e.target.result); });
+        const temp = await dtListar();
+
+        console.group('=== DIAGNÓSTICO DB ===');
+        console.log('Total zips en DB:', zips.length);
+        zips.forEach(z => {
+          console.log('ZIP id=' + z.id, '| nombre=' + z.nombre, '| cat=' + z.categoria, '| blob=' + (z.blob ? z.blob.size + 'B' : 'NULL'), '| samurai_coleccion_id=' + z.samurai_coleccion_id, '| samurai_cap_num=' + z.samurai_cap_num, '| manhwa_coleccion_id=' + z.manhwa_coleccion_id, '| manhwa_cap_num=' + z.manhwa_cap_num, '| zonascans_coleccion_id=' + z.zonascans_coleccion_id, '| zonascans_cap_num=' + z.zonascans_cap_num);
+        });
+        console.log('Total slots temp:', temp.length);
+        temp.forEach(s => {
+          console.log('SLOT id=' + s.slotId, '| cat=' + s.categoria, '| imgs=' + (s.imagenes ? s.imagenes.length : 0), '| total=' + s.total);
+        });
+        console.groupEnd();
+
+        actualizarStatus('🔬 Diagnóstico en consola — abre DevTools (F12)');
+      }
 
       document.addEventListener("DOMContentLoaded", () => {
         // Frame visible, pantalla1 visible, pantalla3/4 y visor ocultos
