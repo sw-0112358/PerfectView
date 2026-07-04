@@ -2575,6 +2575,11 @@
 
       // — Detectar tipo de ZIP e importar correctamente —
       async function detectarYImportarZip(archivo) {
+        // Guard — si es cifrado redirigir a importarWebcBoveda
+        if (archivo.name.endsWith('.webc')) {
+          await importarWebcBoveda(archivo);
+          return;
+        }
         actualizarStatus('⏳ Analizando ' + archivo.name + '…');
         try {
           const zip = await JSZip.loadAsync(archivo);
@@ -2734,16 +2739,191 @@
       function importarZipBoveda() {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
-        fileInput.accept = '.zip';
+        fileInput.accept = '.zip,.webc';
         fileInput.multiple = true;
         fileInput.onchange = async () => {
           const archivos = Array.from(fileInput.files);
           if (!archivos.length) return;
           for (const archivo of archivos) {
-            await detectarYImportarZip(archivo);
+            const esWebc = archivo.name.endsWith('.zip.webc')
+                        || archivo.name.endsWith('.webc')
+                        || archivo.type === 'application/octet-stream' && !archivo.name.endsWith('.zip');
+            if (esWebc) {
+              await importarWebcBoveda(archivo);
+            } else {
+              await detectarYImportarZip(archivo);
+            }
           }
         };
         fileInput.click();
+      }
+
+      // — Overlay genérico de selección con radios —
+      function mostrarSelectorOverlay(titulo, opciones) {
+        return new Promise(resolve => {
+          const overlay = document.createElement('div');
+          overlay.className = 'bv-emoji-overlay';
+          overlay.style.cssText = 'display:flex;padding:24px;overflow-y:auto';
+
+          const card = document.createElement('div');
+          card.style.cssText = 'background:rgba(30,30,45,0.98);border-radius:18px;padding:20px;width:min(340px,90vw);max-height:80vh;overflow-y:auto';
+
+          const tit = document.createElement('div');
+          tit.className = 'bv-emoji-title';
+          tit.style.marginBottom = '14px';
+          tit.textContent = titulo;
+          card.appendChild(tit);
+
+          opciones.forEach(op => {
+            const lbl = document.createElement('label');
+            lbl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;border:1.5px solid rgba(255,255,255,0.08);margin-bottom:8px;color:#cdd6f4;font-size:.9rem;transition:background .15s';
+            lbl.onmouseenter = () => lbl.style.background = 'rgba(203,166,247,.15)';
+            lbl.onmouseleave = () => lbl.style.background = '';
+            const radio = document.createElement('input');
+            radio.type  = 'radio';
+            radio.name  = 'selector';
+            radio.value = op.value;
+            radio.style.accentColor = '#cba6f7';
+            lbl.append(radio, document.createTextNode(op.label));
+            lbl.onclick = () => { overlay.remove(); resolve(op.value); };
+            card.appendChild(lbl);
+          });
+
+          const btnCancel = document.createElement('button');
+          btnCancel.textContent = 'Cancelar';
+          btnCancel.className   = 'btn-ghost btn-sm';
+          btnCancel.style.cssText = 'width:100%;margin-top:8px;color:#6c7086';
+          btnCancel.onclick = () => { overlay.remove(); resolve(null); };
+          card.appendChild(btnCancel);
+
+          overlay.appendChild(card);
+          document.body.appendChild(overlay);
+        });
+      }
+
+      // — Parsear nombre de archivo para extraer colección y clave de capítulo —
+      // — Construir nombre de archivo cifrado —
+      // Primero arma el string completo con metadata, luego lo cifra todo de una vez
+      // Formato interno: {catId}/{nombre}/{clave} o {catId}/{nombre}
+      // Resultado: {stringCifrado}.zip.webc — opaco, sin estructura visible
+      async function construirNombreWebc(catId, nombre, clave) {
+        const meta = catId + '/' + nombre + (clave !== null && clave !== undefined ? '/' + clave : '');
+        if (!_gfPwdMaestra) {
+          // Sin clave — usar base64 simple como fallback legible
+          return btoa(unescape(encodeURIComponent(meta))).replace(/[+/=]/g, c =>
+            ({ '+': '-', '/': '_', '=': '' }[c])) + '.zip.webc';
+        }
+        const claveCrypto = await gfDerivarClave(_gfPwdMaestra);
+        const cifrado     = await gfCifrarNombre(meta, claveCrypto);
+        return cifrado + '.zip.webc';
+      }
+
+      // — Parsear nombre cifrado —
+      // Descifra el nombre completo y extrae catId, nombre, clave
+      async function parsearNombreWebc(nombreArchivo) {
+        const base = nombreArchivo.replace(/\.zip\.webc$/i, '').replace(/\.zip$/i, '');
+        let meta   = null;
+
+        // Intentar descifrar con clave maestra
+        if (_gfPwdMaestra) {
+          try {
+            const claveCrypto = await gfDerivarClave(_gfPwdMaestra);
+            meta = await gfDescifrarNombre(base, claveCrypto);
+          } catch(e) {}
+        }
+
+        // Fallback — intentar base64 simple
+        if (!meta) {
+          try {
+            meta = decodeURIComponent(escape(atob(base.replace(/-/g, '+').replace(/_/g, '/'))));
+          } catch(e) {}
+        }
+
+        // Si no se pudo descifrar — archivo antiguo o desconocido
+        if (!meta) return { catId: null, nombre: base, clave: null };
+
+        // Separar metadata: catId/nombre/clave
+        const partes = meta.split('/');
+        const catId  = partes[0];
+        if (!CAT_CONECTORES[catId]) return { catId: null, nombre: meta, clave: null };
+
+        return {
+          catId,
+          nombre: partes[1] || '',
+          clave:  partes[2] || null
+        };
+      }
+
+      // — Importar .zip.webc cifrado — detecta categoría del nombre o pide al usuario —
+      async function importarWebcBoveda(archivo) {
+        // 1. Intentar detectar categoría del nombre automáticamente
+        const parseado = await parsearNombreWebc(archivo.name);
+        let catId = parseado.catId;
+
+        // Si no se detectó — mostrar selector
+        if (!catId) {
+          const catOpciones = Object.entries(CAT_CONECTORES).map(([id, c]) => ({
+            value: id, label: c.icon + ' ' + c.label
+          }));
+          catId = await mostrarSelectorOverlay('📦 ' + archivo.name + '\n¿Categoría?', catOpciones);
+          if (!catId) return;
+        }
+        const con = CAT_CONECTORES[catId];
+
+        // 2. Usar nombre descifrado del parseado para ambos niveles
+        const nombreBase = archivo.name.replace(/\.zip\.webc$/i, '').replace(/\.zip$/i, '');
+        const { nombre: nombreCol, clave } = (parseado.nombre && parseado.catId)
+          ? parseado
+          : { nombre: nombreBase, clave: null };
+
+        // 3. Buscar o crear colección si es nivel 3
+        let colId = null;
+        if (con.nivel === 3) {
+          const cols     = await con.listar().catch(() => []);
+          const yaExiste = cols.find(c => c.nombre === nombreCol);
+          if (yaExiste) {
+            colId = yaExiste.id;
+          } else {
+            // Crear colección vacía usando el guardador del conector
+            colId = await con.guardar(nombreCol);
+          }
+        }
+
+        // 4. Guardar blob cifrado — igual que gfRestaurarDesdeEstructura
+        actualizarStatus('⏳ Leyendo archivo…');
+        try {
+          const blobReal = await new Response(archivo).blob();
+          // Nombre limpio para guardar en zips store
+          const nombreLimpio = nombreCol
+            ? (con.nivel === 3 && clave
+                ? nombreCol + ' - ' + clave + '.zip.webc'
+                : nombreCol + '.zip.webc')
+            : archivo.name;
+
+          if (con.nivel === 3 && colId && clave) {
+            // Nivel 3 — usar capGuardarZip igual que R2
+            const zipId = await capGuardarZip(catId, nombreLimpio, blobReal, colId, clave);
+            actualizarStatus('✅ Importado en ' + con.icon + ' ' + con.label + ' · ' + nombreCol + ' - ' + clave);
+          } else {
+            // Nivel 2 — usar bvGuardar igual que R2
+            const zipId = await bvGuardar(nombreLimpio, blobReal, catId);
+            const lista    = await con.listar().catch(() => []);
+            const yaExiste = lista.find(g => g.nombre === nombreCol);
+            if (yaExiste) {
+              await con.actualizarZip(yaExiste.id, zipId);
+            } else {
+              await dbGuardar(con.store, {
+                nombre: nombreCol, zip_id: zipId
+              });
+            }
+            actualizarStatus('✅ Importado en ' + con.icon + ' ' + con.label + ' · ' + nombreCol);
+          }
+
+          actualizarStatus('✅ Importado en ' + con.icon + ' ' + con.label + (clave ? ' · ' + nombreCol + ' - ' + clave : ''));
+          renderBoveda();
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+        }
       }
 
       // — Renombrar en IndexedDB —
@@ -3042,6 +3222,7 @@
           nivel: 3, icon: '⚔️', label: 'Samurai', enMenu: true, enAdm: false,
           store: 'sjz_colecciones', slotPrefix: 'sjz', zipCatField: 'samurai',
           listar:          () => sjzListar(),
+          guardar:         nombre => sjzGuardar(nombre, '', []),
           eliminar:        async col => sjzEliminarDB(col.id),
           exportar:        col => sjzExportarZipCompleto(col),
           getPortada:      col => sjzBuscarZipCapitulo(col.id, 1).then(async reg => {
@@ -3067,6 +3248,7 @@
           nivel: 3, icon: '📖', label: 'Manhwa', enMenu: true, enAdm: false,
           store: 'mw_colecciones', slotPrefix: 'mw', zipCatField: 'manhwa',
           listar:          () => mwListar(),
+          guardar:         nombre => mwGuardar(nombre, '', '', []),
           eliminar:        async col => mwEliminarDB(col.id),
           exportar:        col => mwExportarZipCompleto(col),
           getPortada:      col => mwBuscarZipCapitulo(col.id, 1).then(async reg => {
@@ -3092,6 +3274,7 @@
           nivel: 3, icon: '📡', label: 'ZonaScans', enMenu: true, enAdm: false,
           store: 'zs_colecciones', slotPrefix: 'zs', zipCatField: 'zonascans',
           listar:          () => zsListar(),
+          guardar:         nombre => zsGuardar({ nombre, url: '', caps: [], fecha: new Date().toISOString() }),
           eliminar:        async col => zsEliminarDB(col.id),
           exportar:        col => zsExportarZipCompleto(col),
           getPortada:      col => zsBuscarZipPrimero(col.id).then(async reg => {
@@ -3963,35 +4146,13 @@
       // — Exportar galería Hitomi —
       async function htExportarGaleria(gal) {
         if (!gal.zip_id) { actualizarStatus('⚠️ Descarga la galería primero'); return; }
-        actualizarStatus('⏳ Preparando exportación…');
-        try {
-          const reg = await bvCargar(gal.zip_id);
-          if (!reg) throw new Error('ZIP no encontrado');
-          const url = URL.createObjectURL(reg.blob);
-          const a   = document.createElement('a');
-          a.href = url;
-          a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-          actualizarStatus('✅ Exportado: ' + gal.nombre);
-        } catch(err) { actualizarStatus('❌ ' + err.message); }
+        await bovedaDescargar(gal.zip_id, gal.nombre);
       }
 
       // — Exportar galería nhentai —
       async function nhExportarGaleria(gal) {
         if (!gal.zip_id) { actualizarStatus('⚠️ Descarga la galería primero'); return; }
-        actualizarStatus('⏳ Preparando exportación…');
-        try {
-          const reg = await bvCargar(gal.zip_id);
-          if (!reg) throw new Error('ZIP no encontrado');
-          const url = URL.createObjectURL(reg.blob);
-          const a   = document.createElement('a');
-          a.href = url;
-          a.download = gal.nombre.replace(/[^a-zA-Z0-9\-_\s]/g, '') + '.zip';
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-          actualizarStatus('✅ Exportado: ' + gal.nombre);
-        } catch(err) { actualizarStatus('❌ ' + err.message); }
+        await bovedaDescargar(gal.zip_id, gal.nombre);
       }
 
       // — Render hitomi —
@@ -5707,10 +5868,22 @@
         try {
           const registro = await bvCargar(id);
           if (!registro) return;
+          const esCifrado = registro.nombre && registro.nombre.endsWith('.zip.webc');
+          let nombreFinal;
+          if (esCifrado) {
+            const cat    = registro.categoria;
+            const clave  = registro[cat + '_cap_num'] ?? null;
+            const nombreReal = nombre.replace(/\.zip\.webc$/i, '').replace(/\.zip$/i, '');
+            nombreFinal = CAT_CONECTORES[cat]
+              ? await construirNombreWebc(cat, nombreReal, clave)
+              : nombreReal + '.zip.webc';
+          } else {
+            nombreFinal = nombre.replace(/\.zip\.webc$/i, '').replace(/\.zip$/i, '') + '.zip';
+          }
           const url = URL.createObjectURL(registro.blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = nombre;
+          const a   = document.createElement('a');
+          a.href     = url;
+          a.download = nombreFinal;
           a.click();
           setTimeout(() => URL.revokeObjectURL(url), 4000);
         } catch(err) {
@@ -6697,28 +6870,21 @@
 
           // Buscar o crear colección
           let colId;
-          if (store) {
-            const lista    = await dbListar(store);
+          if (con) {
+            const lista    = await con.listar();
             const yaExiste = lista.find(c => c.nombre === nombreManga);
             if (yaExiste) {
               colId = yaExiste.id;
-            } else if (itCat === 'samurai') {
-              colId = await sjzGuardar(nombreManga, urlCol, []);
-            } else if (itCat === 'manhwa') {
-              colId = await mwGuardar(nombreManga, urlCol, '', []);
-            } else if (itCat === 'zonascans') {
-              colId = await zsGuardar({ nombre: nombreManga, url: urlCol, capitulos: [], fecha: new Date().toISOString() });
+            } else {
+              colId = await con.guardar(nombreManga);
             }
           }
 
           // Guardar capítulo
           const zipId = await capGuardarZip(itCat, nombreManga + ' - ' + capNom + ext, blob, colId, capNom);
-          if (!esCifrado) {
-            bvExtraerPortada(blob).then(pb => {
-              if (pb) bvGuardarPortada(zipId, pb).catch(() => {});
-            }).catch(() => {});
-          }
           actualizarStatus('✅ Restaurado: ' + nombreManga + ' - ' + capNom);
+          // Portada en segundo plano
+          if (!esCifrado) bvExtraerPortada(blob).then(pb => { if (pb) bvGuardarPortada(zipId, pb).catch(() => {}); }).catch(() => {});
         }
         renderBoveda();
       }
