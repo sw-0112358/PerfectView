@@ -3573,6 +3573,11 @@
             getLabel:          con.getCapLabel,
             categoriaDB:       con.zipCatField,
             ordenDesc:         cfg.ordenDesc,
+            ordenModo:         cfg.ordenModo,
+            modoIdx:           cfg.modoIdx,
+            setOrdenDesc:      cfg.setOrdenDesc,
+            setOrdenModo:      cfg.setOrdenModo,
+            setModoIdx:        cfg.setModoIdx,
             onToggleOrden:     () => { cfg.setOrdenDesc(!cfg.ordenDesc); renderBoveda(); },
             onBuscarNuevos:    () => con.buscarNuevos(colAct),
             onVolver:          () => { con.setColActual(null); renderBoveda(); },
@@ -3651,6 +3656,7 @@
           ordenModo:    _catOrdenGet(cat).modo,
           setOrdenModo: v => { _catOrdenGet(cat).modo = v; },
           modoIdx:      _catOrdenGet(cat).modoIdx,
+          getModoIdx:   () => _catOrdenGet(cat).modoIdx,
           setModoIdx:   v => { _catOrdenGet(cat).modoIdx = v; },
           panelHtml:
             '<div class="sjz-panel-title">📡 ZONASCANS / ARCHIVIUMBAR</div>'
@@ -4119,12 +4125,40 @@
         contenedor.innerHTML = '';
         const con = CAT_CONECTORES[cfg.cat];
 
+        // Estado de orden nivel 2
+        const _modos2 = [
+          { campo: 'fecha', desc: true,  label: '📅 Fecha' },
+          { campo: 'nombre', desc: false, label: '🔤 A-Z' },
+          { campo: 'nombre', desc: true,  label: '🔤 Z-A' },
+        ];
+
         // Breadcrumb
         const bc = document.createElement('div');
         bc.className = 'bv-breadcrumb';
         bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
           + '<span class="bv-breadcrumb-sep">/</span>'
           + '<span class="bv-breadcrumb-label">' + con.icon + ' ' + con.label + '</span>';
+
+        const btnOrden2 = document.createElement('button');
+        btnOrden2.className = 'bv-breadcrumb-back';
+        btnOrden2.style.marginLeft = 'auto';
+        const o2 = _catOrdenGet(cfg.cat);
+        let modoIdx2 = o2.modoIdx2 ?? 0;
+        btnOrden2.textContent = _modos2[modoIdx2].label;
+        btnOrden2.addEventListener('click', () => {
+          modoIdx2 = (modoIdx2 + 1) % _modos2.length;
+          o2.modoIdx2 = modoIdx2;
+          btnOrden2.textContent = _modos2[modoIdx2].label;
+          const m = _modos2[modoIdx2];
+          const sorted = [...galerias].sort((a, b) => {
+            const va = (a[m.campo] || '').toLowerCase();
+            const vb = (b[m.campo] || '').toLowerCase();
+            return m.desc ? vb.localeCompare(va) : va.localeCompare(vb);
+          });
+          grid.innerHTML = '';
+          sorted.forEach(gal => grid.appendChild(tarjetasMap.get(gal.id) || document.createElement('div')));
+        });
+        bc.appendChild(btnOrden2);
         contenedor.appendChild(bc);
 
         // Panel de entrada específico de la fuente
@@ -4142,7 +4176,13 @@
           actualizarStatus('❌ Error listar ' + cfg.cat + ': ' + e.message);
         }
         actualizarStatus('📋 ' + cfg.cat + ': ' + galerias.length + ' entradas');
-        galerias.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+        const m0 = _modos2[_catOrdenGet(cfg.cat).modoIdx2 ?? 0];
+        galerias.sort((a, b) => {
+          const va = (a[m0.campo] || '').toLowerCase();
+          const vb = (b[m0.campo] || '').toLowerCase();
+          return m0.desc ? vb.localeCompare(va) : va.localeCompare(vb);
+        });
+        const tarjetasMap = new Map();
 
         if (!galerias.length) {
           const empty = document.createElement('div');
@@ -4164,6 +4204,7 @@
             onDelete:      async () => { await con.eliminar(gal); renderNivel2(contenedor, cfg); },
             btnSecundario: cfg.getBtnSec ? cfg.getBtnSec(gal) : null,
           });
+          tarjetasMap.set(gal.id, card);
           grid.appendChild(card);
 
           con.getPortada(gal).then(async blob => {
@@ -5187,7 +5228,8 @@
         btnOrden.textContent = _modos[cfg.modoIdx ?? 1].label;
         btnOrden.title = 'Cambiar orden';
         btnOrden.addEventListener('click', () => {
-          const nuevoIdx = ((cfg.modoIdx ?? 1) + 1) % _modos.length;
+          const idxActual = cfg.getModoIdx ? cfg.getModoIdx() : (cfg.modoIdx ?? 1);
+          const nuevoIdx  = (idxActual + 1) % _modos.length;
           const m = _modos[nuevoIdx];
           if (cfg.setModoIdx)   cfg.setModoIdx(nuevoIdx);
           if (cfg.setOrdenModo) cfg.setOrdenModo(m.modo);
@@ -5363,6 +5405,7 @@
           ordenModo:    _catOrdenGet(cat).modo,
           setOrdenModo: v => { _catOrdenGet(cat).modo = v; },
           modoIdx:      _catOrdenGet(cat).modoIdx,
+          getModoIdx:   () => _catOrdenGet(cat).modoIdx,
           setModoIdx:   v => { _catOrdenGet(cat).modoIdx = v; },
           panelHtml:
             '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
@@ -5678,6 +5721,7 @@
           ordenModo:    _catOrdenGet(cat).modo,
           setOrdenModo: v => { _catOrdenGet(cat).modo = v; },
           modoIdx:      _catOrdenGet(cat).modoIdx,
+          getModoIdx:   () => _catOrdenGet(cat).modoIdx,
           setModoIdx:   v => { _catOrdenGet(cat).modoIdx = v; },
           panelHtml:
             '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
