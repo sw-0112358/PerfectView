@@ -3893,14 +3893,21 @@
           }
         }
 
-        const zip      = await JSZip.loadAsync(blobFinal);
+        const zip    = await JSZip.loadAsync(blobFinal);
+        const vistos = new Set();
         const entradas = Object.values(zip.files)
-          .filter(f => !f.dir)
+          .filter(f => {
+            if (f.dir || !/\.(jpe?g|png|webp|gif|avif)$/i.test(f.name)) return false;
+            const base = f.name.split('/').pop();
+            if (vistos.has(base)) return false;
+            vistos.add(base);
+            return true;
+          })
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         const imagenes = [];
         for (const e of entradas) {
           const blob = await e.async('blob');
-          imagenes.push({ nombre: e.name, blob });
+          imagenes.push({ nombre: e.name.split('/').pop(), blob });
         }
         if (!reg.nombre || !reg.nombre.endsWith('.zip.webc')) {
           // Cachear en descargas_temp solo si no está cifrado
