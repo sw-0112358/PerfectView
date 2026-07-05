@@ -4602,31 +4602,8 @@
       const _bvPortadas = {};
       let _bvDropdownActivo = null;
 
-      function bvCerrarDropdown() {
-        if (_bvDropdownActivo) { _bvDropdownActivo.remove(); _bvDropdownActivo = null; }
-      }
+      
 
-      document.addEventListener('click', bvCerrarDropdown);
-
-      function bvAbrirDropdown(btnEl, item, cardEl, footer) {
-        bvCerrarDropdown();
-        const dd = document.createElement('div');
-        dd.className = 'bv-dropdown';
-        const opciones = [
-          { icon: '✏️', fn: () => bvRenombrar(item, footer) },
-          { icon: '🔽', fn: () => bovedaDescargar(item.id, item.nombre) },
-          { icon: '🗑️', fn: () => bvEliminar(item.id, cardEl), cls: 'danger' },
-        ];
-        opciones.forEach(op => {
-          const el = document.createElement('div');
-          el.className = 'bv-drop-item' + (op.cls ? ' ' + op.cls : '');
-          el.innerHTML = '<span>' + op.icon + '</span>';
-          el.onclick = e => { e.stopPropagation(); bvCerrarDropdown(); op.fn(); };
-          dd.appendChild(el);
-        });
-        btnEl.closest('.bv-cover-card').appendChild(dd);
-        _bvDropdownActivo = dd;
-      }
 
       async function bvExtraerPortada(zipBlob) {
         const zip = await JSZip.loadAsync(zipBlob);
@@ -5884,9 +5861,15 @@
           const { card, ph: placeholder, img, footer } = crearTarjeta({
             nombre:      nombreMostrar + (esCifrado ? ' 🔐' : ''),
             phTexto:     esCifrado ? '🔐' : '📖',
+            esCifrado:   esCifrado,
             onRenombrar: (footerEl) => bvRenombrar(item, footerEl),
-            onDelete:    (btnEl, cardEl, footerEl) => bvAbrirDropdown(btnEl, item, cardEl, footerEl),
-            btnMenu:     '···',
+            onDelete:    async () => { await bvEliminar(item.id, card); },
+            btnSecundario: {
+              texto:   '🔽',
+              titulo:  'Descargar',
+              style:   'top:6px;right:6px',
+              onClick: () => bovedaDescargar(item.id, item.nombre)
+            },
           });
 
           // Tap en portada → abrir en visor
