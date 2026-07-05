@@ -3506,7 +3506,8 @@
         });
       }
 
-      let _zsOrdenDesc = true; // true = más reciente primero (igual que Samurai)
+      let _zsOrdenDesc = true;
+      let _zsOrdenModo = 'num';
 
       async function zsBuscarNuevos() {
         if (!_zsColeccionActual) return;
@@ -3640,8 +3641,10 @@
         await renderNivel3(contenedor, {
           cat:         'zonascans',
           gridId:      'zsGrid',
-          ordenDesc:   _zsOrdenDesc,
+          ordenDesc:    _zsOrdenDesc,
           setOrdenDesc: v => { _zsOrdenDesc = v; },
+          ordenModo:    _zsOrdenModo,
+          setOrdenModo: v => { _zsOrdenModo = v; },
           panelHtml:
             '<div class="sjz-panel-title">📡 ZONASCANS / ARCHIVIUMBAR</div>'
             + '<div class="sjz-row">'
@@ -4903,6 +4906,7 @@
       }
 
       let _sjzOrdenDesc = true; // true = más reciente primero
+      let _sjzOrdenModo = 'num'; // 'num' | 'fecha'
 
       // — Exportar colección completa como ZIP maestro (genérico) —
       async function exportarZipCompleto(col, cfg) {
@@ -5168,9 +5172,26 @@
 
         const btnOrden = document.createElement('button');
         btnOrden.className = 'bv-breadcrumb-back';
-        btnOrden.title = 'Invertir orden';
-        btnOrden.textContent = cfg.ordenDesc ? '🔼 Asc' : '🔽 Desc';
-        btnOrden.addEventListener('click', cfg.onToggleOrden);
+        const _modos = [
+          { modo: 'num',   desc: false, label: '🔢 Asc' },
+          { modo: 'num',   desc: true,  label: '🔢 Desc' },
+          { modo: 'fecha', desc: true,  label: '📅 Fecha' },
+        ];
+        let _modoIdx = _modos.findIndex(m => m.modo === (cfg.ordenModo||'num') && m.desc === cfg.ordenDesc);
+        if (_modoIdx < 0) _modoIdx = 0;
+        btnOrden.textContent = _modos[_modoIdx].label;
+        btnOrden.title = 'Cambiar orden';
+        btnOrden.addEventListener('click', () => {
+          _modoIdx = (_modoIdx + 1) % _modos.length;
+          const m = _modos[_modoIdx];
+          btnOrden.textContent = m.label;
+          if (cfg.setOrdenModo) cfg.setOrdenModo(m.modo);
+          cfg.setOrdenDesc(m.desc);
+          // Re-renderizar chips
+          const capsOrdenadas = _ordenarCaps(cfg.caps, m.modo, m.desc);
+          grid.innerHTML = '';
+          capsOrdenadas.forEach(cap => grid.appendChild(chipsMap.get(cap) || document.createElement('div')));
+        });
 
         bc.append(btnVolver, sep1, lblColeccion, btnNuevos, btnAuto, btnOrden);
         contenedor.appendChild(bc);
@@ -5213,7 +5234,29 @@
         // Cargar mapa de descargados — todos usan campos DB
         const descMap = await capListarDescargados(cfg.categoriaDB, cfg.coleccion.id);
 
-        const capsOrdenadas = cfg.ordenDesc ? [...cfg.caps].reverse() : [...cfg.caps];
+        // Función de ordenamiento
+        function _ordenarCaps(caps, modo, desc) {
+          const sorted = [...caps].sort((a, b) => {
+            if (modo === 'fecha') {
+              const fa = a.fecha || '';
+              const fb = b.fecha || '';
+              return desc ? fb.localeCompare(fa) : fa.localeCompare(fb);
+            }
+            // numérico — usar num o titulo
+            const na = Number(a.num ?? a.titulo ?? 0);
+            const nb = Number(b.num ?? b.titulo ?? 0);
+            if (!isNaN(na) && !isNaN(nb)) return desc ? nb - na : na - nb;
+            // fallback alfanumérico
+            const sa = String(a.num ?? a.titulo ?? '');
+            const sb = String(b.num ?? b.titulo ?? '');
+            return desc ? sb.localeCompare(sa, undefined, {numeric:true}) : sa.localeCompare(sb, undefined, {numeric:true});
+          });
+          return sorted;
+        }
+
+        const chipsMap = new Map(); // cap → chip element
+        const modoActual = cfg.ordenModo || 'num';
+        const capsOrdenadas = _ordenarCaps(cfg.caps, modoActual, cfg.ordenDesc);
         const grid = document.createElement('div');
         grid.className = 'sjz-cap-grid';
 
@@ -5300,6 +5343,7 @@
             };
             chip.appendChild(dl);
           }
+          chipsMap.set(cap, chip);
           grid.appendChild(chip);
         });
         contenedor.appendChild(grid);
@@ -5313,6 +5357,8 @@
           gridId:       'sjzGrid',
           ordenDesc:    _sjzOrdenDesc,
           setOrdenDesc: v => { _sjzOrdenDesc = v; },
+          ordenModo:    _sjzOrdenModo,
+          setOrdenModo: v => { _sjzOrdenModo = v; },
           panelHtml:
             '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
             + '<div class="sjz-row">'
@@ -5335,7 +5381,8 @@
       ============================================= */
 
       let _mwColeccionActual = null;
-      let _mwOrdenDesc       = true;
+      let _mwOrdenDesc = true;
+      let _mwOrdenModo = 'num';
 
       // — Manhwa aliases —
       const mwListar              = ()         => dbListar(CAT_CONECTORES.manhwa.store);
@@ -5622,6 +5669,8 @@
           gridId:       'mwGrid',
           ordenDesc:    _mwOrdenDesc,
           setOrdenDesc: v => { _mwOrdenDesc = v; },
+          ordenModo:    _mwOrdenModo,
+          setOrdenModo: v => { _mwOrdenModo = v; },
           panelHtml:
             '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
             + '<div class="sjz-row">'
