@@ -814,35 +814,35 @@
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
         align-items: start;
       }
-      .sjz-cap-chip {
+      .bv-cap-chip {
         background: var(--surface); border: 1px solid var(--border);
         border-radius: var(--radius-sm); padding: 8px 4px;
         text-align: center; font-size: .72rem; font-weight: 500;
         color: var(--text); cursor: pointer;
         transition: background .12s, border-color .12s;
       }
-      .sjz-cap-chip:active { background: var(--accent); color: #fff; border-color: var(--accent); }
-      .sjz-cap-chip.descargado {
+      .bv-cap-chip:active { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .bv-cap-chip.descargado {
         background: rgba(80,200,120,.12);
         border-color: rgba(80,200,120,.5);
         color: #3a9e60;
       }
-      .sjz-cap-chip.descargando { opacity: .4; pointer-events: none; }
+      .bv-cap-chip.descargando { opacity: .4; pointer-events: none; }
 
       /* Chip con portada descargada */
-      .sjz-cap-chip.con-portada {
+      .bv-cap-chip.con-portada {
         position: relative;
         aspect-ratio: 2 / 3;
         overflow: hidden;
         padding: 0;
         border-color: rgba(80,200,120,.4);
       }
-      .sjz-cap-chip.con-portada img {
+      .bv-cap-chip.con-portada img {
         position: absolute; inset: 0;
         width: 100%; height: 100%;
         object-fit: cover; display: block;
       }
-      .sjz-cap-chip.con-portada .cap-num {
+      .bv-cap-chip.con-portada .cap-num {
         position: absolute;
         bottom: 0; left: 0; right: 0;
         padding: 12px 4px 4px;
@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v240❄️
+          PerfectView🪷v242❄️
         </div>
       </header>
 
@@ -5120,7 +5120,7 @@
           const chips = lote.map(cap => {
             const clave = String(getClave(cap));
             if (!chipContainer) return document.createElement('div');
-            return [...chipContainer.querySelectorAll('.sjz-cap-chip')]
+            return [...chipContainer.querySelectorAll('.bv-cap-chip')]
               .find(el => {
                 const capNum = el.querySelector('.cap-num');
                 const texto  = capNum ? capNum.textContent.trim() : el.textContent.trim();
@@ -5247,7 +5247,7 @@
           const yaDesc = !!descMap[String(clave)];
           const zipId  = descMap[String(clave)];
           const chip   = document.createElement('div');
-          chip.className = 'sjz-cap-chip' + (yaDesc ? ' descargado' : '');
+          chip.className = 'bv-cap-chip' + (yaDesc ? ' descargado' : '');
           chip.textContent = label;
           chip.title = yaDesc ? '✅ ' + label : '⬇️ ' + label;
           chip.onclick = () => cfg.abrirCapFn(cfg.coleccion, cap, chip);
