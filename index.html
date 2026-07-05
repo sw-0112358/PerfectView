@@ -3506,8 +3506,12 @@
         });
       }
 
-      let _zsOrdenDesc = true;
-      let _zsOrdenModo = 'num';
+      // Estado de orden genérico — un solo objeto para todas las categorías nivel 3
+      const _catOrden = {};
+      function _catOrdenGet(cat) {
+        if (!_catOrden[cat]) _catOrden[cat] = { desc: true, modo: 'num', modoIdx: 1 };
+        return _catOrden[cat];
+      }
 
       async function zsBuscarNuevos() {
         if (!_zsColeccionActual) return;
@@ -3638,13 +3642,16 @@
       }
 
       async function renderZonaScans(contenedor) {
+        const cat = 'zonascans';
         await renderNivel3(contenedor, {
-          cat:         'zonascans',
+          cat,
           gridId:      'zsGrid',
-          ordenDesc:    _zsOrdenDesc,
-          setOrdenDesc: v => { _zsOrdenDesc = v; },
-          ordenModo:    _zsOrdenModo,
-          setOrdenModo: v => { _zsOrdenModo = v; },
+          ordenDesc:    _catOrdenGet(cat).desc,
+          setOrdenDesc: v => { _catOrdenGet(cat).desc = v; },
+          ordenModo:    _catOrdenGet(cat).modo,
+          setOrdenModo: v => { _catOrdenGet(cat).modo = v; },
+          modoIdx:      _catOrdenGet(cat).modoIdx,
+          setModoIdx:   v => { _catOrdenGet(cat).modoIdx = v; },
           panelHtml:
             '<div class="sjz-panel-title">📡 ZONASCANS / ARCHIVIUMBAR</div>'
             + '<div class="sjz-row">'
@@ -4905,8 +4912,8 @@
         }
       }
 
-      let _sjzOrdenDesc = true; // true = más reciente primero
-      let _sjzOrdenModo = 'num'; // 'num' | 'fecha'
+      
+
 
       // — Exportar colección completa como ZIP maestro (genérico) —
       async function exportarZipCompleto(col, cfg) {
@@ -5177,13 +5184,12 @@
           { modo: 'num',   desc: true,  label: '🔢 Desc' },
           { modo: 'fecha', desc: true,  label: '📅 Fecha' },
         ];
-        let _modoIdx = _modos.findIndex(m => m.modo === (cfg.ordenModo||'num') && m.desc === cfg.ordenDesc);
-        if (_modoIdx < 0) _modoIdx = 0;
-        btnOrden.textContent = _modos[_modoIdx].label;
+        btnOrden.textContent = _modos[cfg.modoIdx ?? 1].label;
         btnOrden.title = 'Cambiar orden';
         btnOrden.addEventListener('click', () => {
-          _modoIdx = (_modoIdx + 1) % _modos.length;
-          const m = _modos[_modoIdx];
+          const nuevoIdx = ((cfg.modoIdx ?? 1) + 1) % _modos.length;
+          const m = _modos[nuevoIdx];
+          if (cfg.setModoIdx)   cfg.setModoIdx(nuevoIdx);
           if (cfg.setOrdenModo) cfg.setOrdenModo(m.modo);
           cfg.setOrdenDesc(m.desc);
           renderBoveda();
@@ -5348,13 +5354,16 @@
 
       // — Render Samurai —
       async function renderSamurai(contenedor) {
+        const cat = 'samurai';
         await renderNivel3(contenedor, {
-          cat:          'samurai',
+          cat,
           gridId:       'sjzGrid',
-          ordenDesc:    _sjzOrdenDesc,
-          setOrdenDesc: v => { _sjzOrdenDesc = v; },
-          ordenModo:    _sjzOrdenModo,
-          setOrdenModo: v => { _sjzOrdenModo = v; },
+          ordenDesc:    _catOrdenGet(cat).desc,
+          setOrdenDesc: v => { _catOrdenGet(cat).desc = v; },
+          ordenModo:    _catOrdenGet(cat).modo,
+          setOrdenModo: v => { _catOrdenGet(cat).modo = v; },
+          modoIdx:      _catOrdenGet(cat).modoIdx,
+          setModoIdx:   v => { _catOrdenGet(cat).modoIdx = v; },
           panelHtml:
             '<div class="sjz-panel-title">⚔️ samurai.j5z.xyz</div>'
             + '<div class="sjz-row">'
@@ -5377,8 +5386,8 @@
       ============================================= */
 
       let _mwColeccionActual = null;
-      let _mwOrdenDesc = true;
-      let _mwOrdenModo = 'num';
+      
+
 
       // — Manhwa aliases —
       const mwListar              = ()         => dbListar(CAT_CONECTORES.manhwa.store);
@@ -5660,13 +5669,16 @@
 
       // — Render Manhwa —
       async function renderManhwa(contenedor) {
+        const cat = 'manhwa';
         await renderNivel3(contenedor, {
-          cat:          'manhwa',
+          cat,
           gridId:       'mwGrid',
-          ordenDesc:    _mwOrdenDesc,
-          setOrdenDesc: v => { _mwOrdenDesc = v; },
-          ordenModo:    _mwOrdenModo,
-          setOrdenModo: v => { _mwOrdenModo = v; },
+          ordenDesc:    _catOrdenGet(cat).desc,
+          setOrdenDesc: v => { _catOrdenGet(cat).desc = v; },
+          ordenModo:    _catOrdenGet(cat).modo,
+          setOrdenModo: v => { _catOrdenGet(cat).modo = v; },
+          modoIdx:      _catOrdenGet(cat).modoIdx,
+          setModoIdx:   v => { _catOrdenGet(cat).modoIdx = v; },
           panelHtml:
             '<div class="sjz-panel-title">📖 manhwaweb.com</div>'
             + '<div class="sjz-row">'
