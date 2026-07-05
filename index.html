@@ -904,47 +904,25 @@
 
       .bv-menu-btn {
         position: absolute;
-        bottom: 30px; right: 4px;
-        width: 26px; height: 26px;
-        border-radius: 50%;
+        top: 4px; right: 4px;
+        width: 22px; height: 22px;
+        border-radius: 6px;
         background: rgba(0,0,0,0.55);
         border: none; color: #fff;
-        font-size: 13px; font-weight: 700;
+        font-size: .72rem; font-weight: 700;
         display: flex; align-items: center; justify-content: center;
         cursor: pointer;
         z-index: 2;
         line-height: 1;
+        padding: 0;
+      }
+      .bv-menu-btn.del {
+        top: auto; bottom: 4px; right: 4px;
       }
       .bv-menu-btn:active { transform: scale(.9); }
 
-      .bv-dropdown {
-        position: absolute;
-        top: 34px; right: 6px;
-        background: rgba(0,0,0,0.35);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 10px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-        z-index: 20;
-        min-width: 40px;
-        overflow: hidden;
-        animation: bvDropIn .15s ease;
-      }
+      
 
-      @keyframes bvDropIn {
-        from { opacity: 0; transform: translateY(-6px) scale(.97); }
-        to   { opacity: 1; transform: translateY(0)   scale(1);    }
-      }
-
-      .bv-drop-item {
-        padding: 7px 8px;
-        font-size: .8rem;
-        cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        transition: background .12s;
-      }
-      .bv-drop-item:hover        { background: rgba(255,255,255,0.15); }
-      .bv-drop-item.danger:hover { background: rgba(224,80,80,0.25); }
 
       .bv-empty {
         text-align: center; color: var(--text-muted);
@@ -5501,19 +5479,9 @@
         footer.textContent = cfg.nombre || '';
         if (cfg.onRenombrar) footer.addEventListener('click', e => { e.stopPropagation(); cfg.onRenombrar(footer); });
 
-        if (cfg.btnSecundario) {
-          const btn2 = document.createElement('button');
-          btn2.className = 'bv-menu-btn';
-          btn2.textContent = cfg.btnSecundario.texto;
-          btn2.style.cssText = 'top:6px;right:36px' + (cfg.btnSecundario.style ? ';' + cfg.btnSecundario.style : '');
-          if (cfg.btnSecundario.titulo) btn2.title = cfg.btnSecundario.titulo;
-          btn2.onclick = e => { e.stopPropagation(); cfg.btnSecundario.onClick(); };
-          card.appendChild(btn2);
-        }
-
         if (cfg.onDelete) {
           const delBtn = document.createElement('button');
-          delBtn.className = 'bv-menu-btn';
+          delBtn.className = 'bv-menu-btn del';
           delBtn.textContent = '🗑️';
           delBtn.onclick = async e => {
             e.stopPropagation();
@@ -5524,6 +5492,17 @@
         }
 
         card.append(ph, img, footer);
+
+        if (cfg.btnSecundario) {
+          const btn2 = document.createElement('button');
+          btn2.className = 'bv-menu-btn';
+          btn2.textContent = cfg.btnSecundario.texto;
+          btn2.style.cssText = cfg.btnSecundario.style || 'top:4px;right:4px';
+          if (cfg.btnSecundario.titulo) btn2.title = cfg.btnSecundario.titulo;
+          btn2.onclick = e => { e.stopPropagation(); cfg.btnSecundario.onClick(); };
+          card.appendChild(btn2);
+        }
+
         return { card, ph, img, footer };
       }
 
@@ -5867,7 +5846,6 @@
             btnSecundario: {
               texto:   '🔽',
               titulo:  'Descargar',
-              style:   'top:6px;right:6px',
               onClick: () => bovedaDescargar(item.id, item.nombre)
             },
           });
