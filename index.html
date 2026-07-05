@@ -5169,8 +5169,36 @@
 
         if (cfg.metaLinea) {
           const meta = document.createElement('div');
-          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px';
-          meta.textContent = cfg.metaLinea;
+          meta.style.cssText = 'font-size:.75rem;color:var(--text-muted);margin-bottom:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap';
+
+          const txtMeta = document.createElement('span');
+          txtMeta.textContent = cfg.metaLinea;
+          txtMeta.style.flex = '1';
+
+          // Botón editar URL
+          const btnEditUrl = document.createElement('button');
+          btnEditUrl.className = 'bv-breadcrumb-back';
+          btnEditUrl.textContent = '🔗';
+          btnEditUrl.title = 'Editar URL generadora de capítulos';
+          btnEditUrl.addEventListener('click', async () => {
+            const urlActual = cfg.coleccion.base_url || cfg.coleccion.url || cfg.coleccion.slug || '';
+            const nueva = prompt('🔗 URL generadora de capítulos:', urlActual);
+            if (nueva === null) return;
+            try {
+              const con = CAT_CONECTORES[cfg.categoriaDB];
+              if (!con) return;
+              // Actualizar según el campo que usa cada categoría
+              const campo = cfg.categoriaDB === 'manhwa' ? 'slug' : 'base_url';
+              await dbActualizarCampo(con.store, cfg.coleccion.id, campo, nueva.trim());
+              cfg.coleccion[campo] = nueva.trim();
+              txtMeta.textContent = (cfg.coleccion.capitulos ? cfg.coleccion.capitulos.length : 0) + ' capítulos · ' + nueva.trim();
+              actualizarStatus('✅ URL actualizada');
+            } catch(e) {
+              actualizarStatus('❌ Error: ' + e.message);
+            }
+          });
+
+          meta.append(txtMeta, btnEditUrl);
           contenedor.appendChild(meta);
         }
 
@@ -7106,6 +7134,7 @@
           } catch(e) {}
 
           // Buscar o crear colección
+          const con = CAT_CONECTORES[itCat];
           let colId;
           if (con) {
             const lista    = await con.listar();
@@ -7119,6 +7148,23 @@
 
           // Guardar capítulo
           const zipId = await capGuardarZip(itCat, nombreManga + ' - ' + capNom + ext, blob, colId, capNom);
+
+          // Actualizar array capitulos en la colección
+          if (con && colId) {
+            try {
+              const cols  = await con.listar();
+              const col   = cols.find(c => c.id === colId);
+              if (col) {
+                const caps = col.capitulos || [];
+                const yaExisteCap = caps.find(c => String(c.num || c.titulo) === String(capNom));
+                if (!yaExisteCap) {
+                  caps.push({ num: isNaN(Number(capNom)) ? capNom : Number(capNom), zip_id: zipId });
+                  await dbActualizarCampo(con.store, colId, 'capitulos', caps);
+                }
+              }
+            } catch(e) {}
+          }
+
           actualizarStatus('✅ Restaurado: ' + nombreManga + ' - ' + capNom);
           // Portada en segundo plano
           if (!esCifrado) bvExtraerPortada(blob).then(pb => { if (pb) bvGuardarPortada(zipId, pb).catch(() => {}); }).catch(() => {});
