@@ -6200,7 +6200,6 @@
 
       // — Eliminar archivo de R2 —
       async function gfCloudEliminar(key, rowEl) {
-        if (!confirm('¿Eliminar ' + key + ' de R2? No se puede deshacer.')) return;
         if (!CF_WORKER) return;
         try {
           const base = CF_WORKER.replace(/\/$/, '');
@@ -6626,11 +6625,12 @@
           if (it[colIdField]) {
             try {
               const cols = await dbListar(CAT_CONECTORES[itCat].store);
-              const col  = cols.find(c => c.id === it[colIdField]);
+              // Comparar como número y string para evitar mismatch de tipos
+              const col  = cols.find(c => Number(c.id) === Number(it[colIdField]));
               if (col) nombreManga = col.nombre;
             } catch(e) {}
           }
-          if (it[capField]) capNum = String(it[capField]);
+          if (it[capField] !== undefined && it[capField] !== null) capNum = String(it[capField]);
         }
 
         // Construir meta completo y cifrar todo de una vez
