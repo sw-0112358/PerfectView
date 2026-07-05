@@ -1269,6 +1269,7 @@
           <!-- Botón volver -->
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <button class="btn-ghost btn-sm" style="flex:1;gap:6px" id="btnFullscreenGF" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
+            <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="diagnosticarDB()">🔬 Diagnóstico</button>
             <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="bvNavegar('pantalla1')">← Volver</button>
           </div>
 
@@ -1283,25 +1284,14 @@
 
           <!-- Panel Local -->
           <div id="gfPanelLocal">
-            <div style="display:flex;gap:8px;margin-bottom:10px">
-              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfEscanear()">
-                <span class="icon">🔍</span> Escanear
-              </button>
-              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfSubirTodosR2()">
-                <span class="icon">⬆️</span> Subir R2
-              </button>
-              <button class="action-btn" onclick="diagnosticarDB()" title="Diagnóstico DB">🔬</button>
-            </div>
-            <!-- Filtro categoría -->
-            <select id="gfCatFiltro" style="width:100%;margin-bottom:10px" onchange="gfEscanear()">
-              <option value="todas">— Todas las categorías —</option>
-            </select>
-            <div id="gfScanLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear para ver los archivos.</div>
+            
+
+            <div id="gfScanLista" style="font-size:.82rem;color:var(--text-muted)">Cargando categorías…</div>
           </div>
 
           <!-- Panel Cloudflare R2 -->
           <div id="gfPanelCloud" style="display:none">
-            <div style="display:flex;gap:8px;margin-bottom:10px">
+            <div style="display:flex;gap:8px;margin-bottom:12px">
               <button class="action-btn" style="flex:1;justify-content:center" onclick="gfCloudEscanear()">
                 <span class="icon">🔍</span> Escanear R2
               </button>
@@ -5898,16 +5888,6 @@
           _clvCargarYAbrir();
           return;
         }
-        // Poblar select de categorías dinámicamente desde CAT_CONECTORES
-        const sel = document.getElementById('gfCatFiltro');
-        if (sel && sel.options.length <= 1) {
-          Object.entries(CAT_CONECTORES).forEach(([id, c]) => {
-            const op = document.createElement('option');
-            op.value = id;
-            op.textContent = c.icon + ' ' + c.label;
-            sel.appendChild(op);
-          });
-        }
         bvNavegar('pantalla4');
         gfEscanear();
       }
@@ -5917,7 +5897,7 @@
         document.getElementById('gfTabLocal').classList.toggle('active', s === 'local');
         document.getElementById('gfTabCloud').classList.toggle('active', s === 'cloud');
         document.getElementById('gfPanelLocal').style.display  = s === 'local'  ? '' : 'none';
-        document.getElementById('gfPanelCloud').style.display  = s === 'cloud' ? '' : 'none';
+        document.getElementById('gfPanelCloud').style.display  = s === 'cloud'  ? '' : 'none';
         document.getElementById('gfProgreso').innerHTML = '';
         if (s === 'cloud') gfCloudEscanear();
         if (s === 'local') gfEscanear();
@@ -5929,7 +5909,7 @@
       // — Escanear R2 —
       async function gfCloudEscanear() {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
-        const el = document.getElementById('gfCloudLista');
+        const el = document.getElementById('gfScanLista');
         el.textContent = '⏳ Consultando R2…';
         try {
           const base = CF_WORKER.replace(/\/$/, '');
@@ -6187,10 +6167,141 @@
       
 
 
-      // — Escanear todos los zips en IDB —
+      // — Cargar items de una categoría al expandir —
+      async function gfCargarCategoria(cat, cuerpoEl, btnSubirCat, r2NombresReales) {
+        cuerpoEl.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:.78rem">⏳ Cargando…</div>';
+        const db    = await bvAbrirDB();
+        const items = await new Promise((res, rej) => {
+          const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+          req.onsuccess = e => res(e.target.result);
+          req.onerror   = e => rej(e.target.error);
+        });
+        const lista = items.filter(it => {
+          const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+          return itCat === cat;
+        });
+        _gfItems = items; // cache global
+        cuerpoEl.innerHTML = '';
+
+        // Cache R2 si no viene
+        if (!r2NombresReales && CF_WORKER && _gfPwdMaestra) {
+          try {
+            const base  = CF_WORKER.replace(/\/$/, '');
+            const clave = await gfDerivarClave(_gfPwdMaestra);
+            const r2Its = await _obtenerR2ConNombresReales(base, clave);
+            r2NombresReales = new Set(r2Its.map(o => o.nombreReal));
+          } catch(e) { r2NombresReales = new Set(); }
+        }
+
+        let sinR2 = 0;
+        for (const it of lista) {
+          const esCifrado = it.nombre && it.nombre.endsWith('.zip.webc');
+          let enR2 = false;
+          if (esCifrado && r2NombresReales && r2NombresReales.size > 0 && _gfPwdMaestra) {
+            try {
+              const clave  = await gfDerivarClave(_gfPwdMaestra);
+              const r2Info = await gfConstruirR2Key(it, clave);
+              enR2 = r2NombresReales.has(r2Info.nombreReal);
+            } catch(e) {}
+          }
+          if (esCifrado && !enR2) sinR2++;
+
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1.5px solid '
+            + (enR2 ? 'var(--success)' : 'var(--border)')
+            + ';margin-bottom:4px;background:var(--surface2)';
+          row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
+            + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
+            + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
+            + (enR2 ? '<span style="font-size:.65rem;color:var(--success);font-weight:700">☁️</span>' : '')
+            + (esCifrado && !enR2
+                ? '<button class="btn-icon btn-r2-up" style="width:28px;height:28px;font-size:.8rem" title="Subir a R2">⬆️</button>'
+                : '')
+            + (!esCifrado
+                ? '<button class="btn-icon btn-cif" style="width:28px;height:28px;font-size:.8rem" title="Cifrar">🔐</button>'
+                : '<button class="btn-icon btn-exp" style="width:28px;height:28px;font-size:.8rem" title="Exportar">⬇️</button>')
+            + '<button class="btn-icon btn-del" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar">🗑️</button>';
+
+          // ⬆️ Subir a R2
+          const btnUp = row.querySelector('.btn-r2-up');
+          if (btnUp) btnUp.addEventListener('click', async () => {
+            if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra'); return; }
+            btnUp.textContent = '⏳'; btnUp.disabled = true;
+            try {
+              const base  = CF_WORKER.replace(/\/$/, '');
+              const clave = await gfDerivarClave(_gfPwdMaestra);
+              const r2Info = await gfConstruirR2Key(it, clave);
+              const resp  = await fetch(base + '/r2-upload', {
+                method: 'POST', headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) }, body: it.blob
+              });
+              const data = await resp.json();
+              if (!data.ok) throw new Error(data.error);
+              btnUp.remove();
+              row.style.borderColor = 'var(--success)';
+              row.querySelector('span:last-of-type[style*="65rem"]')?.remove();
+              row.insertBefore(Object.assign(document.createElement('span'), {
+                textContent: '☁️', style: 'font-size:.65rem;color:var(--success);font-weight:700'
+              }), row.querySelector('.btn-exp, .btn-del'));
+              actualizarStatus('✅ Subido: ' + r2Info.nombreReal);
+            } catch(e) { btnUp.textContent = '❌'; actualizarStatus('❌ ' + e.message); }
+          });
+
+          // 🔐 Cifrar
+          const btnCif = row.querySelector('.btn-cif');
+          if (btnCif) btnCif.addEventListener('click', async () => {
+            if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra'); return; }
+            btnCif.textContent = '⏳'; btnCif.disabled = true;
+            try {
+              const clave       = await gfDerivarClave(_gfPwdMaestra);
+              const blobCifrado = await gfCifrarBlob(it.blob, clave);
+              const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
+              await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
+              actualizarStatus('✅ Cifrado: ' + nuevoNombre);
+              gfCargarCategoria(cat, cuerpoEl, btnSubirCat, r2NombresReales);
+            } catch(e) { btnCif.textContent = '❌'; actualizarStatus('❌ ' + e.message); }
+          });
+
+          // ⬇️ Exportar
+          const btnExp = row.querySelector('.btn-exp');
+          if (btnExp) btnExp.addEventListener('click', () => bovedaDescargar(it.id, it.nombre));
+
+          // 🗑️ Eliminar
+          row.querySelector('.btn-del').addEventListener('click', async () => {
+            if (!confirm('¿Eliminar "' + (it.nombre || '?') + '"?')) return;
+            try {
+              const itCat = it.categoria || 'mangas';
+              if (CAT_CONECTORES[itCat] && CAT_CONECTORES[itCat].nivel === 2) {
+                const gals = await CAT_CONECTORES[itCat].listar();
+                const gal  = gals.find(g => g.zip_id === it.id);
+                if (gal) await CAT_CONECTORES[itCat].actualizarZip(gal.id, null);
+              } else if (CAT_CONECTORES[itCat]) {
+                const store = CAT_CONECTORES[itCat].store;
+                const cols  = await dbListar(store);
+                for (const col of cols) {
+                  if (col.capitulos) {
+                    const cap = col.capitulos.find(c => c.zip_id === it.id);
+                    if (cap) { cap.zip_id = null; await dbActualizar(store, col); break; }
+                  }
+                }
+              }
+              await bvEliminarDB(it.id);
+              await bvEliminarPortada(it.id);
+              row.style.opacity = '0';
+              setTimeout(() => row.remove(), 300);
+              actualizarStatus('✅ Eliminado: ' + it.nombre);
+            } catch(e) { actualizarStatus('❌ ' + e.message); }
+          });
+          cuerpoEl.appendChild(row);
+        }
+
+        // Actualizar botón ⬆️ categoría
+        if (btnSubirCat) btnSubirCat.textContent = sinR2 ? '⬆️ ' + sinR2 : '✅';
+      }
+
+      // — Escanear: construir headers de categoría con lazy load —
       async function gfEscanear() {
         const el = document.getElementById('gfScanLista');
-        el.textContent = '⏳ Escaneando…';
+        el.textContent = '⏳ Cargando…';
         try {
           const db    = await bvAbrirDB();
           const items = await new Promise((res, rej) => {
@@ -6201,174 +6312,102 @@
           _gfItems = items;
           if (!items.length) { el.textContent = 'No hay archivos en la bóveda.'; return; }
 
-          // Obtener nombres reales de R2 para marcar los que ya tienen copia
-          let r2NombresReales = new Set();
-          if (CF_WORKER && _gfPwdMaestra) {
-            try {
-              const base  = CF_WORKER.replace(/\/$/, '');
-              const clave = await gfDerivarClave(_gfPwdMaestra);
-              const r2Items = await _obtenerR2ConNombresReales(base, clave);
-              r2Items.forEach(o => r2NombresReales.add(o.nombreReal));
-            } catch(e) {}
-          }
-
           // Resumen total
           const total     = items.length;
           const cifrados  = items.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
           const totalSize = items.reduce((s, i) => s + (i.tamaño || 0), 0);
-
           el.innerHTML = '';
 
-          // Pill resumen
+          // Pills resumen
           const resumen = document.createElement('div');
           resumen.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px';
           resumen.innerHTML =
-            '<span style="background:var(--accent-lt);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">📦 ' + total + ' archivos</span>'
-          + '<span style="background:rgba(74,158,106,.12);color:var(--success);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">🔐 ' + cifrados + ' cifrados</span>'
+            '<span style="background:var(--accent-lt);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">📦 ' + total + '</span>'
+          + '<span style="background:rgba(74,158,106,.12);color:var(--success);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">🔐 ' + cifrados + '</span>'
           + '<span style="background:var(--surface2);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">💾 ' + gfFmtSize(totalSize) + '</span>';
           el.appendChild(resumen);
 
-          // Agrupar por categoria normalizada
-          const ORDEN_CAT = ['mangas','samurai','manhwa','nhentai','hitomi','zonascans'];
+          // Agrupar por categoría
+          const ORDEN_CAT = Object.keys(CAT_CONECTORES);
           const porCategoria = {};
-          // Inicializar todas las categorías con array vacío
-          ORDEN_CAT.forEach(c => porCategoria[c] = []);
           items.forEach(it => {
-            let cat = it.categoria || '';
-            if (!cat || cat === 'boveda1') cat = 'mangas';
+            let cat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
             if (!porCategoria[cat]) porCategoria[cat] = [];
             porCategoria[cat].push(it);
           });
 
-          // Renderizar siempre en orden fijo + cualquier categoría extra
-          const cats = [
-            ...ORDEN_CAT,
-            ...Object.keys(porCategoria).filter(c => !ORDEN_CAT.includes(c))
-          ];
-
-          cats.forEach(cat => {
+          // Renderizar headers colapsados — lazy load al expandir
+          [...ORDEN_CAT, ...Object.keys(porCategoria).filter(c => !ORDEN_CAT.includes(c))].forEach(cat => {
             const lista = porCategoria[cat];
             if (!lista || !lista.length) return;
+            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
+            const con    = CAT_CONECTORES[cat];
+
             const seccion = document.createElement('div');
-            seccion.style.cssText = 'margin-bottom:14px';
+            seccion.style.cssText = 'margin-bottom:8px';
 
-            // Contenedor de items (colapsable)
             const cuerpo = document.createElement('div');
-            cuerpo.style.cssText = 'overflow:hidden;transition:max-height .25s ease;max-height:2000px';
+            cuerpo.style.cssText = 'overflow:hidden;max-height:0;transition:max-height .3s ease';
 
-            lista.forEach(async it => {
-              const row = document.createElement('div');
-              const esCifrado = it.nombre && it.nombre.endsWith('.zip.webc');
-              // Verificar si tiene copia en R2
-              let enR2 = false;
-              if (esCifrado && r2NombresReales.size > 0 && _gfPwdMaestra) {
-                try {
-                  const clave      = await gfDerivarClave(_gfPwdMaestra);
-                  const r2Info     = await gfConstruirR2Key(it, clave);
-                  enR2 = r2NombresReales.has(r2Info.nombreReal);
-                } catch(e) {}
-              }
-              row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1.5px solid ' + (enR2 ? 'var(--success)' : 'var(--border)') + ';margin-bottom:4px;background:var(--surface2)';
-              row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
-                + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
-                + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
-                + (enR2 ? '<span style="font-size:.65rem;color:var(--success);font-weight:600;white-space:nowrap">☁️</span>' : '')
-                + (esCifrado
-                    ? '<button class="btn-icon btn-export-local" style="width:28px;height:28px;font-size:.8rem" title="Exportar">⬇️</button>'
-                    : '<button class="btn-icon btn-cif-local" style="width:28px;height:28px;font-size:.8rem" title="Cifrar">🔐</button>')
-                + '<button class="btn-icon btn-del-local" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar">🗑️</button>';
-
-              // Botón cifrar (.zip → .zip.webc)
-              const btnCif = row.querySelector('.btn-cif-local');
-              if (btnCif) btnCif.addEventListener('click', async () => {
-                if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra primero'); return; }
-                btnCif.textContent = '⏳';
-                btnCif.disabled = true;
-                try {
-                  const clave       = await gfDerivarClave(_gfPwdMaestra);
-                  const blobCifrado = await gfCifrarBlob(it.blob, clave);
-                  const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
-                  await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
-                  btnCif.textContent = '✅';
-                  row.querySelector('span').textContent = '🔐';
-                  actualizarStatus('✅ Cifrado: ' + nuevoNombre);
-                  setTimeout(() => gfEscanear(), 800);
-                } catch(e) { btnCif.textContent = '❌'; actualizarStatus('❌ ' + e.message); }
-              });
-
-              // Botón exportar (.zip.webc → descarga)
-              const btnExp = row.querySelector('.btn-export-local');
-              if (btnExp) btnExp.addEventListener('click', () => bovedaDescargar(it.id, it.nombre));
-
-              row.querySelector('.btn-del-local').addEventListener('click', async () => {
-                if (!confirm('¿Eliminar "' + (it.nombre || '?') + '"? No se puede deshacer.')) return;
-                try {
-                  // Limpiar zip_id en la colección correspondiente
-                  const itCat = it.categoria || 'mangas';
-                  if (CAT_CONECTORES[itCat] && CAT_CONECTORES[itCat].nivel === 2) {
-                    const gals = await CAT_CONECTORES[itCat].listar();
-                    const gal  = gals.find(g => g.zip_id === it.id);
-                    if (gal) await CAT_CONECTORES[itCat].actualizarZip(gal.id, null);
-                  } else if (CAT_CONECTORES[itCat]) {
-                    const store = CAT_CONECTORES[itCat].store;
-                    const cols  = await dbListar(store);
-                    for (const col of cols) {
-                      if (col.capitulos) {
-                        const cap = col.capitulos.find(c => c.zip_id === it.id);
-                        if (cap) { cap.zip_id = null; await dbActualizar(store, col); break; }
-                      }
-                    }
-                  }
-                  await bvEliminarDB(it.id);
-                  await bvEliminarPortada(it.id);
-                  row.style.opacity = '0';
-                  setTimeout(() => { row.remove(); }, 300);
-                  actualizarStatus('✅ Eliminado: ' + it.nombre);
-                } catch(e) {
-                  actualizarStatus('❌ Error al eliminar: ' + e.message);
-                }
-              });
-              cuerpo.appendChild(row);
+            // Botón ⬆️ subir categoría a R2
+            const btnSubirCat = document.createElement('button');
+            btnSubirCat.className = 'btn-icon';
+            btnSubirCat.style.cssText = 'width:26px;height:26px;font-size:.75rem;flex-shrink:0';
+            btnSubirCat.title = 'Subir pendientes a R2';
+            btnSubirCat.textContent = '⬆️';
+            btnSubirCat.addEventListener('click', async e => {
+              e.stopPropagation();
+              if (!_gfPwdMaestra || !CF_WORKER) { actualizarStatus('⚠️ Activa clave maestra y Worker'); return; }
+              btnSubirCat.textContent = '⏳'; btnSubirCat.disabled = true;
+              _gfItems = lista;
+              await gfSubirTodosR2();
+              btnSubirCat.disabled = false;
+              gfCargarCategoria(cat, cuerpo, btnSubirCat, null);
             });
 
-            // Título clickeable
-            const titulo = document.createElement('div');
-            titulo.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none';
-            // Botón 🔄 generar ZIPs desde temporales
+            // Botón 🔄 generar ZIPs
             const btnGen = document.createElement('button');
             btnGen.className = 'btn-icon';
-            btnGen.style.cssText = 'width:22px;height:22px;font-size:.7rem;margin-left:auto;flex-shrink:0';
-            btnGen.title   = 'Generar ZIPs desde descargas temporales';
+            btnGen.style.cssText = 'width:26px;height:26px;font-size:.75rem;flex-shrink:0';
+            btnGen.title = 'Generar ZIPs desde temporales';
             btnGen.textContent = '🔄';
             btnGen.addEventListener('click', async e => {
               e.stopPropagation();
-              btnGen.textContent = '⏳';
-              btnGen.disabled    = true;
+              btnGen.textContent = '⏳'; btnGen.disabled = true;
               await gfGenerarZipsDeTemp(cat);
-              btnGen.textContent = '🔄';
-              btnGen.disabled    = false;
-              await gfEscanear();
+              btnGen.textContent = '🔄'; btnGen.disabled = false;
+              gfCargarCategoria(cat, cuerpo, btnSubirCat, null);
             });
 
-            const cifCat = lista.filter(i => i.nombre && i.nombre.endsWith('.zip.webc')).length;
-            titulo.innerHTML = '<span class="gf-chevron" style="font-size:.7rem;transition:transform .25s;display:inline-block">▼</span>'
-              + gfCatLabel(cat)
-              + '<span style="color:var(--text-muted);font-weight:400">(' + lista.length + ')'
+            // Header clickeable
+            const titulo = document.createElement('div');
+            titulo.style.cssText = 'font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)';
+            titulo.innerHTML = '<span class="gf-chevron" style="font-size:.7rem;transition:transform .25s;display:inline-block;transform:rotate(-90deg)">▼</span>'
+              + '<span>' + (con ? con.icon : '📁') + ' ' + (con ? con.label.toUpperCase() : cat.toUpperCase()) + '</span>'
+              + '<span style="color:var(--text-muted);font-weight:400;font-size:.75rem">(' + lista.length + ')'
               + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
+            titulo.appendChild(btnSubirCat);
             titulo.appendChild(btnGen);
 
             let abierto = false;
-            cuerpo.style.maxHeight = '0';
-            titulo.querySelector('.gf-chevron').style.transform = 'rotate(-90deg)';
-            titulo.addEventListener('click', () => {
+            let cargado = false;
+            titulo.addEventListener('click', async () => {
               abierto = !abierto;
-              cuerpo.style.maxHeight  = abierto ? cuerpo.scrollHeight + 'px' : '0';
               titulo.querySelector('.gf-chevron').style.transform = abierto ? 'rotate(0deg)' : 'rotate(-90deg)';
+              if (abierto) {
+                if (!cargado) {
+                  cargado = true;
+                  await gfCargarCategoria(cat, cuerpo, btnSubirCat, null);
+                }
+                cuerpo.style.maxHeight = cuerpo.scrollHeight + 5000 + 'px';
+              } else {
+                cuerpo.style.maxHeight = '0';
+              }
             });
 
             seccion.appendChild(titulo);
             seccion.appendChild(cuerpo);
-            el.appendChild(seccion);        
+            el.appendChild(seccion);
           });
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
