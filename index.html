@@ -6250,6 +6250,7 @@
 
       // — Cargar items de una categoría al expandir —
       async function gfCargarCategoria(cat, cuerpoEl, btnSubirCat, r2NombresReales) {
+        const con = CAT_CONECTORES[cat];
         cuerpoEl.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:.78rem">⏳ Cargando…</div>';
         const db    = await bvAbrirDB();
         const items = await new Promise((res, rej) => {
