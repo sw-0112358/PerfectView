@@ -1272,93 +1272,44 @@
             <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="bvNavegar('pantalla1')">← Volver</button>
           </div>
 
-          <!-- Tabs nivel 1: almacenamiento -->
+          <!-- Tabs: Local / Cloudflare -->
           <div style="display:flex;gap:6px;margin-bottom:12px">
             <button id="gfTabLocal" class="filter-chip active" onclick="gfSetStorage('local')">📱 Local</button>
             <button id="gfTabCloud" class="filter-chip" onclick="gfSetStorage('cloud')">☁️ Cloudflare</button>
           </div>
 
-          <!-- Tabs nivel 2: operación -->
-          <div style="display:flex;gap:6px;margin-bottom:16px">
-            <button id="gfTabScan"    class="filter-chip active" onclick="gfSetOp('scan')">🔍 Escanear</button>
-            <button id="gfTabCifrar"  class="filter-chip"        onclick="gfSetOp('cifrar')">🔐 Cifrar</button>
-            <button id="gfTabDescifrar" class="filter-chip"       onclick="gfSetOp('descifrar')">🔓 Descifrar</button>
-          </div>
+          <!-- Barra de progreso compartida -->
+          <div id="gfProgreso" style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px;min-height:52px"></div>
 
-          <!-- Panel: Escanear -->
-          <div id="gfPanelScan">
-            <div class="card" style="margin-bottom:10px">
-              <div class="card-title">Archivos en PerfectViewBoveda</div>
-              <div style="display:flex;gap:8px;margin-bottom:10px">
-                <button class="action-btn" style="flex:1;justify-content:center" onclick="gfEscanear()">
-                  <span class="icon">🔍</span> Escanear ahora
-                </button>
-                <button class="action-btn" style="flex:1;justify-content:center" onclick="diagnosticarDB()">
-                  <span class="icon">🔬</span> Diagnóstico DB
-                </button>
-              </div>
-              <div id="gfScanLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear para ver los archivos.</div>
-            </div>
-          </div>
-
-          <!-- Panel: Cifrar -->
-          <div id="gfPanelCifrar" style="display:none">
-            <div class="card" style="margin-bottom:10px">
-              <div class="card-title">Cifrar archivos .zip → .zip.webc</div>
-              <div class="field-group" style="margin-bottom:10px">
-                <label class="field-label">Categoría</label>
-                <select id="gfCatCifrar" onchange="gfCargarListaCifrar()">
-                  <option value="todas">— Todas —</option>
-                  <option value="mangas">📖 Mangas</option>
-                  <option value="samurai">⚔️ Samurai</option>
-                  <option value="manhwa">🌸 Manhwa</option>
-                  <option value="nhentai">💠 nhentai</option>
-                  <option value="hitomi">💫 Hitomi</option>
-                  <option value="zonascans">📡 ZonaScans</option>
-                </select>
-              </div>
-              <div class="field-group" style="margin-bottom:10px">
-                <label class="field-label">Contraseña</label>
-                <div id="gfPwdCifrarInfo" style="font-size:.8rem;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted)">
-                  🔐 Usando contraseña maestra — <a href="#" onclick="abrirPanelClave();return false" style="color:var(--accent)">cambiar</a>
-                </div>
-              </div>
-              <button class="action-btn" style="width:100%;justify-content:center;margin-bottom:8px" onclick="_gfStorage==='cloud'?gfCifrarTodosCloud():gfCifrarTodos()">
-                <span class="icon">🔐</span> Cifrar seleccionados
+          <!-- Panel Local -->
+          <div id="gfPanelLocal">
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfEscanear()">
+                <span class="icon">🔍</span> Escanear
               </button>
-              <div id="gfProgresoCifrar" style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px;min-height:52px"></div>
-              <div id="gfListaCifrar" style="font-size:.82rem;color:var(--text-muted)">Selecciona una categoría para ver los archivos.</div>
+              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfSubirTodosR2()">
+                <span class="icon">⬆️</span> Subir R2
+              </button>
+              <button class="action-btn" onclick="diagnosticarDB()" title="Diagnóstico DB">🔬</button>
             </div>
+            <!-- Filtro categoría -->
+            <select id="gfCatFiltro" style="width:100%;margin-bottom:10px" onchange="gfEscanear()">
+              <option value="todas">— Todas las categorías —</option>
+            </select>
+            <div id="gfScanLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear para ver los archivos.</div>
           </div>
 
-          <!-- Panel: Descifrar -->
-          <div id="gfPanelDescifrar" style="display:none">
-            <div class="card" style="margin-bottom:10px">
-              <div class="card-title">Descifrar archivos .zip.webc → .zip</div>
-              <div class="field-group" style="margin-bottom:10px">
-                <label class="field-label">Categoría</label>
-                <select id="gfCatDescifrar" onchange="gfCargarListaDescifrar()">
-                  <option value="todas">— Todas —</option>
-                  <option value="mangas">📖 Mangas</option>
-                  <option value="samurai">⚔️ Samurai</option>
-                  <option value="manhwa">🌸 Manhwa</option>
-                  <option value="nhentai">💠 nhentai</option>
-                  <option value="hitomi">💫 Hitomi</option>
-                  <option value="zonascans">📡 ZonaScans</option>
-                </select>
-              </div>
-              <div class="field-group" style="margin-bottom:10px">
-                <label class="field-label">Contraseña</label>
-                <div id="gfPwdDescifrarInfo" style="font-size:.8rem;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted)">
-                  🔐 Usando contraseña maestra — <a href="#" onclick="abrirPanelClave();return false" style="color:var(--accent)">cambiar</a>
-                </div>
-              </div>
-              <button class="action-btn" style="width:100%;justify-content:center;margin-bottom:8px" onclick="_gfStorage==='cloud'?gfCloudDescargarTodos():gfDescifrarTodos()">
-                <span class="icon">🔓</span> Descifrar seleccionados
+          <!-- Panel Cloudflare R2 -->
+          <div id="gfPanelCloud" style="display:none">
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfCloudEscanear()">
+                <span class="icon">🔍</span> Escanear R2
               </button>
-              <div id="gfProgresoDescifrar" style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px;min-height:52px"></div>
-              <div id="gfListaDescifrar" style="font-size:.82rem;color:var(--text-muted)">Selecciona una categoría para ver los archivos.</div>
+              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfCloudDescargarTodos()">
+                <span class="icon">⬇️</span> Bajar todo
+              </button>
             </div>
+            <div id="gfCloudLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear R2 para ver los archivos.</div>
           </div>
 
         </div>
@@ -5947,6 +5898,16 @@
           _clvCargarYAbrir();
           return;
         }
+        // Poblar select de categorías dinámicamente desde CAT_CONECTORES
+        const sel = document.getElementById('gfCatFiltro');
+        if (sel && sel.options.length <= 1) {
+          Object.entries(CAT_CONECTORES).forEach(([id, c]) => {
+            const op = document.createElement('option');
+            op.value = id;
+            op.textContent = c.icon + ' ' + c.label;
+            sel.appendChild(op);
+          });
+        }
         bvNavegar('pantalla4');
         gfEscanear();
       }
@@ -5955,25 +5916,20 @@
         _gfStorage = s;
         document.getElementById('gfTabLocal').classList.toggle('active', s === 'local');
         document.getElementById('gfTabCloud').classList.toggle('active', s === 'cloud');
-        if (s === 'cloud') gfCloudInit();
+        document.getElementById('gfPanelLocal').style.display  = s === 'local'  ? '' : 'none';
+        document.getElementById('gfPanelCloud').style.display  = s === 'cloud' ? '' : 'none';
+        document.getElementById('gfProgreso').innerHTML = '';
+        if (s === 'cloud') gfCloudEscanear();
         if (s === 'local') gfEscanear();
       }
 
       // ── Tab ☁️ Cloudflare — R2 ──
       let _gfCloudItems = [];
 
-      async function gfCloudInit() {
-        // Redirige las operaciones al panel cloud según op activa
-        const op = _gfOp;
-        if (op === 'scan')      await gfCloudEscanear();
-        if (op === 'cifrar')    await gfCloudCargarSubir();
-        if (op === 'descifrar') await gfCloudCargarDescargar();
-      }
-
       // — Escanear R2 —
       async function gfCloudEscanear() {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
-        const el = document.getElementById('gfScanLista');
+        const el = document.getElementById('gfCloudLista');
         el.textContent = '⏳ Consultando R2…';
         try {
           const base = CF_WORKER.replace(/\/$/, '');
@@ -6228,21 +6184,8 @@
         }
       }
 
-      function gfSetOp(op) {
-        _gfOp = op;
-        const tabIds   = { scan:'gfTabScan',      cifrar:'gfTabCifrar',      descifrar:'gfTabDescifrar' };
-        const panelIds = { scan:'gfPanelScan',    cifrar:'gfPanelCifrar',    descifrar:'gfPanelDescifrar' };
-        ['scan','cifrar','descifrar'].forEach(o => {
-          document.getElementById(tabIds[o]).classList.toggle('active', o === op);
-          document.getElementById(panelIds[o]).style.display = (o === op) ? '' : 'none';
-        });
-        if (_gfStorage === 'cloud') {
-          gfCloudInit();
-        } else {
-          if (op === 'cifrar')    gfCargarListaCifrar();
-          if (op === 'descifrar') gfCargarListaDescifrar();
-        }
-      }
+      
+
 
       // — Escanear todos los zips en IDB —
       async function gfEscanear() {
@@ -6325,12 +6268,38 @@
                   enR2 = r2NombresReales.has(r2Info.nombreReal);
                 } catch(e) {}
               }
-              row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1.5px solid ' + (enR2 ? 'var(--success)' : 'var(--border)') + ';margin-bottom:4px;background:var(--surface2)';
+              row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1.5px solid ' + (enR2 ? 'var(--success)' : 'var(--border)') + ';margin-bottom:4px;background:var(--surface2)';
               row.innerHTML = '<span style="font-size:1rem">' + (esCifrado ? '🔐' : '📦') + '</span>'
                 + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (it.nombre || '?') + '</span>'
                 + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(it.tamaño) + '</span>'
-                + (esCifrado ? '<span style="font-size:.7rem;color:var(--success);font-weight:600;white-space:nowrap">CIFRADO</span>' : '')
+                + (enR2 ? '<span style="font-size:.65rem;color:var(--success);font-weight:600;white-space:nowrap">☁️</span>' : '')
+                + (esCifrado
+                    ? '<button class="btn-icon btn-export-local" style="width:28px;height:28px;font-size:.8rem" title="Exportar">⬇️</button>'
+                    : '<button class="btn-icon btn-cif-local" style="width:28px;height:28px;font-size:.8rem" title="Cifrar">🔐</button>')
                 + '<button class="btn-icon btn-del-local" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar">🗑️</button>';
+
+              // Botón cifrar (.zip → .zip.webc)
+              const btnCif = row.querySelector('.btn-cif-local');
+              if (btnCif) btnCif.addEventListener('click', async () => {
+                if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra primero'); return; }
+                btnCif.textContent = '⏳';
+                btnCif.disabled = true;
+                try {
+                  const clave       = await gfDerivarClave(_gfPwdMaestra);
+                  const blobCifrado = await gfCifrarBlob(it.blob, clave);
+                  const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
+                  await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
+                  btnCif.textContent = '✅';
+                  row.querySelector('span').textContent = '🔐';
+                  actualizarStatus('✅ Cifrado: ' + nuevoNombre);
+                  setTimeout(() => gfEscanear(), 800);
+                } catch(e) { btnCif.textContent = '❌'; actualizarStatus('❌ ' + e.message); }
+              });
+
+              // Botón exportar (.zip.webc → descarga)
+              const btnExp = row.querySelector('.btn-export-local');
+              if (btnExp) btnExp.addEventListener('click', () => bovedaDescargar(it.id, it.nombre));
+
               row.querySelector('.btn-del-local').addEventListener('click', async () => {
                 if (!confirm('¿Eliminar "' + (it.nombre || '?') + '"? No se puede deshacer.')) return;
                 try {
