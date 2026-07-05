@@ -854,17 +854,20 @@
         text-align: center;
       }
 
+      
+      /* botones dentro de la portada nivel 3 */
       /* — Badges y botones flotantes — */
       .bv-chip-badge, .bv-chip-btn, .bv-card-badge {
         position: absolute;
         font-size: .65rem;
-        background: rgba(0,0,0,.55);
+        background: transparent;
         border-radius: 6px;
         padding: 1px 3px;
-        color: #fff;
+        color: #ffb6c1;
         border: none;
         z-index: 2;
         line-height: 1.4;
+        text-shadow: 0 0 6px rgba(255,105,180,0.7), 0 0 12px rgba(255,105,180,0.4);
       }
       .bv-chip-badge, .bv-card-badge {
         top: 4px; left: 4px;
@@ -929,28 +932,28 @@
         cursor: text;
       }
 
+     /* botones dentrode la portada 2 niveles */   
       .bv-menu-btn {
         position: absolute;
-        top: 4px; right: 4px;
-        width: 22px; height: 22px;
+        font-size: .65rem;
+        background: transparent;
         border-radius: 6px;
-        background: rgba(0,0,0,0.55);
-        border: none; color: #fff;
-        font-size: .72rem; font-weight: 700;
-        display: flex; align-items: center; justify-content: center;
-        cursor: pointer;
+        padding: 1px 3px;
+        color: #ffb6c1;
+        border: none;
         z-index: 2;
-        line-height: 1;
-        padding: 0;
-      }
+        line-height: 1.4;
+        text-shadow: 0 0 6px rgba(255,105,180,0.7), 0 0 12px rgba(255,105,180,0.4);
+       }
       .bv-menu-btn.del {
-        top: auto; bottom: 4px; right: 4px;
-      }
+      top: auto;
+      bottom: 4px;
+      right: 4px;
+      color: #ffb6c1;
+    }
       .bv-menu-btn:active { transform: scale(.9); }
 
       
-
-
       .bv-empty {
         text-align: center; color: var(--text-muted);
         padding: 60px 20px; font-size: 1rem; line-height: 2;
