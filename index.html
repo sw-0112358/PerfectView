@@ -904,17 +904,16 @@
 
       .bv-menu-btn {
         position: absolute;
-        top: 6px; right: 6px;
+        bottom: 30px; right: 4px;
         width: 26px; height: 26px;
         border-radius: 50%;
-        background: rgba(0,0,0,0.6);
+        background: rgba(0,0,0,0.55);
         border: none; color: #fff;
         font-size: 13px; font-weight: 700;
         display: flex; align-items: center; justify-content: center;
         cursor: pointer;
         z-index: 2;
         line-height: 1;
-        letter-spacing: 1px;
       }
       .bv-menu-btn:active { transform: scale(.9); }
 
@@ -5329,7 +5328,7 @@
           chip.className = 'bv-cap-chip' + (yaDesc ? ' descargado' : '');
           chip.textContent = label;
           chip.title = yaDesc ? '✅ ' + label : '⬇️ ' + label;
-          chip.onclick = () => cfg.abrirCapFn(cfg.coleccion, cap, chip);
+          chip.onclick = unaTapVez(() => cfg.abrirCapFn(cfg.coleccion, cap, chip), chip);
 
           if (yaDesc && zipId) {
             Promise.all([bvCargarPortada(zipId), bvCargar(zipId)]).then(([blob, reg]) => {
@@ -5484,11 +5483,26 @@
 
       // — Fetch genérico con Referer vía Worker —
 
+      // — Evitar doble ejecución en tap —
+      function unaTapVez(fn, cardEl) {
+        let ejecutando = false;
+        return async (...args) => {
+          if (ejecutando) return;
+          ejecutando = true;
+          if (cardEl) cardEl.style.opacity = '0.6';
+          try { await fn(...args); }
+          finally {
+            ejecutando = false;
+            if (cardEl) cardEl.style.opacity = '';
+          }
+        };
+      }
+
       function crearTarjeta(cfg) {
         // cfg: { nombre, phTexto, onTap, onDelete, btnSecundario, esCifrado }
         const card = document.createElement('div');
         card.className = 'bv-cover-card';
-        if (cfg.onTap) card.onclick = cfg.onTap;
+        if (cfg.onTap) card.onclick = unaTapVez(cfg.onTap, card);
 
         // Badge 🔐 si es .webc
         if (cfg.esCifrado) {
@@ -5523,10 +5537,12 @@
         if (cfg.onDelete) {
           const delBtn = document.createElement('button');
           delBtn.className = 'bv-menu-btn';
-          delBtn.textContent = cfg.btnMenu || '🗑️';
-          delBtn.onclick = cfg.btnMenu
-            ? e => { e.stopPropagation(); cfg.onDelete(delBtn, card, footer); }
-          : async e => { e.stopPropagation(); if (!confirm('¿Eliminar "' + cfg.nombre + '"?')) return; await cfg.onDelete(); };
+          delBtn.textContent = '🗑️';
+          delBtn.onclick = async e => {
+            e.stopPropagation();
+            if (!confirm('¿Eliminar "' + cfg.nombre + '"?')) return;
+            await cfg.onDelete();
+          };
           card.appendChild(delBtn);
         }
 
