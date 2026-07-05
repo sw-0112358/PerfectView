@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v249❄️
+          PerfectView🪷v252❄️
         </div>
       </header>
 
@@ -1291,15 +1291,7 @@
 
           <!-- Panel Cloudflare R2 -->
           <div id="gfPanelCloud" style="display:none">
-            <div style="display:flex;gap:8px;margin-bottom:12px">
-              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfCloudEscanear()">
-                <span class="icon">🔍</span> Escanear R2
-              </button>
-              <button class="action-btn" style="flex:1;justify-content:center" onclick="gfCloudDescargarTodos()">
-                <span class="icon">⬇️</span> Bajar todo
-              </button>
-            </div>
-            <div id="gfCloudLista" style="font-size:.82rem;color:var(--text-muted)">Presiona Escanear R2 para ver los archivos.</div>
+            <div id="gfCloudLista" style="font-size:.82rem;color:var(--text-muted)">Cargando R2…</div>
           </div>
 
         </div>
@@ -5909,51 +5901,140 @@
       // — Escanear R2 —
       async function gfCloudEscanear() {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
-        const el = document.getElementById('gfScanLista');
+        const el = document.getElementById('gfCloudLista');
         el.textContent = '⏳ Consultando R2…';
         try {
-          const base = CF_WORKER.replace(/\/$/, '');
-          const resp = await fetch(base + '/r2-list');
-          const data = await resp.json();
-          if (!data.ok) throw new Error(data.error);
-          _gfCloudItems = data.objetos;
+          const base  = CF_WORKER.replace(/\/$/, '');
+          const clave = _gfPwdMaestra ? await gfDerivarClave(_gfPwdMaestra) : null;
 
-          if (!data.objetos.length) { el.textContent = '☁️ El bucket está vacío.'; return; }
+          // Obtener lista R2
+          _r2Cache = null;
+          const r2Items = await _obtenerR2ConNombresReales(base, clave);
+          _gfCloudItems = r2Items;
+          if (!r2Items.length) { el.textContent = '☁️ El bucket está vacío.'; return; }
 
-          const totalSize = data.objetos.reduce((s, o) => s + (o.size || 0), 0);
+          // Obtener nombres reales locales para detectar duplicados
+          const db      = await bvAbrirDB();
+          const locales = await new Promise((res, rej) => {
+            const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+          });
+          const localNombresReales = new Set();
+          if (clave) {
+            for (const it of locales) {
+              if (!it.nombre || !it.nombre.endsWith('.zip.webc')) continue;
+              try {
+                const r2Info = await gfConstruirR2Key(it, clave);
+                localNombresReales.add(r2Info.nombreReal);
+              } catch(e) {}
+            }
+          }
+
+          // Agrupar por categoría (primera parte del nombreReal)
+          const porCategoria = {};
+          for (const o of r2Items) {
+            if (o.key.endsWith('/link.json')) continue;
+            const cat = (o.nombreReal || o.key).split('/')[0] || 'otros';
+            if (!porCategoria[cat]) porCategoria[cat] = [];
+            porCategoria[cat].push(o);
+          }
+
+          const totalSize = r2Items.reduce((s, o) => s + (o.size || 0), 0);
           el.innerHTML = '';
 
           // Pills resumen
           const resumen = document.createElement('div');
           resumen.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px';
           resumen.innerHTML =
-            '<span style="background:var(--accent-lt);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">☁️ ' + data.objetos.length + ' archivos</span>'
+            '<span style="background:var(--accent-lt);color:var(--accent);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">☁️ ' + r2Items.length + '</span>'
+          + '<span style="background:rgba(245,166,35,.12);color:#f5a623;padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">📱 ' + localNombresReales.size + ' locales</span>'
           + '<span style="background:var(--surface2);color:var(--text-muted);padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600">💾 ' + gfFmtSize(totalSize) + '</span>';
           el.appendChild(resumen);
 
-          const clave = _gfPwdMaestra ? await gfDerivarClave(_gfPwdMaestra) : null;
-          for (const o of data.objetos) {
-            // Ignorar link.json — son metadata interna
-            if (o.key.endsWith('/link.json')) continue;
-            const row   = document.createElement('div');
-            const fecha = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
-            let nombreMostrar = o.key;
-            if (clave) nombreMostrar = await _descifrarKeyR2(o.key, clave);
-            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);margin-bottom:4px;background:var(--surface2)';
-            row.innerHTML = '<span>🔐</span>'
-              + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + nombreMostrar + '</span>'
-              + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
-              + '<span style="font-size:.7rem;color:var(--text-muted);white-space:nowrap">' + fecha + '</span>'
-              + '<button class="btn-icon btn-dl" style="width:28px;height:28px;font-size:.8rem" title="Descargar">⬇️</button>'
-              + '<button class="btn-icon btn-del" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar">🗑️</button>';
-            row.querySelector('.btn-dl').addEventListener('click', () => gfCloudDescargar(o.key));
-            row.querySelector('.btn-del').addEventListener('click', () => gfCloudEliminar(o.key, row));
-            el.appendChild(row);
-          }
+          // Renderizar por categoría colapsada
+          Object.entries(porCategoria).forEach(([cat, objetos]) => {
+            const con    = CAT_CONECTORES[cat];
+            const enLocal = objetos.filter(o => localNombresReales.has(o.nombreReal)).length;
+            const seccion = document.createElement('div');
+            seccion.style.cssText = 'margin-bottom:8px';
+
+            const cuerpo = document.createElement('div');
+            cuerpo.style.cssText = 'overflow:hidden;max-height:0;transition:max-height .3s ease';
+
+            // Botón bajar pendientes
+            const btnBajar = document.createElement('button');
+            btnBajar.className = 'btn-icon';
+            btnBajar.style.cssText = 'width:26px;height:26px;font-size:.75rem;flex-shrink:0';
+            btnBajar.title = 'Bajar pendientes a bóveda';
+            const pendientes = objetos.filter(o => !localNombresReales.has(o.nombreReal));
+            btnBajar.textContent = pendientes.length ? '⬇️' : '✅';
+            btnBajar.addEventListener('click', async e => {
+              e.stopPropagation();
+              if (!pendientes.length) return;
+              btnBajar.textContent = '⏳'; btnBajar.disabled = true;
+              for (const o of pendientes) {
+                try {
+                  const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(o.key));
+                  const blob = await resp.blob();
+                  await gfRestaurarDesdeEstructura(o.key, o.nombreReal, blob, true);
+                } catch(e) {}
+              }
+              btnBajar.textContent = '✅';
+              actualizarStatus('✅ ' + pendientes.length + ' descargados');
+              renderBoveda();
+            });
+
+            // Header
+            const titulo = document.createElement('div');
+            titulo.style.cssText = 'font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)';
+            titulo.innerHTML = '<span class="gf-chevron" style="font-size:.7rem;transition:transform .25s;display:inline-block;transform:rotate(-90deg)">▼</span>'
+              + '<span>' + (con ? con.icon : '📁') + ' ' + (con ? con.label.toUpperCase() : cat.toUpperCase()) + '</span>'
+              + '<span style="color:var(--text-muted);font-weight:400;font-size:.75rem">(' + objetos.length + ')'
+              + (enLocal ? ' · <span style="color:#f5a623">📱 ' + enLocal + '</span>' : '') + '</span>';
+            titulo.appendChild(btnBajar);
+
+            let abierto = false;
+            titulo.addEventListener('click', () => {
+              abierto = !abierto;
+              titulo.querySelector('.gf-chevron').style.transform = abierto ? 'rotate(0deg)' : 'rotate(-90deg)';
+              if (abierto) {
+                // Renderizar items
+                if (!cuerpo.children.length) {
+                  objetos.forEach(o => {
+                    if (o.key.endsWith('/link.json')) return;
+                    const yaLocal = localNombresReales.has(o.nombreReal);
+                    const fecha   = o.uploaded ? new Date(o.uploaded).toLocaleDateString('es') : '?';
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;border:1.5px solid '
+                      + (yaLocal ? '#f5a623' : 'var(--border)')
+                      + ';margin-bottom:4px;background:var(--surface2)';
+                    row.innerHTML = '<span>🔐</span>'
+                      + '<span style="flex:1;word-break:break-all;font-size:.78rem">' + (o.nombreReal || o.key) + '</span>'
+                      + '<span style="font-size:.72rem;color:var(--text-muted);white-space:nowrap">' + gfFmtSize(o.size) + '</span>'
+                      + (yaLocal ? '<span style="font-size:.65rem;color:#f5a623;font-weight:700">📱</span>' : '')
+                      + '<button class="btn-icon btn-dl-r2" style="width:28px;height:28px;font-size:.8rem" title="Bajar a bóveda">⬇️</button>'
+                      + '<button class="btn-icon btn-del-r2" style="width:28px;height:28px;font-size:.8rem;background:rgba(224,80,80,.1);color:var(--danger)" title="Eliminar de R2">🗑️</button>';
+                    row.querySelector('.btn-dl-r2').addEventListener('click', () => gfCloudDescargarUno(o));
+                    row.querySelector('.btn-del-r2').addEventListener('click', () => gfCloudEliminar(o.key, row));
+                    cuerpo.appendChild(row);
+                  });
+                }
+                cuerpo.style.maxHeight = cuerpo.scrollHeight + 5000 + 'px';
+              } else {
+                cuerpo.style.maxHeight = '0';
+              }
+            });
+
+            seccion.appendChild(titulo);
+            seccion.appendChild(cuerpo);
+            el.appendChild(seccion);
+          });
         } catch(err) {
           el.textContent = '❌ Error: ' + err.message;
         }
       }
+
 
       // — Subir .zip.webc a R2 (tab Cifrar en modo cloud) —
       async function gfCloudCargarSubir() {
