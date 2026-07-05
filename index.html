@@ -5184,15 +5184,9 @@
         btnOrden.addEventListener('click', () => {
           _modoIdx = (_modoIdx + 1) % _modos.length;
           const m = _modos[_modoIdx];
-          btnOrden.textContent = m.label;
           if (cfg.setOrdenModo) cfg.setOrdenModo(m.modo);
           cfg.setOrdenDesc(m.desc);
-          // Re-ordenar chips moviendo nodos del DOM
-          const capsOrdenadas = _ordenarCaps(cfg.caps, m.modo, m.desc);
-          capsOrdenadas.forEach(cap => {
-            const chip = chipsMap.get(cap);
-            if (chip) grid.appendChild(chip); // mover al final en orden
-          });
+          renderBoveda();
         });
 
         bc.append(btnVolver, sep1, lblColeccion, btnNuevos, btnAuto, btnOrden);
