@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v237❄️
+          PerfectView🪷v240❄️
         </div>
       </header>
 
@@ -6406,6 +6406,9 @@
       async function gfCargarListaCifrar() {
         const cat = document.getElementById('gfCatCifrar').value;
         const el  = document.getElementById('gfListaCifrar');
+        // Restaurar texto del botón al modo local
+        const btnCif = document.querySelector('#gfPanelCifrar .action-btn:last-of-type');
+        if (btnCif) btnCif.innerHTML = '<span class="icon">🔐</span> Cifrar seleccionados';
         el.textContent = '⏳ Cargando…';
         try {
           const db    = await bvAbrirDB();
@@ -6440,6 +6443,9 @@
       async function gfCargarListaDescifrar() {
         const cat = document.getElementById('gfCatDescifrar').value;
         const el  = document.getElementById('gfListaDescifrar');
+        // Restaurar texto del botón al modo local
+        const btnDesc = document.querySelector('#gfPanelDescifrar .action-btn:last-of-type');
+        if (btnDesc) btnDesc.innerHTML = '<span class="icon">🔓</span> Descifrar seleccionados';
         el.textContent = '⏳ Cargando…';
         try {
           const db    = await bvAbrirDB();
@@ -6581,16 +6587,19 @@
         }
       }
 
-      // — Renderizar barra de progreso en un elemento —
+      
+
+
+      // — Barra de progreso visual —
       function gfMostrarProgreso(el, actual, total, icono, nombre, color) {
-        const pct    = total ? Math.round((actual / total) * 100) : 0;
+        const pct      = total ? Math.round((actual / total) * 100) : 0;
         const barColor = color || 'var(--accent)';
         el.innerHTML =
-          '<div style="font-size:.78rem;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-          + icono + ' <b>' + actual + '</b>/' + total + ' — ' + nombre
+          '<div style="font-size:.78rem;color:var(--text);margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          + icono + ' <b>' + actual + '</b>/<b>' + total + '</b> — ' + nombre
           + '</div>'
-          + '<div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden">'
-          +   '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:6px;transition:width .2s"></div>'
+          + '<div style="background:var(--border);border-radius:6px;height:7px;overflow:hidden">'
+          +   '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:6px;transition:width .25s"></div>'
           + '</div>'
           + '<div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;text-align:right">' + pct + '%</div>';
       }
@@ -6714,33 +6723,35 @@
         // Cargar lista R2 una sola vez para verificar duplicados
         _r2Cache = null;
         const r2Items = await _obtenerR2ConNombresReales(base, clave);
-        let ok = 0, errores = 0, omitidos = 0;
+        const pendientesSubir = [];
         for (const it of _gfItems) {
-          const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
-          const r2Info     = await gfConstruirR2Key(it, clave);
-          const blobCifrado = it.blob;
-
-          // Verificar duplicado por nombreReal antes de subir
+          const r2Info = await gfConstruirR2Key(it, clave);
+          const itCat  = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
           const nombreRealLocal = itCat + '/' + r2Info.nombreManga + (r2Info.capNum ? '/' + r2Info.capNum : '');
-          const yaExiste = r2Items.find(o => o.nombreReal === nombreRealLocal);
-          if (yaExiste) { omitidos++; continue; }
-          prog.textContent = '☁️ Subiendo ' + (ok + errores + 1) + '/' + _gfItems.length + ': ' + r2Info.nombreReal;
+          if (!r2Items.find(o => o.nombreReal === nombreRealLocal)) pendientesSubir.push({ it, r2Info });
+        }
+        let ok = 0, errores = 0, omitidos = _gfItems.length - pendientesSubir.length;
+        for (const { it, r2Info } of pendientesSubir) {
+          gfMostrarProgreso(prog, ok + errores + 1, pendientesSubir.length, '☁️', r2Info.nombreReal, '#60a5fa');
           try {
             const resp = await fetch(base + '/r2-upload', {
               method:  'POST',
               headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
-              body:    blobCifrado,
+              body:    it.blob,
             });
             const data = await resp.json();
             if (!data.ok) throw new Error(data.error);
             ok++;
           } catch(err) {
             errores++;
-            prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
+            prog.innerHTML += '<div style="color:var(--danger);font-size:.75rem">❌ ' + it.nombre + ': ' + err.message + '</div>';
           }
         }
-        prog.textContent = '✅ ' + ok + ' subido(s)' + (omitidos ? ' · ⏭️ ' + omitidos + ' ya existían' : '') + (errores ? ' · ❌ ' + errores + ' error(es)' : '') + ' — R2';
-        _r2Cache = null; // limpiar cache después de subir
+        prog.innerHTML = '<div style="color:var(--success);font-weight:600;font-size:.82rem">✅ ' + ok + ' subido(s)'
+          + (omitidos ? ' · ⏭️ ' + omitidos + ' ya existían' : '')
+          + (errores  ? ' · ❌ ' + errores + ' error(es)'    : '')
+          + ' — R2</div>';
+        _r2Cache = null;
       }
 
       // — Recuperar .zip.webc de R2 → importar a IDB — solo los que no están en local —
@@ -6781,7 +6792,7 @@
         let ok = 0, omitidos = _gfCloudItems.length - pendientes.length;
         for (const o of pendientes) {
           const nombreMostrar = o.nombreReal || o.key;
-          prog.textContent = '⬇️ ' + (ok+1) + '/' + pendientes.length + ': ' + nombreMostrar;
+          gfMostrarProgreso(prog, ok + 1, pendientes.length, '⬇️', nombreMostrar, 'var(--accent)');
           try {
             const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(o.key));
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -6789,10 +6800,11 @@
             await gfRestaurarDesdeEstructura(o.key, nombreMostrar, blobCifrado, true);
             ok++;
           } catch(err) {
-            prog.textContent = '❌ Error en ' + nombreMostrar + ': ' + err.message;
+            prog.innerHTML += '<div style="color:var(--danger);font-size:.75rem">❌ ' + nombreMostrar + ': ' + err.message + '</div>';
           }
         }
-        prog.textContent = '✅ ' + ok + ' recuperado(s)' + (omitidos ? ' · ⏭️ ' + omitidos + ' ya estaban en local' : '');
+        prog.innerHTML = '<div style="color:var(--success);font-weight:600;font-size:.82rem">✅ ' + ok + ' recuperado(s)'
+          + (omitidos ? ' · ⏭️ ' + omitidos + ' ya en local' : '') + '</div>';
         if (ok) renderBoveda();
       }
 
