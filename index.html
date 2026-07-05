@@ -1136,12 +1136,8 @@
             <button class="action-btn" onclick="abrirConfigWorker()">
               <span class="icon">☁️</span>cloudflare
             </button>
-            <button class="action-btn" onclick="abrirGestorArchivos()">
-              <span class="icon">🗂️</span> Gestor
-            </button>
-            <button class="action-btn" onclick="abrirPanelClave()">
-              <span class="icon">🧬</span> Clave
-            </button>
+            
+
             <button class="action-btn" id="btnEnviarBoveda" onclick="enviarABoveda()" style="display:none">
               <span class="icon">📨🔐</span> 
             </button>
@@ -1234,6 +1230,7 @@
                 <div style="display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px">
                   <button class="action-btn" style="flex:1" onclick="bvBloquear()"><span class="icon">🔒</span> Bloquear</button>
                   <button class="action-btn" style="flex:1" onclick="bvLimpiarTemp()"><span class="icon">✨</span> Limpiar caché</button>
+                  <button class="action-btn" style="flex:1" onclick="abrirGestorArchivos()"><span class="icon">🗂️</span> Gestor</button>
                 </div>
               </div>
             </div>
@@ -1241,6 +1238,7 @@
 
           <div style="display:flex;gap:8px;margin-top:4px;margin-bottom:8px">
             <button class="btn-ghost btn-sm" style="flex:1;gap:6px" id="btnFullscreen" onclick="toggleFullscreen()">⛶ Pantalla completa</button>
+            <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="abrirPanelClave()">🧬 Clave</button>
             <button class="btn-ghost btn-sm" style="flex:1;gap:6px" onclick="bvNavegar('pantalla1')">← Volver</button>
           </div>
 
