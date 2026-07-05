@@ -1048,7 +1048,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v235❄️
+          PerfectView🪷v237❄️
         </div>
       </header>
 
@@ -1329,7 +1329,7 @@
               <button class="action-btn" style="width:100%;justify-content:center" onclick="_gfStorage==='cloud'?gfCifrarTodosCloud():gfCifrarTodos()">
                 <span class="icon">🔐</span> Cifrar seleccionados
               </button>
-              <div id="gfProgresoCifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
+              <div id="gfProgresoCifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:52px"></div>
             </div>
           </div>
 
@@ -1359,7 +1359,7 @@
               <button class="action-btn" style="width:100%;justify-content:center" onclick="_gfStorage==='cloud'?gfCloudDescargarTodos():gfDescifrarTodos()">
                 <span class="icon">🔓</span> Descifrar seleccionados
               </button>
-              <div id="gfProgresoDescifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
+              <div id="gfProgresoDescifrar" style="font-size:.8rem;color:var(--text-muted);margin-top:8px;min-height:52px"></div>
             </div>
           </div>
 
@@ -6090,7 +6090,7 @@
         const base = CF_WORKER.replace(/\/$/, '');
         let ok = 0;
         for (const it of _gfItems) {
-          prog.textContent = '☁️ Subiendo ' + (ok+1) + '/' + _gfItems.length + ': ' + it.nombre;
+          gfMostrarProgreso(prog, ok + 1, _gfItems.length, '☁️', it.nombre, '#60a5fa');
           try {
             const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(it.nombre), {
               method: 'POST',
@@ -6100,11 +6100,11 @@
             if (!data.ok) throw new Error(data.error);
             ok++;
           } catch(err) {
-            prog.textContent = '❌ Error en ' + it.nombre + ': ' + err.message;
+            prog.innerHTML = '<div style="color:var(--danger);font-size:.82rem">❌ Error en ' + it.nombre + ': ' + err.message + '</div>';
             return;
           }
         }
-        prog.textContent = '✅ ' + ok + ' archivo(s) subido(s) a R2.';
+        prog.innerHTML = '<div style="color:var(--success);font-size:.82rem;font-weight:600">✅ ' + ok + ' archivo(s) subido(s) a R2.</div>';
       }
 
       // — Cargar lista R2 para descargar (tab Descifrar en modo cloud) —
@@ -6545,13 +6545,13 @@
           const clave = await gfDerivarClave(pwd);
           let ok = 0;
           for (const it of _gfItems) {
-            prog.textContent = '🔐 Cifrando ' + (ok+1) + '/' + _gfItems.length + ': ' + it.nombre;
+            gfMostrarProgreso(prog, ok + 1, _gfItems.length, '🔐', it.nombre, 'var(--accent)');
             const blobCifrado = await gfCifrarBlob(it.blob, clave);
             const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
             await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
             ok++;
           }
-          prog.textContent = '✅ ' + ok + ' archivo(s) cifrado(s) correctamente.';
+          prog.innerHTML = '<div style="color:var(--success);font-size:.82rem;font-weight:600">✅ ' + ok + ' archivo(s) cifrado(s) correctamente.</div>';
           gfCargarListaCifrar();
         } catch(err) {
           document.getElementById('gfProgresoCifrar').textContent = '❌ Error: ' + err.message;
@@ -6568,17 +6568,31 @@
           const clave = await gfDerivarClave(pwd);
           let ok = 0;
           for (const it of _gfItems) {
-            prog.textContent = '🔓 Descifrando ' + (ok+1) + '/' + _gfItems.length + ': ' + it.nombre;
+            gfMostrarProgreso(prog, ok + 1, _gfItems.length, '🔓', it.nombre, 'var(--success)');
             const blobDec    = await gfDescifrarBlob(it.blob, clave);
             const nuevoNombre = it.nombre.replace(/\.zip\.webc$/i, '.zip');
             await gfActualizarItem(it.id, nuevoNombre, blobDec);
             ok++;
           }
-          prog.textContent = '✅ ' + ok + ' archivo(s) descifrado(s) correctamente.';
+          prog.innerHTML = '<div style="color:var(--success);font-size:.82rem;font-weight:600">✅ ' + ok + ' archivo(s) descifrado(s) correctamente.</div>';
           gfCargarListaDescifrar();
         } catch(err) {
           document.getElementById('gfProgresoDescifrar').textContent = '❌ Error: ' + err.message;
         }
+      }
+
+      // — Renderizar barra de progreso en un elemento —
+      function gfMostrarProgreso(el, actual, total, icono, nombre, color) {
+        const pct    = total ? Math.round((actual / total) * 100) : 0;
+        const barColor = color || 'var(--accent)';
+        el.innerHTML =
+          '<div style="font-size:.78rem;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+          + icono + ' <b>' + actual + '</b>/' + total + ' — ' + nombre
+          + '</div>'
+          + '<div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden">'
+          +   '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:6px;transition:width .2s"></div>'
+          + '</div>'
+          + '<div style="font-size:.72rem;color:var(--text-muted);margin-top:3px;text-align:right">' + pct + '%</div>';
       }
 
       // — Formatear tamaño —
