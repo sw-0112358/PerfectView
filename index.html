@@ -5187,10 +5187,12 @@
           btnOrden.textContent = m.label;
           if (cfg.setOrdenModo) cfg.setOrdenModo(m.modo);
           cfg.setOrdenDesc(m.desc);
-          // Re-renderizar chips
+          // Re-ordenar chips moviendo nodos del DOM
           const capsOrdenadas = _ordenarCaps(cfg.caps, m.modo, m.desc);
-          grid.innerHTML = '';
-          capsOrdenadas.forEach(cap => grid.appendChild(chipsMap.get(cap) || document.createElement('div')));
+          capsOrdenadas.forEach(cap => {
+            const chip = chipsMap.get(cap);
+            if (chip) grid.appendChild(chip); // mover al final en orden
+          });
         });
 
         bc.append(btnVolver, sep1, lblColeccion, btnNuevos, btnAuto, btnOrden);
