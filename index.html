@@ -4709,17 +4709,25 @@
 
           if (!maxSitio) { actualizarStatus('⚠️ No se pudo detectar el total de episodios'); return; }
 
-          const caps        = _sjzColeccionActual.capitulos;
-          const maxLocal    = Math.max(...caps.map(c => c.num));
-          const nuevosNums  = [];
-          for (let i = maxLocal + 1; i <= maxSitio; i++) nuevosNums.push(i);
+          const caps       = _sjzColeccionActual.capitulos;
+          const existentes = new Set(caps.map(c => c.num));
+          // Detectar huecos + nuevos
+          const nuevosNums = [];
+          for (let i = 1; i <= maxSitio; i++) {
+            if (!existentes.has(i)) nuevosNums.push(i);
+          }
 
           if (!nuevosNums.length) {
-            actualizarStatus('✅ Todo al día — último episodio: ' + maxLocal);
+            actualizarStatus('✅ Todo al día — último episodio: ' + maxSitio);
             return;
           }
 
-          if (!confirm('🆕 Hay ' + nuevosNums.length + ' episodio(s) nuevo(s) (del ' + nuevosNums[0] + ' al ' + nuevosNums[nuevosNums.length - 1] + ').\n¿Agregar a la colección?')) return;
+          const huecos  = nuevosNums.filter(n => n < Math.max(...existentes));
+          const nuevos  = nuevosNums.filter(n => n > Math.max(...existentes));
+          let msg = '🆕 ' + nuevosNums.length + ' episodio(s) faltante(s)';
+          if (huecos.length)  msg += '\n🕳️ ' + huecos.length + ' hueco(s): ' + huecos.slice(0,5).join(', ') + (huecos.length > 5 ? '…' : '');
+          if (nuevos.length)  msg += '\n✨ ' + nuevos.length + ' nuevo(s): hasta ep ' + Math.max(...nuevos);
+          if (!confirm(msg + '\n\n¿Agregar a la colección?')) return;
 
           const nuevasCaps = [
             ...caps,
