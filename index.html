@@ -815,11 +815,13 @@
         align-items: start;
       }
       .bv-cap-chip {
+        position: relative;
         background: var(--surface); border: 1px solid var(--border);
         border-radius: var(--radius-sm); padding: 8px 4px;
         text-align: center; font-size: .72rem; font-weight: 500;
         color: var(--text); cursor: pointer;
         transition: background .12s, border-color .12s;
+        overflow: hidden;
       }
       .bv-cap-chip:active { background: var(--accent); color: #fff; border-color: var(--accent); }
       .bv-cap-chip.descargado {
@@ -5319,13 +5321,12 @@
                     bovedaDescargar(zipId, nombre);
                   }
                 };
+                chip.append(img, num, dl);
                 if (esCif) {
                   const lock = document.createElement('span');
                   lock.textContent = '🔐';
-                  lock.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.65rem;background:rgba(0,0,0,.45);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center';
-                  chip.append(img, num, dl, lock);
-                } else {
-                  chip.append(img, num, dl);
+                  lock.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.65rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 3px;pointer-events:none';
+                  chip.appendChild(lock);
                 }
               } else if (esCif) {
                 chip.textContent = '🔐';
@@ -5333,8 +5334,8 @@
             }).catch(() => {});
           } else if (yaDesc) {
             const dl = document.createElement('span');
-            dl.textContent = ' 🔽';
-            dl.style.cssText = 'font-size:.6rem;cursor:pointer';
+            dl.textContent = '🔽';
+            dl.style.cssText = 'position:absolute;top:4px;right:4px;font-size:.65rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 3px;cursor:pointer;z-index:2';
             dl.onclick = async e => {
               e.stopPropagation();
               const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
