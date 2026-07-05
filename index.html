@@ -4176,6 +4176,21 @@
           actualizarStatus('❌ Error listar ' + cfg.cat + ': ' + e.message);
         }
         actualizarStatus('📋 ' + cfg.cat + ': ' + galerias.length + ' entradas');
+
+        // Cache de nombres de zip para detectar .webc
+        const zipNombres = {};
+        if (galerias.some(g => g.zip_id)) {
+          try {
+            const db   = await bvAbrirDB();
+            const zips = await new Promise((res, rej) => {
+              const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+              req.onsuccess = e => res(e.target.result);
+              req.onerror   = e => rej(e.target.error);
+            });
+            zips.forEach(z => { zipNombres[z.id] = z.nombre || ''; });
+          } catch(e) {}
+        }
+
         const m0 = _modos2[_catOrdenGet(cfg.cat).modoIdx2 ?? 0];
         galerias.sort((a, b) => {
           const va = (a[m0.campo] || '').toLowerCase();
@@ -4200,6 +4215,7 @@
           const { card, ph, img } = crearTarjeta({
             nombre:        gal.nombre,
             phTexto:       con.tieneZip && con.tieneZip(gal) ? '📖' : '⬇️',
+            esCifrado:     gal.zip_id && (zipNombres[gal.zip_id] || '').endsWith('.zip.webc'),
             onTap:         () => cfg.onTap(gal, card),
             onDelete:      async () => { await con.eliminar(gal); renderNivel2(contenedor, cfg); },
             btnSecundario: cfg.getBtnSec ? cfg.getBtnSec(gal) : null,
@@ -5469,10 +5485,18 @@
       // — Fetch genérico con Referer vía Worker —
 
       function crearTarjeta(cfg) {
-        // cfg: { nombre, phTexto, onTap, onDelete, btnSecundario: { texto, titulo, style, onClick } }
+        // cfg: { nombre, phTexto, onTap, onDelete, btnSecundario, esCifrado }
         const card = document.createElement('div');
         card.className = 'bv-cover-card';
         if (cfg.onTap) card.onclick = cfg.onTap;
+
+        // Badge 🔐 si es .webc
+        if (cfg.esCifrado) {
+          const badge = document.createElement('div');
+          badge.textContent = '🔐';
+          badge.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.75rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 4px;z-index:2;pointer-events:none';
+          card.appendChild(badge);
+        }
 
         const ph = document.createElement('div');
         ph.className = 'bv-cover-placeholder';
