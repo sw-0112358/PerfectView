@@ -5300,7 +5300,7 @@
                 num.textContent = label;
                 const dl = document.createElement('button');
                 dl.textContent = '🔽';
-                dl.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(0,0,0,.45);border:none;border-radius:50%;width:22px;height:22px;font-size:.65rem;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center';
+                dl.style.cssText = 'position:absolute;top:4px;right:4px;font-size:.65rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 3px;cursor:pointer;z-index:2;border:none;color:#fff';
                 dl.onclick = async e => {
                   e.stopPropagation();
                   const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
