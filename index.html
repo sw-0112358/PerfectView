@@ -854,6 +854,31 @@
         text-align: center;
       }
 
+      /* — Badges y botones flotantes — */
+      .bv-chip-badge, .bv-chip-btn, .bv-card-badge {
+        position: absolute;
+        font-size: .65rem;
+        background: rgba(0,0,0,.55);
+        border-radius: 6px;
+        padding: 1px 3px;
+        color: #fff;
+        border: none;
+        z-index: 2;
+        line-height: 1.4;
+      }
+      .bv-chip-badge, .bv-card-badge {
+        top: 4px; left: 4px;
+        pointer-events: none;
+      }
+      .bv-chip-btn {
+        top: 4px; right: 4px;
+        cursor: pointer;
+      }
+      .bv-card-badge {
+        font-size: .75rem;
+        padding: 1px 4px;
+      }
+
       /* Grid de portadas */
       .bv-grid {
         display: grid;
@@ -5300,7 +5325,7 @@
                 num.textContent = label;
                 const dl = document.createElement('button');
                 dl.textContent = '🔽';
-                dl.style.cssText = 'position:absolute;top:4px;right:4px;font-size:.65rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 3px;cursor:pointer;z-index:2;border:none;color:#fff';
+                dl.className = 'bv-chip-btn';
                 dl.onclick = async e => {
                   e.stopPropagation();
                   const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
@@ -5325,7 +5350,7 @@
                 if (esCif) {
                   const lock = document.createElement('span');
                   lock.textContent = '🔐';
-                  lock.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.65rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 3px;pointer-events:none';
+                  lock.className = 'bv-chip-badge';
                   chip.appendChild(lock);
                 }
               } else if (esCif) {
@@ -5335,7 +5360,7 @@
           } else if (yaDesc) {
             const dl = document.createElement('span');
             dl.textContent = '🔽';
-            dl.style.cssText = 'position:absolute;top:4px;right:4px;font-size:.65rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 3px;cursor:pointer;z-index:2;border:none;color:#fff';
+            dl.className = 'bv-chip-btn';
             dl.onclick = async e => {
               e.stopPropagation();
               const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
@@ -5464,7 +5489,7 @@
         if (cfg.esCifrado) {
           const badge = document.createElement('div');
           badge.textContent = '🔐';
-          badge.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.75rem;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 4px;z-index:2;pointer-events:none';
+          badge.className = 'bv-card-badge';
           card.appendChild(badge);
         }
 
