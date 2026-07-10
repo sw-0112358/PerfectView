@@ -1942,7 +1942,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 10);
+          const req = indexedDB.open('PerfectViewBoveda', 11);
           req.onupgradeneeded = e => {
             const db  = e.target.result;
             const old = e.oldVersion;
@@ -1975,6 +1975,9 @@
             if (!db.objectStoreNames.contains('imgs_temp')) {
               const st = db.createObjectStore('imgs_temp', { keyPath: 'id', autoIncrement: true });
               st.createIndex('porSlot', 'slotId', { unique: false });
+            }
+            if (!db.objectStoreNames.contains('zips_blobs')) {
+              db.createObjectStore('zips_blobs', { keyPath: 'id' });
             }
 
           };
@@ -2138,12 +2141,25 @@
       async function bvGuardar(nombre, blob, categoria = 'mangas') {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx    = db.transaction('zips', 'readwrite');
-          const store = tx.objectStore('zips');
-          const req   = store.add({ nombre, fecha: new Date().toISOString(), tamaño: blob.size, blob, categoria });
-          tx.oncomplete = () => resolve(req.result);
-          tx.onerror    = e => reject(e.target.error);
-          tx.onabort    = e => reject(e.target.error);
+          const tx     = db.transaction(['zips', 'zips_blobs'], 'readwrite');
+          const stMeta = tx.objectStore('zips');
+          const stBlob = tx.objectStore('zips_blobs');
+          // Guardar metadatos sin blob
+          const req = stMeta.add({
+            nombre, fecha: new Date().toISOString(),
+            tamaño: blob.size, categoria
+          });
+          req.onsuccess = e => {
+            const id = e.target.result;
+            // Guardar blob con el mismo id
+            stBlob.put({ id, blob });
+          };
+          tx.oncomplete = () => {
+            const id = req.result;
+            resolve(id);
+          };
+          tx.onerror = e => reject(e.target.error);
+          tx.onabort = e => reject(e.target.error);
         });
       }
 
@@ -2167,12 +2183,32 @@
         });
       }
 
-      async function bvCargar(id) {
+      // — Cargar solo metadatos (sin blob) —
+      async function bvCargarMeta(id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
           const req = db.transaction('zips', 'readonly').objectStore('zips').get(id);
-          req.onsuccess = e => resolve(e.target.result);
+          req.onsuccess = e => resolve(e.target.result || null);
           req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      // — Cargar blob + metadatos —
+      async function bvCargar(id) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx   = db.transaction(['zips', 'zips_blobs'], 'readonly');
+          const req  = tx.objectStore('zips').get(id);
+          req.onsuccess = e => {
+            const meta = e.target.result;
+            if (!meta) { resolve(null); return; }
+            const req2 = tx.objectStore('zips_blobs').get(id);
+            req2.onsuccess = e2 => {
+              const blobReg = e2.target.result;
+              resolve({ ...meta, blob: blobReg ? blobReg.blob : null });
+            };
+          };
+          tx.onerror = e => reject(e.target.error);
         });
       }
 
@@ -2291,7 +2327,7 @@
           });
           let bytes = 0;
           for (const r of todos) {
-            if (r.blob instanceof Blob) bytes += r.blob.size;
+            if (r.tamaño) bytes += r.tamaño;
             // descargas_temp tiene imagenes[]
             if (Array.isArray(r.imagenes)) {
               for (const img of r.imagenes) {
@@ -2362,9 +2398,11 @@
       async function bvEliminarDB(id) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('zips', 'readwrite').objectStore('zips').delete(id);
-          req.onsuccess = () => resolve();
-          req.onerror   = e => reject(e.target.error);
+          const tx = db.transaction(['zips', 'zips_blobs'], 'readwrite');
+          tx.objectStore('zips').delete(id);
+          tx.objectStore('zips_blobs').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
         });
       }
 
