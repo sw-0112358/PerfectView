@@ -1942,9 +1942,10 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 9);
+          const req = indexedDB.open('PerfectViewBoveda', 10);
           req.onupgradeneeded = e => {
-            const db = e.target.result;
+            const db  = e.target.result;
+            const old = e.oldVersion;
             if (!db.objectStoreNames.contains('zips')) {
               db.createObjectStore('zips', { keyPath: 'id', autoIncrement: true })
                 .createIndex('fecha', 'fecha', { unique: false });
@@ -1963,12 +1964,17 @@
             }
             if (!db.objectStoreNames.contains('ht_galerias')) {
               db.createObjectStore('ht_galerias', { keyPath: 'id', autoIncrement: true });
-            } 
+            }
             if (!db.objectStoreNames.contains('zs_colecciones')) {
               db.createObjectStore('zs_colecciones', { keyPath: 'id', autoIncrement: true });
             }
+            // v10: descargas_temp solo metadatos + imgs_temp una imagen por registro
             if (!db.objectStoreNames.contains('descargas_temp')) {
               db.createObjectStore('descargas_temp', { keyPath: 'slotId' });
+            }
+            if (!db.objectStoreNames.contains('imgs_temp')) {
+              const st = db.createObjectStore('imgs_temp', { keyPath: 'id', autoIncrement: true });
+              st.createIndex('porSlot', 'slotId', { unique: false });
             }
 
           };
@@ -2034,36 +2040,39 @@
         });
       }
  
-      // ── descargas_temp — persistencia de progreso ──
+      // ── descargas_temp: metadatos del slot ──
+      // ── imgs_temp: una imagen por registro — sin cargar blobs anteriores ──
+
       async function dtCrear(slotId, meta) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx  = db.transaction('descargas_temp', 'readwrite');
+          const tx = db.transaction(['descargas_temp', 'imgs_temp'], 'readwrite');
+          // Solo metadatos — sin imagenes[]
           tx.objectStore('descargas_temp').put({
             slotId,
-            categoria:  meta.categoria,
-            nombre:     meta.nombre,
-            total:      meta.total,
-            imagenes:   [],
-            fecha:      new Date().toISOString()
+            categoria: meta.categoria,
+            nombre:    meta.nombre,
+            total:     meta.total,
+            fecha:     new Date().toISOString()
           });
+          // Limpiar imágenes previas del slot si existían
+          const req = tx.objectStore('imgs_temp').index('porSlot')
+            .openCursor(IDBKeyRange.only(slotId));
+          req.onsuccess = e => {
+            const c = e.target.result;
+            if (c) { c.delete(); c.continue(); }
+          };
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
       }
 
       async function dtAgregarImagen(slotId, imagen) {
+        // O(1) — solo un add, sin leer nada previo
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx    = db.transaction('descargas_temp', 'readwrite');
-          const store = tx.objectStore('descargas_temp');
-          const req   = store.get(slotId);
-          req.onsuccess = e => {
-            const slot = e.target.result;
-            if (!slot) { resolve(); return; }
-            slot.imagenes.push(imagen);
-            store.put(slot);
-          };
+          const tx = db.transaction('imgs_temp', 'readwrite');
+          tx.objectStore('imgs_temp').add({ slotId, ...imagen });
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
@@ -2072,18 +2081,33 @@
       async function dtCargar(slotId) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('descargas_temp', 'readonly')
-          .objectStore('descargas_temp').get(slotId);
-          req.onsuccess = e => resolve(e.target.result || null);
-          req.onerror   = e => reject(e.target.error);
+          const tx  = db.transaction(['descargas_temp', 'imgs_temp'], 'readonly');
+          const req = tx.objectStore('descargas_temp').get(slotId);
+          req.onsuccess = e => {
+            const slot = e.target.result;
+            if (!slot) { resolve(null); return; }
+            const req2 = tx.objectStore('imgs_temp').index('porSlot')
+              .getAll(IDBKeyRange.only(slotId));
+            req2.onsuccess = e2 => {
+              slot.imagenes = e2.target.result;
+              resolve(slot);
+            };
+          };
+          tx.onerror = e => reject(e.target.error);
         });
       }
 
       async function dtEliminar(slotId) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const tx = db.transaction('descargas_temp', 'readwrite');
+          const tx  = db.transaction(['descargas_temp', 'imgs_temp'], 'readwrite');
           tx.objectStore('descargas_temp').delete(slotId);
+          const req = tx.objectStore('imgs_temp').index('porSlot')
+            .openCursor(IDBKeyRange.only(slotId));
+          req.onsuccess = e => {
+            const c = e.target.result;
+            if (c) { c.delete(); c.continue(); }
+          };
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
@@ -2092,10 +2116,22 @@
       async function dtListar() {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
-          const req = db.transaction('descargas_temp', 'readonly')
-          .objectStore('descargas_temp').getAll();
-          req.onsuccess = e => resolve(e.target.result);
-          req.onerror   = e => reject(e.target.error);
+          const tx  = db.transaction(['descargas_temp', 'imgs_temp'], 'readonly');
+          const req = tx.objectStore('descargas_temp').getAll();
+          req.onsuccess = e => {
+            const slots = e.target.result;
+            if (!slots.length) { resolve([]); return; }
+            let pendientes = slots.length;
+            slots.forEach(slot => {
+              const r = tx.objectStore('imgs_temp').index('porSlot')
+                .getAll(IDBKeyRange.only(slot.slotId));
+              r.onsuccess = e2 => {
+                slot.imagenes = e2.target.result;
+                if (--pendientes === 0) resolve(slots);
+              };
+            });
+          };
+          tx.onerror = e => reject(e.target.error);
         });
       }
 
