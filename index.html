@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷v285❄️
+          PerfectView🪷302❄️
         </div>
       </header>
 
@@ -1989,16 +1989,21 @@
 
       async function capGuardarZip(categoria, nombre, blob, coleccion_id, cap_num) {
         const db = await bvAbrirDB();
-        const prefix = categoria; // 'samurai' o 'manhwa'
+        const prefix = categoria;
         return new Promise((resolve, reject) => {
-          const tx  = db.transaction('zips', 'readwrite');
-          const req = tx.objectStore('zips').add({
+          const tx     = db.transaction(['zips', 'zips_blobs'], 'readwrite');
+          const stMeta = tx.objectStore('zips');
+          const stBlob = tx.objectStore('zips_blobs');
+          const req    = stMeta.add({
             nombre, fecha: new Date().toISOString(),
-            tamaño: blob.size, blob,
+            tamaño: blob.size,
             categoria,
             [prefix + '_coleccion_id']: coleccion_id,
             [prefix + '_cap_num']:      cap_num
           });
+          req.onsuccess = e => {
+            stBlob.put({ id: e.target.result, blob });
+          };
           tx.oncomplete = () => resolve(req.result);
           tx.onerror    = e => reject(e.target.error);
           tx.onabort    = e => reject(e.target.error);
@@ -2230,15 +2235,15 @@
         if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
         const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-        // Leer registro existente y reemplazar solo el blob
+        // Actualizar metadatos en zips y blob en zips_blobs
         const db  = await bvAbrirDB();
-        const reg = await bvCargar(zipId);
+        const reg = await bvCargarMeta(zipId);
         if (!reg) { actualizarStatus('❌ Registro no encontrado en DB'); return false; }
-        reg.blob   = zipBlob;
         reg.tamaño = zipBlob.size;
         await new Promise((res, rej) => {
-          const tx = db.transaction('zips', 'readwrite');
+          const tx = db.transaction(['zips', 'zips_blobs'], 'readwrite');
           tx.objectStore('zips').put(reg);
+          tx.objectStore('zips_blobs').put({ id: zipId, blob: zipBlob });
           tx.oncomplete = () => res();
           tx.onerror    = e => rej(e.target.error);
         });
@@ -4293,13 +4298,32 @@
         if (cfg.gridId) grid.id = cfg.gridId;
 
         galerias.forEach(gal => {
+          const esWebc = gal.zip_id && (zipNombres[gal.zip_id] || '').endsWith('.zip.webc');
           const { card, ph, img } = crearTarjeta({
             nombre:        gal.nombre,
             phTexto:       con.tieneZip && con.tieneZip(gal) ? '📖' : '⬇️',
-            esCifrado:     gal.zip_id && (zipNombres[gal.zip_id] || '').endsWith('.zip.webc'),
+            esCifrado:     gal.zip_id ? esWebc : undefined,
             onTap:         () => cfg.onTap(gal, card),
             onDelete:      async () => { await con.eliminar(gal); renderNivel2(contenedor, cfg); },
             btnSecundario: cfg.getBtnSec ? cfg.getBtnSec(gal) : null,
+            onCifrar: (!esWebc && gal.zip_id && _gfPwdMaestra) ? async () => {
+              try {
+                // 1. Cargar blob
+                const reg   = await bvCargar(gal.zip_id);
+                if (!reg || !reg.blob) throw new Error('Blob no encontrado');
+                // 2. Cifrar
+                const clave      = await gfDerivarClave(_gfPwdMaestra);
+                const blobCifrado = await gfCifrarBlob(reg.blob, clave);
+                // 3. Actualizar en DB con nuevo nombre .webc
+                const nuevoNombre = reg.nombre.replace(/\.zip$/i, '') + '.zip.webc';
+                await gfActualizarItem(gal.zip_id, nuevoNombre, blobCifrado);
+                // 4. Limpiar slot temporal si existe
+                const slotId = con.slotPrefix + '-' + gal.id;
+                await dtEliminar(slotId).catch(() => {});
+                actualizarStatus('✅ Cifrado: ' + nuevoNombre);
+                renderBoveda();
+              } catch(e) { actualizarStatus('❌ ' + e.message); }
+            } : null,
           });
           tarjetasMap.set(gal.id, card);
           grid.appendChild(card);
@@ -5562,11 +5586,21 @@
         card.className = 'bv-cover-card';
         if (cfg.onTap) card.onclick = unaTapVez(cfg.onTap, card);
 
-        // Badge 🔐 si es .webc
-        if (cfg.esCifrado) {
-          const badge = document.createElement('div');
-          badge.textContent = '🔐';
+        // Badge — 🔐 si cifrado (solo indicador), 📦 si .zip (botón para cifrar)
+        if (cfg.esCifrado !== undefined) {
+          const badge = document.createElement(cfg.esCifrado ? 'div' : 'button');
+          badge.textContent = cfg.esCifrado ? '🔐' : '📦';
           badge.className = 'bv-card-badge';
+          if (!cfg.esCifrado && cfg.onCifrar) {
+            badge.style.pointerEvents = 'auto';
+            badge.style.cursor = 'pointer';
+            badge.onclick = async e => {
+              e.stopPropagation();
+              badge.textContent = '⏳';
+              badge.style.pointerEvents = 'none';
+              await cfg.onCifrar();
+            };
+          }
           card.appendChild(badge);
         }
 
@@ -6362,9 +6396,11 @@
         for (const it of _gfItems) {
           gfMostrarProgreso(prog, ok + 1, _gfItems.length, '☁️', it.nombre, '#60a5fa');
           try {
+            const reg = await bvCargar(it.id);
+            if (!reg || !reg.blob) { ok++; continue; }
             const resp = await fetch(base + '/r2-upload?key=' + encodeURIComponent(it.nombre), {
               method: 'POST',
-              body: it.blob,
+              body: reg.blob,
             });
             const data = await resp.json();
             if (!data.ok) throw new Error(data.error);
@@ -6553,9 +6589,11 @@
             try {
               const base  = CF_WORKER.replace(/\/$/, '');
               const clave = await gfDerivarClave(_gfPwdMaestra);
-              const r2Info = await gfConstruirR2Key(it, clave);
+              const r2Info  = await gfConstruirR2Key(it, clave);
+              const regBlob = await bvCargar(it.id);
+              if (!regBlob || !regBlob.blob) throw new Error('Blob no encontrado');
               const resp  = await fetch(base + '/r2-upload', {
-                method: 'POST', headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) }, body: it.blob
+                method: 'POST', headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) }, body: regBlob.blob
               });
               const data = await resp.json();
               if (!data.ok) throw new Error(data.error);
@@ -6576,7 +6614,9 @@
             btnCif.textContent = '⏳'; btnCif.disabled = true;
             try {
               const clave       = await gfDerivarClave(_gfPwdMaestra);
-              const blobCifrado = await gfCifrarBlob(it.blob, clave);
+              const reg         = await bvCargar(it.id); // cargar blob desde zips_blobs
+              if (!reg || !reg.blob) throw new Error('Blob no encontrado');
+              const blobCifrado = await gfCifrarBlob(reg.blob, clave);
               const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
               await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
               actualizarStatus('✅ Cifrado: ' + nuevoNombre);
@@ -6867,16 +6907,17 @@
       async function gfActualizarItem(id, nuevoNombre, nuevoBlob) {
         const db = await bvAbrirDB();
         return new Promise((res, rej) => {
-          const tx    = db.transaction('zips','readwrite');
-          const store = tx.objectStore('zips');
-          const req   = store.get(id);
+          const tx     = db.transaction(['zips', 'zips_blobs'], 'readwrite');
+          const stMeta = tx.objectStore('zips');
+          const stBlob = tx.objectStore('zips_blobs');
+          const req    = stMeta.get(id);
           req.onsuccess = e => {
             const rec = e.target.result;
             if (!rec) { res(); return; }
             rec.nombre = nuevoNombre;
-            rec.blob   = nuevoBlob;
             rec.tamaño = nuevoBlob.size;
-            store.put(rec);
+            stMeta.put(rec);
+            stBlob.put({ id, blob: nuevoBlob });
           };
           tx.oncomplete = () => res();
           tx.onerror    = e => rej(e.target.error);
@@ -6894,7 +6935,9 @@
           let ok = 0;
           for (const it of _gfItems) {
             gfMostrarProgreso(prog, ok + 1, _gfItems.length, '🔐', it.nombre, 'var(--accent)');
-            const blobCifrado = await gfCifrarBlob(it.blob, clave);
+            const reg         = await bvCargar(it.id);
+            if (!reg || !reg.blob) continue;
+            const blobCifrado = await gfCifrarBlob(reg.blob, clave);
             const nuevoNombre = it.nombre.replace(/\.zip$/i, '') + '.zip.webc';
             await gfActualizarItem(it.id, nuevoNombre, blobCifrado);
             ok++;
@@ -6917,7 +6960,9 @@
           let ok = 0;
           for (const it of _gfItems) {
             gfMostrarProgreso(prog, ok + 1, _gfItems.length, '🔓', it.nombre, 'var(--success)');
-            const blobDec    = await gfDescifrarBlob(it.blob, clave);
+            const reg         = await bvCargar(it.id);
+            if (!reg || !reg.blob) continue;
+            const blobDec     = await gfDescifrarBlob(reg.blob, clave);
             const nuevoNombre = it.nombre.replace(/\.zip\.webc$/i, '.zip');
             await gfActualizarItem(it.id, nuevoNombre, blobDec);
             ok++;
@@ -7028,7 +7073,9 @@
         try {
           const clave      = await gfDerivarClave(_gfPwdMaestra);
           const r2Info     = await gfConstruirR2Key(it, clave);
-          const blobCifrado = it.blob;
+          const reg = await bvCargar(it.id);
+          if (!reg || !reg.blob) { btnEl.textContent = '❌'; actualizarStatus('❌ Blob no encontrado'); return; }
+          const blobCifrado = reg.blob;
           const base       = CF_WORKER.replace(/\/$/, '');
 
           // Verificar duplicado por nombreReal
@@ -7077,10 +7124,12 @@
         for (const { it, r2Info } of pendientesSubir) {
           gfMostrarProgreso(prog, ok + errores + 1, pendientesSubir.length, '☁️', r2Info.nombreReal, '#60a5fa');
           try {
+            const regBlob = await bvCargar(it.id);
+            if (!regBlob || !regBlob.blob) { errores++; continue; }
             const resp = await fetch(base + '/r2-upload', {
               method:  'POST',
               headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
-              body:    it.blob,
+              body:    regBlob.blob,
             });
             const data = await resp.json();
             if (!data.ok) throw new Error(data.error);
