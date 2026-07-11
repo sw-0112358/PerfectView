@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷317❄️
+          PerfectView🪷320❄️
         </div>
       </header>
 
@@ -4359,7 +4359,7 @@
             onDelete: async () => {
               const slotId = con.slotPrefix + '-' + gal.id;
               await con.eliminar(gal);
-              dtEliminar(slotId).catch(() => {});
+              await dtEliminar(slotId).catch(() => {});
               renderNivel2(contenedor, cfg);
             },
             btnSecundario: cfg.getBtnSec ? cfg.getBtnSec(gal) : null,
