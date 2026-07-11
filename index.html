@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷310❄️
+          PerfectView🪷311❄️
         </div>
       </header>
 
@@ -2283,7 +2283,7 @@
       }
 
       async function bvLimpiarTemp() {
-        const slots = await dtListar();
+        const slots = await dtListar(); // incluye imagenes[] desde imgs_temp
         if (!slots.length) { actualizarStatus('✨ No hay imágenes temporales'); return; }
 
         const incompletos = slots.filter(s => {
@@ -2296,22 +2296,20 @@
         const imgsInc   = incompletos.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
         const imgsCache = cacheSlots.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
 
+        // Usar overlay con radios en lugar de prompt
         const opciones = [];
-        if (incompletos.length) opciones.push('1 — Solo descargas incompletas (' + imgsInc + ' imágenes de ' + incompletos.length + ' slots)');
-        if (cacheSlots.length)  opciones.push('2 — Solo caché de visor (' + imgsCache + ' imágenes de ' + cacheSlots.length + ' slots)');
-        if (incompletos.length && cacheSlots.length) opciones.push('3 — Todo (' + (imgsInc + imgsCache) + ' imágenes)');
+        if (incompletos.length) opciones.push({ value:'1', label: '⏳ Incompletas — ' + imgsInc + ' imgs · ' + incompletos.length + ' slots' });
+        if (cacheSlots.length)  opciones.push({ value:'2', label: '✅ Caché visor — ' + imgsCache + ' imgs · ' + cacheSlots.length + ' slots' });
+        if (incompletos.length && cacheSlots.length) opciones.push({ value:'3', label: '🗑️ Todo — ' + (imgsInc + imgsCache) + ' imgs' });
+        if (!opciones.length) { actualizarStatus('✨ No hay imágenes temporales'); return; }
 
-        const resp = prompt(
-          'Limpiar imágenes temporales:\n\n' + opciones.join('\n') +
-          '\n\nEscribe el número de opción (o cancela):'
-        );
+        const resp = await mostrarSelectorOverlay('✨ Limpiar imágenes temporales', opciones);
         if (!resp) return;
 
         let aBorrar = [];
-        if (resp.trim() === '1') aBorrar = incompletos;
-        else if (resp.trim() === '2') aBorrar = cacheSlots;
-        else if (resp.trim() === '3') aBorrar = slots;
-        else { actualizarStatus('⚠️ Opción no válida'); return; }
+        if (resp === '1') aBorrar = incompletos;
+        else if (resp === '2') aBorrar = cacheSlots;
+        else if (resp === '3') aBorrar = slots;
 
         for (const slot of aBorrar) await dtEliminar(slot.slotId);
         const total = aBorrar.reduce((a, s) => a + (s.imagenes?.length || 0), 0);
@@ -7650,9 +7648,17 @@
         if (!zips.length) {
           html += '<div style="color:#e05050;margin-bottom:12px">— Sin registros en store zips —</div>';
         }
+        // Cargar zips_blobs para verificar existencia
+        const blobs = await new Promise(r => {
+          const q = db.transaction('zips_blobs','readonly').objectStore('zips_blobs').getAll();
+          q.onsuccess = e => r(e.target.result);
+        });
+        const blobsMap = new Set(blobs.map(b => b.id));
+
         zips.forEach(z => {
-          const blobInfo = z.blob ? (z.blob.size + ' B') : '❌ NULL';
-          const color    = z.blob ? '#eee' : '#e05050';
+          const tieneBlob = blobsMap.has(z.id);
+          const blobInfo  = tieneBlob ? (z.tamaño ? gfFmtSize(z.tamaño) : '✅') : '❌ NULL';
+          const color     = tieneBlob ? '#eee' : '#e05050';
           html += '<div style="color:' + color + ';border-bottom:1px solid #333;padding:4px 0">'
             + '🆔 <b>' + z.id + '</b> | ' + (z.nombre || '?') + '<br>'
             + 'cat=' + (z.categoria||'?')
