@@ -7126,6 +7126,46 @@
             titulo.appendChild(btnGen);
             titulo.appendChild(btnEsq);
 
+            // Botón 🗑️ eliminar todos los .webc2 de R2 de esta categoría
+            const btnDelEsq = document.createElement('button');
+            btnDelEsq.className = 'btn-icon';
+            btnDelEsq.style.cssText = 'width:26px;height:26px;font-size:.75rem;flex-shrink:0;background:rgba(224,80,80,.1);color:var(--danger)';
+            btnDelEsq.title = 'Eliminar .webc2 de R2';
+            btnDelEsq.textContent = '🗑️';
+            btnDelEsq.addEventListener('click', async e => {
+              e.stopPropagation();
+              if (!_gfPwdMaestra || !CF_WORKER) { actualizarStatus('⚠️ Activa clave maestra y Worker'); return; }
+              if (!confirm('¿Eliminar todos los .webc2 de R2 de la categoría ' + cat + '?')) return;
+              btnDelEsq.textContent = '⏳'; btnDelEsq.disabled = true;
+              try {
+                const base  = CF_WORKER.replace(/\/$/, '');
+                const clave = await gfDerivarClave(_gfPwdMaestra);
+                // Listar todos los .webc2 de R2
+                const resp = await fetch(base + '/r2-list');
+                const data = await resp.json();
+                if (!data.ok) throw new Error(data.error);
+                const webc2s = (data.objetos || []).filter(o => o.key.endsWith('.webc2'));
+                let borrados = 0, errores = 0;
+                for (const o of webc2s) {
+                  try {
+                    // Descifrar para verificar que es de esta categoría
+                    const nombreReal = await _descifrarKeyR2(o.key, clave);
+                    if (!nombreReal.startsWith(cat + '/')) continue;
+                    const r = await fetch(base + '/r2-delete?key=' + encodeURIComponent(o.key));
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error);
+                    borrados++;
+                  } catch(e) { errores++; }
+                }
+                actualizarStatus('🗑️ .webc2 eliminados: ' + borrados + (errores ? ' · ❌ ' + errores : ''));
+                _r2Cache = null;
+              } catch(e) {
+                actualizarStatus('❌ ' + e.message);
+              }
+              btnDelEsq.textContent = '🗑️'; btnDelEsq.disabled = false;
+            });
+            titulo.appendChild(btnDelEsq);
+
             let abierto = false;
             let cargado = false;
             titulo.addEventListener('click', async () => {
