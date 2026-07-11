@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷337❄️
+          PerfectView🪷339❄️
         </div>
       </header>
 
@@ -7653,23 +7653,6 @@
         // Key del .webc2 = mismo nombre cifrado del .webc pero extensión .webc2
         const keyWebc2 = r2Info.key.replace(/\.webc$/i, '.webc2');
 
-        // Verificar si ya existe un .webc2 con el mismo nombreReal en R2
-        try {
-          const listResp = await fetch(base + '/r2-list');
-          const listData = await listResp.json();
-          if (listData.ok) {
-            const clave2 = await gfDerivarClave(_gfPwdMaestra);
-            for (const o of (listData.objetos || [])) {
-              if (!o.key.endsWith('.webc2')) continue;
-              const nr = await _descifrarKeyR2(o.key, clave2);
-              if (nr === r2Info.nombreReal) {
-                // Ya existe — eliminar el viejo antes de subir el nuevo
-                await fetch(base + '/r2-delete?key=' + encodeURIComponent(o.key));
-              }
-            }
-          }
-        } catch(e) {}
-
         // Subir a R2
         const resp = await fetch(base + '/r2-upload', {
           method:  'POST',
@@ -7678,7 +7661,6 @@
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error || 'Error R2 webc2');
-        _r2Cache = null; // invalidar cache
         return keyWebc2;
       }
 
@@ -7730,7 +7712,7 @@
 
           // Verificar duplicado por nombreReal
           const r2Items  = await _obtenerR2ConNombresReales(base, clave);
-          const yaExiste = r2Items.find(o => o.nombreReal === r2Info.nombreManga + (r2Info.capNum ? '/' + r2Info.capNum : ''));
+          const yaExiste = r2Items.find(o => o.nombreReal === r2Info.nombreReal);
           if (yaExiste) {
             btnEl.textContent = '✅';
             actualizarStatus('⚠️ Ya existe en R2: ' + it.nombre);
@@ -7765,12 +7747,12 @@
         // Cargar lista R2 una sola vez para verificar duplicados
         _r2Cache = null;
         const r2Items = await _obtenerR2ConNombresReales(base, clave);
+        const r2NombresSet = new Set(r2Items.map(o => o.nombreReal));
         const pendientesSubir = [];
         for (const it of _gfItems) {
           const r2Info = await gfConstruirR2Key(it, clave);
-          const itCat  = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
-          const nombreRealLocal = itCat + '/' + r2Info.nombreManga + (r2Info.capNum ? '/' + r2Info.capNum : '');
-          if (!r2Items.find(o => o.nombreReal === nombreRealLocal)) pendientesSubir.push({ it, r2Info });
+          // Usar r2Info.nombreReal directamente — misma fuente que la comparación
+          if (!r2NombresSet.has(r2Info.nombreReal)) pendientesSubir.push({ it, r2Info });
         }
         let ok = 0, errores = 0, omitidos = _gfItems.length - pendientesSubir.length;
         for (const { it, r2Info } of pendientesSubir) {
