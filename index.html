@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷349❄️
+          PerfectView🪷348❄️
         </div>
       </header>
 
@@ -1946,7 +1946,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 12);
+          const req = indexedDB.open('PerfectViewBoveda', 13);
           req.onupgradeneeded = e => {
             const db  = e.target.result;
             const old = e.oldVersion;
@@ -1985,6 +1985,9 @@
             }
             if (!db.objectStoreNames.contains('esq_cache')) {
               db.createObjectStore('esq_cache', { keyPath: 'nombreReal' });
+            }
+            if (!db.objectStoreNames.contains('r2_uploads')) {
+              db.createObjectStore('r2_uploads', { keyPath: 'key' });
             }
 
           };
@@ -6542,7 +6545,14 @@
       let _gfOp      = 'scan';
       let _gfItems   = []; // cache del último escaneo
 
-      function abrirGestorArchivos() {
+      async function abrirGestorArchivos() {
+        if (CF_WORKER && _gfPwdMaestra) {
+          try {
+            const base  = CF_WORKER.replace(/\/$/, '');
+            const clave = await gfDerivarClave(_gfPwdMaestra);
+            gfReanudarPendientes(base, clave);
+          } catch(e) {}
+        }
         if (typeof _gfPwdMaestra === 'undefined' || !_gfPwdMaestra) {
           const id = prompt('🧬 Ingresa tu ID para activar la clave maestra:', '🪷🌸💠');
           if (id === null) return;
@@ -7733,49 +7743,175 @@
       }
 
       // — Subida multipart para archivos > 90MB — chunks de 50MB —
+      // — Wake Lock: mantiene pantalla activa durante operaciones R2 —
+      let _wakeLock = null;
+      let _wakeLockOps = 0;
+
+      async function wlAcquire() {
+        _wakeLockOps++;
+        if (_wakeLock) return;
+        try {
+          if ('wakeLock' in navigator) {
+            _wakeLock = await navigator.wakeLock.request('screen');
+            _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+          }
+        } catch(e) {}
+      }
+
+      function wlRelease() {
+        _wakeLockOps = Math.max(0, _wakeLockOps - 1);
+        if (_wakeLockOps > 0) return;
+        if (_wakeLock) { _wakeLock.release(); _wakeLock = null; }
+      }
+
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible' && _wakeLockOps > 0 && !_wakeLock) {
+          try {
+            if ('wakeLock' in navigator) {
+              _wakeLock = await navigator.wakeLock.request('screen');
+              _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+            }
+          } catch(e) {}
+        }
+      });
+
+      // — Estado de subidas multipart pendientes —
+      async function mpGuardar(estado) {
+        const db = await bvAbrirDB();
+        return new Promise((res, rej) => {
+          const tx = db.transaction('r2_uploads', 'readwrite');
+          tx.objectStore('r2_uploads').put(estado);
+          tx.oncomplete = () => res();
+          tx.onerror    = e => rej(e.target.error);
+        });
+      }
+
+      async function mpCargar(key) {
+        const db = await bvAbrirDB();
+        return new Promise((res, rej) => {
+          const req = db.transaction('r2_uploads', 'readonly').objectStore('r2_uploads').get(key);
+          req.onsuccess = e => res(e.target.result || null);
+          req.onerror   = e => rej(e.target.error);
+        });
+      }
+
+      async function mpEliminar(key) {
+        const db = await bvAbrirDB();
+        return new Promise((res, rej) => {
+          const tx = db.transaction('r2_uploads', 'readwrite');
+          tx.objectStore('r2_uploads').delete(key);
+          tx.oncomplete = () => res();
+          tx.onerror    = e => rej(e.target.error);
+        });
+      }
+
+      async function mpListar() {
+        const db = await bvAbrirDB();
+        return new Promise((res, rej) => {
+          const req = db.transaction('r2_uploads', 'readonly').objectStore('r2_uploads').getAll();
+          req.onsuccess = e => res(e.target.result || []);
+          req.onerror   = e => rej(e.target.error);
+        });
+      }
+
       const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB
 
       async function gfSubirR2Multipart(blob, key, base, onProgreso) {
-        // 1. Iniciar
-        const initResp = await fetch(base + '/r2-multipart-create', {
-          method: 'POST',
-          headers: { 'X-R2-Key': encodeURIComponent(key) }
-        });
-        const initData = await initResp.json();
-        if (!initData.ok) throw new Error('Multipart init: ' + initData.error);
-        const { uploadId } = initData;
+        await wlAcquire();
+        try {
+          // Verificar si hay subida pendiente para esta key
+          let estado = await mpCargar(key);
+          let uploadId, partsCompletadas;
 
-        // 2. Subir partes
-        const parts = [];
-        const totalChunks = Math.ceil(blob.size / CHUNK_SIZE);
-        for (let i = 0; i < totalChunks; i++) {
-          const start  = i * CHUNK_SIZE;
-          const chunk  = blob.slice(start, start + CHUNK_SIZE);
-          const partNum = i + 1;
-          if (onProgreso) onProgreso(partNum, totalChunks);
-          const partResp = await fetch(base + '/r2-multipart-part', {
+          if (estado && estado.uploadId) {
+            uploadId         = estado.uploadId;
+            partsCompletadas = estado.parts || [];
+            actualizarStatus('🔄 Reanudando: parte ' + (partsCompletadas.length + 1) + '/' + estado.totalChunks);
+          } else {
+            const initResp = await fetch(base + '/r2-multipart-create', {
+              method: 'POST',
+              headers: { 'X-R2-Key': encodeURIComponent(key) }
+            });
+            const initData = await initResp.json();
+            if (!initData.ok) throw new Error('Multipart init: ' + initData.error);
+            uploadId         = initData.uploadId;
+            partsCompletadas = [];
+            await mpGuardar({ key, uploadId, parts: [], totalChunks: Math.ceil(blob.size / CHUNK_SIZE), fecha: new Date().toISOString() });
+          }
+
+          const totalChunks = Math.ceil(blob.size / CHUNK_SIZE);
+
+          for (let i = partsCompletadas.length; i < totalChunks; i++) {
+            const start   = i * CHUNK_SIZE;
+            const chunk   = blob.slice(start, start + CHUNK_SIZE);
+            const partNum = i + 1;
+            if (onProgreso) onProgreso(partNum, totalChunks);
+            const partResp = await fetch(base + '/r2-multipart-part', {
+              method:  'POST',
+              headers: {
+                'X-R2-Key':      encodeURIComponent(key),
+                'X-Upload-Id':   uploadId,
+                'X-Part-Number': String(partNum),
+              },
+              body: chunk
+            });
+            const partData = await partResp.json();
+            if (!partData.ok) throw new Error('Parte ' + partNum + ': ' + partData.error);
+            partsCompletadas.push({ partNumber: partData.partNumber, etag: partData.etag });
+            // Guardar progreso tras cada parte exitosa
+            await mpGuardar({ key, uploadId, parts: partsCompletadas, totalChunks, fecha: new Date().toISOString() });
+          }
+
+          const complResp = await fetch(base + '/r2-multipart-complete', {
             method:  'POST',
-            headers: {
-              'X-R2-Key':      encodeURIComponent(key),
-              'X-Upload-Id':   uploadId,
-              'X-Part-Number': String(partNum),
-            },
-            body: chunk
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ key, uploadId, parts: partsCompletadas })
           });
-          const partData = await partResp.json();
-          if (!partData.ok) throw new Error('Parte ' + partNum + ': ' + partData.error);
-          parts.push({ partNumber: partData.partNumber, etag: partData.etag });
+          const complData = await complResp.json();
+          if (!complData.ok) throw new Error('Complete: ' + complData.error);
+          await mpEliminar(key);
+          return complData;
+        } finally {
+          wlRelease();
         }
+      }
 
-        // 3. Completar
-        const complResp = await fetch(base + '/r2-multipart-complete', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ key, uploadId, parts })
-        });
-        const complData = await complResp.json();
-        if (!complData.ok) throw new Error('Multipart complete: ' + complData.error);
-        return complData;
+      // — Reanudar subidas pendientes al abrir el gestor —
+      async function gfReanudarPendientes(base, clave) {
+        const pendientes = await mpListar();
+        if (!pendientes.length) return;
+        actualizarStatus('⏳ ' + pendientes.length + ' subida(s) pendiente(s)');
+        for (const estado of pendientes) {
+          try {
+            const db   = await bvAbrirDB();
+            const zips = await new Promise((res, rej) => {
+              const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+              req.onsuccess = e => res(e.target.result || []);
+              req.onerror   = e => rej(e.target.error);
+            });
+            let blobEncontrado = null;
+            for (const z of zips) {
+              try {
+                const ri = await gfConstruirR2Key(z, clave);
+                if (ri.key === estado.key) {
+                  const reg = await bvCargar(z.id);
+                  if (reg && reg.blob) { blobEncontrado = reg.blob; break; }
+                }
+              } catch(e) {}
+            }
+            if (!blobEncontrado) {
+              actualizarStatus('⚠️ Sin blob para reanudar: ' + estado.key.slice(0,20));
+              await mpEliminar(estado.key);
+              continue;
+            }
+            await gfSubirR2Multipart(blobEncontrado, estado.key, base, (p, t) => {
+              actualizarStatus('⬆️ Reanudando · parte ' + p + '/' + t);
+            });
+            actualizarStatus('✅ Subida reanudada y completada');
+          } catch(e) {
+            actualizarStatus('❌ Error reanudando: ' + e.message);
+          }
+        }
       }
 
       // — Subir un solo .zip.webc a R2 conservando categoría —
