@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷307❄️
+          PerfectView🪷308❄️
         </div>
       </header>
 
@@ -5495,34 +5495,37 @@
               }
             }).catch(() => {});
           } else if (yaDesc) {
-            // Badge 📦 o 🔐 para cifrar
-            const regMeta = zipId ? await bvCargarMeta(zipId) : null;
-            const esCifChip = regMeta && regMeta.nombre && regMeta.nombre.endsWith('.zip.webc');
-            const badgeChip = document.createElement(esCifChip ? 'span' : 'button');
-            badgeChip.textContent = esCifChip ? '🔐' : '📦';
+            // Badge 📦 — detectar si es .webc de forma lazy
+            const badgeChip = document.createElement('button');
+            badgeChip.textContent = '📦';
             badgeChip.className = 'bv-chip-badge';
-            if (!esCifChip && _gfPwdMaestra && zipId) {
-              badgeChip.style.pointerEvents = 'auto';
-              badgeChip.style.cursor = 'pointer';
-              badgeChip.onclick = async e => {
-                e.stopPropagation();
-                badgeChip.textContent = '⏳';
-                badgeChip.style.pointerEvents = 'none';
-                try {
-                  const regZip  = await bvCargar(zipId);
-                  if (!regZip || !regZip.blob) throw new Error('Blob no encontrado');
-                  const claveCrypto = await gfDerivarClave(_gfPwdMaestra);
-                  const blobCifrado = await gfCifrarBlob(regZip.blob, claveCrypto);
-                  const nuevoNombre = (regZip.nombre || '').replace(/\.zip$/i, '') + '.zip.webc';
-                  await gfActualizarItem(zipId, nuevoNombre, blobCifrado);
-                  const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
-                                + '-' + cfg.coleccion.id + '-' + clave;
-                  await dtEliminar(slotKey).catch(() => {});
+            badgeChip.style.cursor = 'pointer';
+            badgeChip.onclick = async e => {
+              e.stopPropagation();
+              if (!_gfPwdMaestra || !zipId) return;
+              badgeChip.textContent = '⏳';
+              badgeChip.style.pointerEvents = 'none';
+              try {
+                const regZip = await bvCargar(zipId);
+                if (!regZip || !regZip.blob) throw new Error('Blob no encontrado');
+                // Si ya es .webc solo mostrar 🔐
+                if (regZip.nombre && regZip.nombre.endsWith('.zip.webc')) {
                   badgeChip.textContent = '🔐';
-                  actualizarStatus('✅ Cifrado');
-                } catch(e) { badgeChip.textContent = '📦'; actualizarStatus('❌ ' + e.message); }
-              };
-            }
+                  badgeChip.style.pointerEvents = 'none';
+                  return;
+                }
+                const claveCrypto = await gfDerivarClave(_gfPwdMaestra);
+                const blobCifrado = await gfCifrarBlob(regZip.blob, claveCrypto);
+                const nuevoNombre = (regZip.nombre || '').replace(/\.zip$/i, '') + '.zip.webc';
+                await gfActualizarItem(zipId, nuevoNombre, blobCifrado);
+                const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                              + '-' + cfg.coleccion.id + '-' + clave;
+                await dtEliminar(slotKey).catch(() => {});
+                badgeChip.textContent = '🔐';
+                badgeChip.style.pointerEvents = 'none';
+                actualizarStatus('✅ Cifrado');
+              } catch(e) { badgeChip.textContent = '📦'; badgeChip.style.pointerEvents = 'auto'; actualizarStatus('❌ ' + e.message); }
+            };
             chip.appendChild(badgeChip);
 
             const dl = document.createElement('span');
