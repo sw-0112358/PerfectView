@@ -4856,7 +4856,45 @@
         btnActualizar.className = 'btn-icon';
         btnActualizar.title = 'Actualizar desde R2';
         btnActualizar.textContent = '🔄';
+
+        const btnDelTodos = document.createElement('button');
+        btnDelTodos.className = 'btn-ghost btn-sm';
+        btnDelTodos.style.cssText = 'color:var(--danger);border-color:var(--danger);white-space:nowrap;font-size:.72rem';
+        btnDelTodos.textContent = '.webc2 🗑️';
+        btnDelTodos.title = 'Eliminar todos los .webc2 de R2';
+        btnDelTodos.addEventListener('click', async () => {
+          if (!confirm('¿Eliminar todos los .webc2 de R2?')) return;
+          btnDelTodos.disabled = true;
+          btnDelTodos.textContent = '⏳';
+          try {
+            const base  = CF_WORKER.replace(/\/$/, '');
+            const resp  = await fetch(base + '/r2-list');
+            const data  = await resp.json();
+            if (!data.ok) throw new Error(data.error);
+            const webc2s = (data.objetos || []).filter(o => o.key.endsWith('.webc2'));
+            let borrados = 0, errores = 0;
+            for (const o of webc2s) {
+              try {
+                const r = await fetch(base + '/r2-delete?key=' + encodeURIComponent(o.key));
+                const d = await r.json();
+                if (!d.ok) throw new Error(d.error);
+                borrados++;
+              } catch(e) { errores++; }
+            }
+            await esqLimpiar();
+            _r2Cache = null;
+            actualizarStatus('🗑️ ' + borrados + ' .webc2 eliminados' + (errores ? ' · ❌ ' + errores : ''));
+            estado.textContent = '— Sin esqueletos .webc2 en R2 —';
+            grid.innerHTML = '';
+          } catch(e) {
+            actualizarStatus('❌ ' + e.message);
+          }
+          btnDelTodos.textContent = '.webc2 🗑️';
+          btnDelTodos.disabled = false;
+        });
+
         bcRow.appendChild(bc);
+        bcRow.appendChild(btnDelTodos);
         bcRow.appendChild(btnActualizar);
         contenedor.appendChild(bcRow);
 
@@ -7139,8 +7177,8 @@
                     const r2Info   = await gfConstruirR2Key(it, clave);
                     const enR2     = r2NombresSet.has(r2Info.nombreReal);
                     const yaExiste = webc2NombresYa.has(r2Info.nombreReal);
-                    if (!enR2)    { omitidos++; continue; }
-                    if (yaExiste) { omitidos++; continue; }
+                    if (!enR2) { omitidos++; continue; } // no está en R2, saltar
+                    // Si ya existe .webc2, regenerar igual (gfGenerarWebc2 limpia el viejo)
                     const keyW2 = r2Info.key.replace(/\.webc$/i, '.webc2');
                     // Leer portada ya guardada (solo thumbnail, sin ZIP)
                     const portadaBlob = await bvCargarPortada(it.id).catch(() => null);
@@ -7615,6 +7653,23 @@
         // Key del .webc2 = mismo nombre cifrado del .webc pero extensión .webc2
         const keyWebc2 = r2Info.key.replace(/\.webc$/i, '.webc2');
 
+        // Verificar si ya existe un .webc2 con el mismo nombreReal en R2
+        try {
+          const listResp = await fetch(base + '/r2-list');
+          const listData = await listResp.json();
+          if (listData.ok) {
+            const clave2 = await gfDerivarClave(_gfPwdMaestra);
+            for (const o of (listData.objetos || [])) {
+              if (!o.key.endsWith('.webc2')) continue;
+              const nr = await _descifrarKeyR2(o.key, clave2);
+              if (nr === r2Info.nombreReal) {
+                // Ya existe — eliminar el viejo antes de subir el nuevo
+                await fetch(base + '/r2-delete?key=' + encodeURIComponent(o.key));
+              }
+            }
+          }
+        } catch(e) {}
+
         // Subir a R2
         const resp = await fetch(base + '/r2-upload', {
           method:  'POST',
@@ -7623,6 +7678,7 @@
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error || 'Error R2 webc2');
+        _r2Cache = null; // invalidar cache
         return keyWebc2;
       }
 
