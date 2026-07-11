@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷330❄️
+          PerfectView🪷331❄️
         </div>
       </header>
 
@@ -7401,7 +7401,9 @@
       // Formato: {todoCifrado}.webc → descifrar → catId/nombre o catId/nombre/clave
       async function _descifrarKeyR2(key, clave) {
         try {
-          const meta = await gfDescifrarNombre(key.replace(/\.webc$/i, ''), clave);
+          // Quitar extensión .webc o .webc2 para descifrar el nombre base
+          const base = key.replace(/\.webc2$/i, '').replace(/\.webc$/i, '');
+          const meta = await gfDescifrarNombre(base, clave);
           return meta;
         } catch(e) {
           return key; // no se pudo descifrar — mostrar key opaca
@@ -7416,6 +7418,7 @@
         const resultado = [];
         for (const o of data.objetos) {
           if (o.key.endsWith('/link.json')) continue;
+          if (o.key.endsWith('.webc2')) continue; // esqueletos — no son contenido real
           let nombreReal = o.key;
           if (clave) nombreReal = await _descifrarKeyR2(o.key, clave);
           resultado.push({ ...o, nombreReal });
