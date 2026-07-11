@@ -683,7 +683,7 @@
       FILTROS MANGA
       ============================================= */
 
-      .mangaImg { transition: filter 0.35s ease; content-visibility: auto; }
+      .mangaImg { transition: filter 0.35s ease; }
 
       .mangaImg.colorMagico {
         filter: sepia(40%) saturate(200%) hue-rotate(250deg) contrast(120%);
@@ -1666,13 +1666,15 @@
       function mostrarImagenesEnVisor() {
         const visor = document.getElementById("visor");
         visor.innerHTML = "";
-        archivosDescargados.forEach(a => {
+        archivosDescargados.forEach((a, i) => {
           const img = document.createElement("img");
           img.src = URL.createObjectURL(a.blob);
           img.alt = a.nombre;
           img.classList.add("mangaImg");
           img.style.maxWidth = "100%";
           img.style.margin = "0";
+          // Las primeras 3 imágenes se cargan inmediato; el resto lazy
+          if (i >= 3) { img.loading = "lazy"; img.decoding = "async"; }
           if (filtroActivo) img.classList.add(filtroActivo);
           visor.appendChild(img);
         });
@@ -1760,6 +1762,8 @@
                 img.classList.add("mangaImg");
                 img.style.maxWidth = "100%";
                 img.style.margin = "0";
+                img.loading = "lazy";
+                img.decoding = "async";
                 if (filtroActivo) img.classList.add(filtroActivo);
                 visor.appendChild(img);
               }
