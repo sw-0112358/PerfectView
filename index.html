@@ -6964,6 +6964,8 @@
               });
               const data = await resp.json();
               if (!data.ok) throw new Error(data.error);
+              // Generar y subir esqueleto .webc2
+              try { await gfGenerarWebc2(it, clave); } catch(e) {}
               btnUp.remove();
               row.style.borderColor = 'var(--success)';
               row.querySelector('span:last-of-type[style*="65rem"]')?.remove();
