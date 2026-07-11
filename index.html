@@ -7103,7 +7103,7 @@
                     actualizarStatus('🗂️ ' + ok + ' esqueleto(s) generado(s) — ' + meta.nombre);
                   } catch(e) {
                     errores++;
-                    actualizarStatus('❌ Error esqueleto: ' + e.message);
+                    actualizarStatus('❌ Error esqueleto [' + (it.nombre||'?') + ']: ' + e.message + (e.stack ? ' · ' + e.stack.split('\n')[1] : ''));
                   }
                 }
                 actualizarStatus('✅ .webc2: ' + ok + ' generado(s) · ' + omitidos + ' omitido(s)' + (errores ? ' · ❌ ' + errores : ''));
