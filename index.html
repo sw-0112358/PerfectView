@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷302❄️
+          PerfectView🪷307❄️
         </div>
       </header>
 
@@ -2086,6 +2086,11 @@
         });
       }
 
+      // — Guardar imagen en transacción existente (sin abrir nueva) —
+      function dtAgregarImagenTx(tx, slotId, imagen) {
+        tx.objectStore('imgs_temp').add({ slotId, ...imagen });
+      }
+
       async function dtCargar(slotId) {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
@@ -2217,26 +2222,36 @@
         });
       }
 
-      // — Regenerar blob de un ZIP desde el slot de descargas_temp —
+      // — Regenerar blob de un ZIP desde imgs_temp — imagen por imagen sin acumular en RAM —
       async function bvRegenerarZip(zipId, slotId) {
-        const slot = await dtCargar(slotId);
-        if (!slot || !slot.imagenes || !slot.imagenes.length) {
-          actualizarStatus('❌ No hay imágenes en cache para regenerar');
-          return false;
-        }
+        const db = await bvAbrirDB();
+
+        // Cargar imágenes desde imgs_temp sin traer todo a RAM de golpe
+        const imgs = await new Promise((res, rej) => {
+          const req = db.transaction('imgs_temp', 'readonly')
+            .objectStore('imgs_temp').index('porSlot')
+            .getAll(IDBKeyRange.only(slotId));
+          req.onsuccess = e => res(e.target.result || []);
+          req.onerror   = e => rej(e.target.error);
+        });
+        if (!imgs.length) { actualizarStatus('❌ No hay imágenes en cache'); return false; }
+
         actualizarStatus('⏳ Regenerando ZIP desde cache…');
-        const archivos = slot.imagenes.sort((a, b) =>
-          a.nombre.localeCompare(b.nombre, undefined, { numeric: true })
-        );
-        const zip = new JSZip();
-        archivos.forEach(a => zip.file(a.nombre, a.blob));
+        imgs.sort((a, b) => (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric: true }));
+
+        const zip     = new JSZip();
         const urlsMap = {};
-        archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
+        let portadaBlob = null;
+        for (const img of imgs) {
+          zip.file(img.nombre, img.blob);
+          if (img.url) urlsMap[img.nombre] = img.url;
+          if (!portadaBlob) portadaBlob = img.blob; // guardar primera para portada
+          img.blob = null; // liberar de RAM
+        }
         if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
         const zipBlob = await zip.generateAsync({ type: 'blob' });
 
         // Actualizar metadatos en zips y blob en zips_blobs
-        const db  = await bvAbrirDB();
         const reg = await bvCargarMeta(zipId);
         if (!reg) { actualizarStatus('❌ Registro no encontrado en DB'); return false; }
         reg.tamaño = zipBlob.size;
@@ -2250,7 +2265,7 @@
 
         // Regenerar portada si no existe
         bvCargarPortada(zipId).then(pb => {
-          if (!pb && archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          if (!pb && portadaBlob) bvGuardarPortada(zipId, portadaBlob).catch(() => {});
         }).catch(() => {});
 
         actualizarStatus('✅ ZIP regenerado correctamente');
@@ -5648,6 +5663,14 @@
         const referer  = headers ? (headers['Referer'] || headers['referer'] || '') : '';
         const archivos = [];
 
+        // Abrir una sola transacción IDB para todas las imágenes
+        let tx = null;
+        if (slotId) {
+          const db = await bvAbrirDB();
+          tx = db.transaction('imgs_temp', 'readwrite');
+          tx.onerror = () => {}; // silenciar errores de tx
+        }
+
         for (let i = 0; i < entradas.length; i++) {
           const { nombre, url } = entradas[i];
           const blob = await proxyImagen(url, referer);
@@ -5656,8 +5679,19 @@
             actualizarStatus('⚠️ ' + nombre + ': no disponible');
             continue;
           }
-          archivos.push({ nombre, blob, url });
-          if (slotId) dtAgregarImagen(slotId, { nombre, blob, url }).catch(() => {});
+          if (slotId && tx) {
+            try { dtAgregarImagenTx(tx, slotId, { nombre, blob, url }); }
+            catch(e) {
+              // Si la tx expiró abrir una nueva
+              const db2 = await bvAbrirDB();
+              tx = db2.transaction('imgs_temp', 'readwrite');
+              tx.onerror = () => {};
+              dtAgregarImagenTx(tx, slotId, { nombre, blob, url });
+            }
+            archivos.push({ nombre, url }); // sin blob en RAM
+          } else {
+            archivos.push({ nombre, blob, url });
+          }
           if (onProgreso) onProgreso(archivos.length, entradas.length);
         }
         return archivos;
