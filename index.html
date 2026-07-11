@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷311❄️
+          PerfectView🪷314❄️
         </div>
       </header>
 
@@ -2222,8 +2222,7 @@
         });
       }
 
-      // — Construir JSZip desde imgs_temp — sin pasar por archivos[] en RAM —
-      async function zipDesdeSlot(slotId, extraFiles) {
+      async function generarZipDesdeSlot(slotId, extraFiles) {
         const db   = await bvAbrirDB();
         const imgs = await new Promise((res, rej) => {
           const req = db.transaction('imgs_temp','readonly')
@@ -2234,19 +2233,19 @@
         });
         if (!imgs.length) return null;
         imgs.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric:true }));
-        const zip     = new JSZip();
+        const zip = new JSZip();
         const urlsMap = {};
-        let portada   = null;
+        let portadaBlob = null;
         for (const img of imgs) {
           zip.file(img.nombre, img.blob);
           if (img.url) urlsMap[img.nombre] = img.url;
-          if (!portada) portada = img.blob;
+          if (!portadaBlob) portadaBlob = img.blob;
           img.blob = null;
         }
         if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
         if (extraFiles) extraFiles.forEach(f => zip.file(f.nombre, f.contenido));
         const zipBlob = await zip.generateAsync({ type:'blob' });
-        return { zipBlob, portada };
+        return { zipBlob, portadaBlob };
       }
 
       // — Regenerar blob de un ZIP desde imgs_temp — imagen por imagen sin acumular en RAM —
@@ -2310,6 +2309,7 @@
       }
 
       async function bvLimpiarTemp() {
+        await bvLimpiarImgsHuerfanas();
         const slots = await dtListar(); // incluye imagenes[] desde imgs_temp
         if (!slots.length) { actualizarStatus('✨ No hay imágenes temporales'); return; }
 
@@ -2343,9 +2343,27 @@
         actualizarStatus('✨ ' + total + ' imágenes liberadas de ' + aBorrar.length + ' slots');
       }
 
+      // — Limpiar imgs_temp huérfanas (sin slot padre en descargas_temp) —
+      async function bvLimpiarImgsHuerfanas() {
+        const db      = await bvAbrirDB();
+        const slots   = await dtListar();
+        const slotIds = new Set(slots.map(s => s.slotId));
+        const imgs    = await new Promise((res, rej) => {
+          const req = db.transaction('imgs_temp','readonly').objectStore('imgs_temp').getAll();
+          req.onsuccess = e => res(e.target.result || []);
+          req.onerror   = e => rej(e.target.error);
+        });
+        const huerfanas = imgs.filter(i => !slotIds.has(i.slotId));
+        if (!huerfanas.length) return;
+        const tx = db.transaction('imgs_temp','readwrite');
+        huerfanas.forEach(i => tx.objectStore('imgs_temp').delete(i.id));
+        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+        actualizarStatus('✨ ' + huerfanas.length + ' imágenes huérfanas eliminadas');
+      }
+
       async function bvLimpiarTodo() {
         const stores = [
-          'zips', 'portadas', 'descargas_temp',
+          'zips', 'zips_blobs', 'portadas', 'descargas_temp', 'imgs_temp',
           ...Object.values(CAT_CONECTORES)
             .map(c => c.store)
             .filter((s, i, arr) => s !== 'zips' && arr.indexOf(s) === i)
@@ -3565,17 +3583,12 @@
               chipEl.textContent = total + '/' + todasEntradas.length;
             }, false, slotId)
             : [];
-            const archivos = [...slotPrevio.imagenes, ...nuevas]
-            .sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-            const zip = new JSZip();
-            archivos.forEach(a => zip.file(a.nombre, a.blob));
-            const urlsMap = {};
-            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const resZip = await generarZipDesdeSlot(slotId);
+            if (!resZip) throw new Error('No hay imágenes en slot');
             const zsNombre = col.nombre + ' - ' + cap.titulo + '.zip';
-            const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, col.id, cap.titulo);
-            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            const zipId   = await capGuardarZip('zonascans', zsNombre, resZip.zipBlob, col.id, cap.titulo);
+            if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+            dtEliminar(slotId).catch(() => {});
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
             chipEl.title = '✅ Descargado — tap para abrir';
@@ -3601,15 +3614,12 @@
             chipEl.textContent = n + '/' + t;
           }, false, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
-          const zip = new JSZip();
-          archivos.forEach(a => zip.file(a.nombre, a.blob));
-          const urlsMap = {};
-          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const resZip = await generarZipDesdeSlot(slotId);
+          if (!resZip) throw new Error('No hay imágenes en slot');
           const zsNombre = col.nombre + ' - ' + cap.titulo + '.zip';
-          const zipId   = await capGuardarZip('zonascans', zsNombre, zipBlob, col.id, cap.titulo);
-          if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          const zipId   = await capGuardarZip('zonascans', zsNombre, resZip.zipBlob, col.id, cap.titulo);
+          if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+          dtEliminar(slotId).catch(() => {});
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado — tap para abrir';
@@ -4013,18 +4023,16 @@
             const slot = await dtCargar(slotId);
             if (slot && slot.imagenes && slot.imagenes.length > 0) {
               actualizarStatus('⏳ Regenerando ZIP desde cache…');
-              const archivos = slot.imagenes.sort((a,b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const urlsMap = {};
-              archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-              if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-              zip.file('galeria.json', JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
-              await htActualizarZip(galeria.id, zipId);
-              galeria.zip_id = zipId;
-              if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+              const resZip = await generarZipDesdeSlot(slotId, [
+                { nombre: 'galeria.json', contenido: JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }) }
+              ]);
+              if (resZip) {
+                const zipId = await bvGuardar(galeria.nombre + '.zip', resZip.zipBlob, 'hitomi');
+                await htActualizarZip(galeria.id, zipId);
+                galeria.zip_id = zipId;
+                if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+                dtEliminar(slotId).catch(() => {});
+              }
               actualizarStatus('✅ ZIP regenerado — cargando…');
             }
           }
@@ -4079,23 +4087,19 @@
               actualizarStatus('⏳ ' + galeria.nombre.slice(0, 20) + ' · ' + (slotPrevio.imagenes.length + n) + '/' + todasEntradas.length);
             }, false, slotId)
             : [];
-            const archivos = [...slotPrevio.imagenes, ...nuevas]
-            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
             setPh('📦');
-            const zip = new JSZip();
-            archivos.forEach(a => zip.file(a.nombre, a.blob));
-            const urlsMap = {};
-            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-            zip.file('galeria.json', JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }, null, 2));
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
+            const resZip = await generarZipDesdeSlot(slotId, [
+              { nombre: 'galeria.json', contenido: JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }) }
+            ]);
+            if (!resZip) throw new Error('No hay imágenes en slot');
+            const zipId   = await bvGuardar(galeria.nombre + '.zip', resZip.zipBlob, 'hitomi');
             await htActualizarZip(galeria.id, zipId);
             galeria.zip_id = zipId;
-            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+            dtEliminar(slotId).catch(() => {});
             if (cardEl) {
-              if (ph && img && archivos[0]) {
-                img.src = URL.createObjectURL(archivos[0].blob);
+              if (ph && img && resZip.portadaBlob) {
+                img.src = URL.createObjectURL(resZip.portadaBlob);
                 img.style.display = 'block';
                 ph.style.display  = 'none';
               }
@@ -4117,20 +4121,18 @@
           }, slotId);
           if (!archivos.length) throw new Error('No se descargó ninguna imagen');
           setPh('📦');
-          actualizarStatus('⏳ Creando ZIP…');
-          const resultado = await zipDesdeSlot(slotId, [
+          const resZip = await generarZipDesdeSlot(slotId, [
             { nombre: 'galeria.json', contenido: JSON.stringify({ version:1, tipo:'hitomi', media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, files:galeria.files||[], fecha:galeria.fecha }) }
           ]);
-          if (!resultado) throw new Error('No hay imágenes en slot');
-          const { zipBlob, portada } = resultado;
-          const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'hitomi');
+          if (!resZip) throw new Error('No hay imágenes en slot');
+          const zipId   = await bvGuardar(galeria.nombre + '.zip', resZip.zipBlob, 'hitomi');
           await htActualizarZip(galeria.id, zipId);
           galeria.zip_id = zipId;
-          if (portada) bvGuardarPortada(zipId, portada).catch(() => {});
+          if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
           dtEliminar(slotId).catch(() => {});
           if (cardEl) {
-            if (ph && img && portada) {
-              img.src = URL.createObjectURL(portada);
+            if (ph && img && resZip.portadaBlob) {
+              img.src = URL.createObjectURL(resZip.portadaBlob);
               img.style.display = 'block';
               ph.style.display  = 'none';
             }
@@ -4552,20 +4554,18 @@
             }
             setPh('📦');
             actualizarStatus('⏳ Creando ZIP…');
-            const zip = new JSZip();
-            archivos.forEach(a => zip.file(a.nombre, a.blob));
-            const urlsMap = {};
-            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-            zip.file('galeria.json', JSON.stringify({ version:1, tipo:'nhentai', nh_id:galeria.nh_id, media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }, null, 2));
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
+            const resZip = await generarZipDesdeSlot(slotId, [
+              { nombre: 'galeria.json', contenido: JSON.stringify({ version:1, tipo:'nhentai', nh_id:galeria.nh_id, media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }) }
+            ]);
+            if (!resZip) throw new Error('No hay imágenes en slot');
+            const zipId   = await bvGuardar(galeria.nombre + '.zip', resZip.zipBlob, 'nhentai');
             await nhActualizarZip(galeria.id, zipId);
-            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+            dtEliminar(slotId).catch(() => {});
             galeria.zip_id = zipId;
             if (cardEl) {
-              if (img && archivos[0]) {
-                img.src = URL.createObjectURL(archivos[0].blob);
+              if (img && resZip.portadaBlob) {
+                img.src = URL.createObjectURL(resZip.portadaBlob);
                 img.style.display = 'block';
                 ph.style.display  = 'none';
               }
@@ -4593,19 +4593,18 @@
           }
           setPh('📦');
           actualizarStatus('⏳ Creando ZIP…');
-          const resultado = await zipDesdeSlot(slotId, [
+          const resZip = await generarZipDesdeSlot(slotId, [
             { nombre: 'galeria.json', contenido: JSON.stringify({ version:1, tipo:'nhentai', nh_id:galeria.nh_id, media_id:galeria.media_id, nombre:galeria.nombre, num_pages:galeria.num_pages, paths:galeria.paths||[], fecha:galeria.fecha }) }
           ]);
-          if (!resultado) throw new Error('No hay imágenes en slot');
-          const { zipBlob, portada } = resultado;
-          const zipId   = await bvGuardar(galeria.nombre + '.zip', zipBlob, 'nhentai');
+          if (!resZip) throw new Error('No hay imágenes en slot');
+          const zipId   = await bvGuardar(galeria.nombre + '.zip', resZip.zipBlob, 'nhentai');
           await nhActualizarZip(galeria.id, zipId);
-          if (portada) bvGuardarPortada(zipId, portada).catch(() => {});
+          if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
           dtEliminar(slotId).catch(() => {});
           galeria.zip_id = zipId;
           if (cardEl) {
-            if (img && portada) {
-              img.src = URL.createObjectURL(portada);
+            if (img && resZip.portadaBlob) {
+              img.src = URL.createObjectURL(resZip.portadaBlob);
               img.style.display = 'block';
               ph.style.display  = 'none';
             }
@@ -5008,22 +5007,15 @@
             }, false, slotId)
             : [];
 
-            // Combinar previas + nuevas y ordenar por nombre
-            const archivos = [...slotPrevio.imagenes, ...nuevas]
-            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
-
-            // Crear ZIP y guardar
-            const zip = new JSZip();
-            archivos.forEach(a => zip.file(a.nombre, a.blob));
-            const urlsMap = {};
-            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            // Generar ZIP desde imgs_temp
+            const resZip = await generarZipDesdeSlot(slotId);
+            if (!resZip) throw new Error('No hay imágenes en slot');
             const zipId   = await sjzGuardarCapitulo(
               coleccion.nombre + ' - Cap ' + cap.num + '.zip',
-              zipBlob, coleccion.id, cap.num
+              resZip.zipBlob, coleccion.id, cap.num
             );
-            if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+            dtEliminar(slotId).catch(() => {});
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
             chipEl.title = '✅ Descargado — tap para abrir';
@@ -5060,22 +5052,14 @@
             chipEl.textContent = prog;
           }, false, slotId);
 
-          // 3. Crear ZIP
-          const zip = new JSZip();
-          archivos.forEach(a => zip.file(a.nombre, a.blob));
-          const urlsMap = {};
-          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-          const zipBlob = await zip.generateAsync({ type: 'blob' });
-
-          // 4. Guardar en IndexedDB
+          const resZip = await generarZipDesdeSlot(slotId);
+          if (!resZip) throw new Error('No hay imágenes en slot');
           const zipId = await sjzGuardarCapitulo(
             coleccion.nombre + ' - Cap ' + cap.num + '.zip',
-            zipBlob, coleccion.id, cap.num
+            resZip.zipBlob, coleccion.id, cap.num
           );
-
-          // 5. Guardar portada
-          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+          dtEliminar(slotId).catch(() => {});
 
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
@@ -5884,17 +5868,12 @@
               chipEl.textContent = slotPrevio.imagenes.length + n;
             }, true, slotId)
             : [];
-            const archivos = [...slotPrevio.imagenes, ...nuevas]
-            .sort((a, b) => a.nombre.localeCompare(b.nombre, undefined, { numeric: true }));
             actualizarStatus('⏳ Creando ZIP…');
-            const zip = new JSZip();
-            archivos.forEach(a => zip.file(a.nombre, a.blob));
-            const urlsMap = {};
-            archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-            if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
-            if (archivos[0]) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+            const resZip = await generarZipDesdeSlot(slotId);
+            if (!resZip) throw new Error('No hay imágenes en slot');
+            const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', resZip.zipBlob, coleccion.id, cap.num);
+            if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+            dtEliminar(slotId).catch(() => {});
             chipEl.classList.remove('descargando');
             chipEl.classList.add('descargado');
             chipEl.title = '✅ Descargado — tap para abrir';
@@ -5915,14 +5894,11 @@
           }, slotId);
           if (!archivos.length) throw new Error('Sin imágenes — verifica que el Worker tenga el endpoint /proxy-img');
           actualizarStatus('⏳ Creando ZIP…');
-          const zip = new JSZip();
-          archivos.forEach(a => zip.file(a.nombre, a.blob));
-          const urlsMap = {};
-          archivos.forEach(a => { if (a.url) urlsMap[a.nombre] = a.url; });
-          if (Object.keys(urlsMap).length) zip.file('urls.json', JSON.stringify(urlsMap, null, 2));
-          const zipBlob = await zip.generateAsync({ type: 'blob' });
-          const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', zipBlob, coleccion.id, cap.num);
-          if (archivos.length) bvGuardarPortada(zipId, archivos[0].blob).catch(() => {});
+          const resZip = await generarZipDesdeSlot(slotId);
+          if (!resZip) throw new Error('No hay imágenes en slot');
+          const zipId   = await mwGuardarCapitulo(coleccion.nombre + ' - Cap ' + cap.num + '.zip', resZip.zipBlob, coleccion.id, cap.num);
+          if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+          dtEliminar(slotId).catch(() => {});
           chipEl.classList.remove('descargando');
           chipEl.classList.add('descargado');
           chipEl.title = '✅ Descargado — tap para abrir';
@@ -7618,12 +7594,12 @@
               }
 
               actualizarStatus('⏳ Generando ZIP: ' + slot.nombre);
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const zipBlob = await zip.generateAsync({ type: 'blob' });
-              const zipId   = await bvGuardar(gal.nombre + '.zip', zipBlob, cat);
+              const resZip = await generarZipDesdeSlot(slot.slotId);
+              if (!resZip) continue;
+              const zipId = await bvGuardar(gal.nombre + '.zip', resZip.zipBlob, cat);
               await con.actualizarZip(gal.id, zipId);
-              bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+              dtEliminar(slot.slotId).catch(() => {});
 
             } else {
               // samurai / manhwa / zonascans — colección/capítulo
@@ -7640,12 +7616,12 @@
               if (zipExistente) continue;
 
               actualizarStatus('⏳ Generando ZIP: ' + slot.nombre);
-              const zip = new JSZip();
-              archivos.forEach(a => zip.file(a.nombre, a.blob));
-              const zipBlob  = await zip.generateAsync({ type: 'blob' });
-              const nombre   = con.getDescargarLabel({ num: clave, titulo: clave }, col.nombre);
-              const zipId    = await capGuardarZip(cat, nombre, zipBlob, colId, isNaN(Number(clave)) ? clave : Number(clave));
-              bvExtraerPortada(zipBlob).then(pb => pb && bvGuardarPortada(zipId, pb)).catch(() => {});
+              const resZip = await generarZipDesdeSlot(slot.slotId);
+              if (!resZip) continue;
+              const nombre = con.getDescargarLabel({ num: clave, titulo: clave }, col.nombre);
+              const zipId  = await capGuardarZip(cat, nombre, resZip.zipBlob, colId, isNaN(Number(clave)) ? clave : Number(clave));
+              if (resZip.portadaBlob) bvGuardarPortada(zipId, resZip.portadaBlob).catch(() => {});
+              dtEliminar(slot.slotId).catch(() => {});
             }
             generados++;
           } catch(e) {
