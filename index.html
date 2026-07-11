@@ -5463,17 +5463,68 @@
                   }
                 };
                 chip.append(img, num, dl);
-                if (esCif) {
-                  const lock = document.createElement('span');
-                  lock.textContent = '🔐';
-                  lock.className = 'bv-chip-badge';
-                  chip.appendChild(lock);
+                const badgeCif = document.createElement(esCif ? 'span' : 'button');
+                badgeCif.textContent = esCif ? '🔐' : '📦';
+                badgeCif.className = 'bv-chip-badge';
+                if (!esCif && _gfPwdMaestra) {
+                  badgeCif.style.pointerEvents = 'auto';
+                  badgeCif.style.cursor = 'pointer';
+                  badgeCif.onclick = async e => {
+                    e.stopPropagation();
+                    badgeCif.textContent = '⏳';
+                    badgeCif.style.pointerEvents = 'none';
+                    try {
+                      const regZip  = await bvCargar(zipId);
+                      if (!regZip || !regZip.blob) throw new Error('Blob no encontrado');
+                      const claveCrypto = await gfDerivarClave(_gfPwdMaestra);
+                      const blobCifrado = await gfCifrarBlob(regZip.blob, claveCrypto);
+                      const nuevoNombre = (regZip.nombre || '').replace(/\.zip$/i, '') + '.zip.webc';
+                      await gfActualizarItem(zipId, nuevoNombre, blobCifrado);
+                      // Limpiar slot temporal
+                      const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                                    + '-' + cfg.coleccion.id + '-' + clave;
+                      await dtEliminar(slotKey).catch(() => {});
+                      badgeCif.textContent = '🔐';
+                      actualizarStatus('✅ Cifrado: ' + nuevoNombre);
+                    } catch(e) { badgeCif.textContent = '📦'; actualizarStatus('❌ ' + e.message); }
+                  };
                 }
+                chip.appendChild(badgeCif);
               } else if (esCif) {
                 chip.textContent = '🔐';
               }
             }).catch(() => {});
           } else if (yaDesc) {
+            // Badge 📦 o 🔐 para cifrar
+            const regMeta = zipId ? await bvCargarMeta(zipId) : null;
+            const esCifChip = regMeta && regMeta.nombre && regMeta.nombre.endsWith('.zip.webc');
+            const badgeChip = document.createElement(esCifChip ? 'span' : 'button');
+            badgeChip.textContent = esCifChip ? '🔐' : '📦';
+            badgeChip.className = 'bv-chip-badge';
+            if (!esCifChip && _gfPwdMaestra && zipId) {
+              badgeChip.style.pointerEvents = 'auto';
+              badgeChip.style.cursor = 'pointer';
+              badgeChip.onclick = async e => {
+                e.stopPropagation();
+                badgeChip.textContent = '⏳';
+                badgeChip.style.pointerEvents = 'none';
+                try {
+                  const regZip  = await bvCargar(zipId);
+                  if (!regZip || !regZip.blob) throw new Error('Blob no encontrado');
+                  const claveCrypto = await gfDerivarClave(_gfPwdMaestra);
+                  const blobCifrado = await gfCifrarBlob(regZip.blob, claveCrypto);
+                  const nuevoNombre = (regZip.nombre || '').replace(/\.zip$/i, '') + '.zip.webc';
+                  await gfActualizarItem(zipId, nuevoNombre, blobCifrado);
+                  const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                                + '-' + cfg.coleccion.id + '-' + clave;
+                  await dtEliminar(slotKey).catch(() => {});
+                  badgeChip.textContent = '🔐';
+                  actualizarStatus('✅ Cifrado');
+                } catch(e) { badgeChip.textContent = '📦'; actualizarStatus('❌ ' + e.message); }
+              };
+            }
+            chip.appendChild(badgeChip);
+
             const dl = document.createElement('span');
             dl.textContent = '🔽';
             dl.className = 'bv-chip-btn';
