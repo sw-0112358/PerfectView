@@ -2112,15 +2112,22 @@
 
       async function dtEliminar(slotId) {
         const db = await bvAbrirDB();
-        return new Promise((resolve, reject) => {
-          const tx  = db.transaction(['descargas_temp', 'imgs_temp'], 'readwrite');
-          tx.objectStore('descargas_temp').delete(slotId);
+        // Primero borrar todas las imágenes del slot via índice porSlot
+        await new Promise((resolve, reject) => {
+          const tx  = db.transaction('imgs_temp', 'readwrite');
           const req = tx.objectStore('imgs_temp').index('porSlot')
             .openCursor(IDBKeyRange.only(slotId));
           req.onsuccess = e => {
             const c = e.target.result;
             if (c) { c.delete(); c.continue(); }
           };
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+        // Luego borrar el slot de metadatos
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction('descargas_temp', 'readwrite');
+          tx.objectStore('descargas_temp').delete(slotId);
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
