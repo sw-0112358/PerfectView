@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷322❄️
+          PerfectView🪷330❄️
         </div>
       </header>
 
@@ -4780,6 +4780,65 @@
         renderBoveda();
       }
 
+      async function bvAbrirCarpetaR2() {
+        document.getElementById('PanelAdmi').style.display = 'none';
+        const contenedor = document.getElementById('bvLista');
+        contenedor.innerHTML = '';
+
+        // Breadcrumb
+        const bc = document.createElement('div');
+        bc.className = 'bv-breadcrumb';
+        bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
+          + '<span class="bv-breadcrumb-sep">/</span>'
+          + '<span class="bv-breadcrumb-label">☁️ Nube R2</span>';
+        contenedor.appendChild(bc);
+
+        // Estado de carga
+        const estado = document.createElement('div');
+        estado.style.cssText = 'font-size:.82rem;color:var(--text-muted);margin-bottom:12px';
+        estado.textContent = '⏳ Leyendo esqueletos de R2…';
+        contenedor.appendChild(estado);
+
+        const grid = document.createElement('div');
+        grid.className = 'bv-grid';
+        contenedor.appendChild(grid);
+
+        try {
+          const esqueletos = await gfEscanearEsqueletos();
+          if (!esqueletos.length) {
+            estado.textContent = '— Sin esqueletos .webc2 en R2 —';
+            return;
+          }
+          estado.textContent = esqueletos.length + ' esqueleto(s) en R2';
+
+          esqueletos.forEach(esq => {
+            const nombre = esq.nombre || esq.nombreReal || '?';
+            const con    = CAT_CONECTORES[esq.cat];
+            const { card, ph, img } = crearTarjeta({
+              nombre:    nombre + (esq.capNum ? ' · ' + esq.capNum : ''),
+              phTexto:   con ? con.icon : '☁️',
+              esCifrado: true,
+            });
+            // Badge ☁️ encima de la portada
+            const badgeR2 = document.createElement('div');
+            badgeR2.textContent = '☁️';
+            badgeR2.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.85rem;line-height:1;pointer-events:none';
+            card.style.position = 'relative';
+            card.appendChild(badgeR2);
+
+            if (esq.portada_b64) {
+              img.src = esq.portada_b64;
+              img.style.display = 'block';
+              ph.style.display  = 'none';
+            }
+            card.addEventListener('click', () => bovedaAbrirDesdeEsqueleto(esq));
+            grid.appendChild(card);
+          });
+        } catch(err) {
+          estado.textContent = '❌ Error: ' + err.message;
+        }
+      }
+
       function bvVolverMenu() {
         categoriaActual = 'menu';
         document.getElementById('PanelAdmi').style.display = _bvMaestra ? '' : 'none';
@@ -6030,6 +6089,16 @@
               btn.onclick = () => bvAbrirCarpeta(id);
               adm.appendChild(btn);
             });
+
+          // — Carpeta ☁️ R2 — igual que las otras, solo si hay clave y Worker —
+          if (_bvMaestra && CF_WORKER && _gfPwdMaestra) {
+            const btnR2 = document.createElement('button');
+            btnR2.className = 'action-btn';
+            btnR2.style.cssText = 'flex:1;min-width:80px;justify-content:center';
+            btnR2.innerHTML = '☁️ Nube R2';
+            btnR2.onclick = () => bvAbrirCarpetaR2();
+            adm.appendChild(btnR2);
+          }
         }
 
         // — Vista Menú —
@@ -6210,6 +6279,63 @@
           bvNavegar('pantalla1');
           mostrarImagenesEnVisor();
           actualizarStatus('✅ ' + entradas.length + ' imágenes cargadas');
+        } catch(err) {
+          actualizarStatus('❌ Error: ' + err.message);
+        }
+      }
+
+      // — Abrir desde esqueleto .webc2: descarga .webc de R2 si no está local —
+      async function bovedaAbrirDesdeEsqueleto(esq) {
+        if (!CF_WORKER || !_gfPwdMaestra) {
+          actualizarStatus('⚠️ Activa clave maestra y Worker primero');
+          return;
+        }
+        actualizarStatus('⏳ Buscando en bóveda local…');
+        try {
+          const clave = await gfDerivarClave(_gfPwdMaestra);
+          // Buscar en IDB local por nombreReal (cat/nombre[/cap])
+          const todosLocal = await new Promise((res, rej) => {
+            bvAbrirDB().then(db => {
+              const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+              req.onsuccess = e => res(e.target.result || []);
+              req.onerror   = e => rej(e.target.error);
+            });
+          });
+          // Reconstruir nombreReal desde esqueleto para comparar
+          const nombreEsq = esq.nombreReal || (esq.cat + '/' + esq.nombre + (esq.capNum ? '/' + esq.capNum : ''));
+          // Intentar encontrar local por nombre descifrado
+          let registroLocal = null;
+          for (const it of todosLocal) {
+            try {
+              const r2Info = await gfConstruirR2Key(it, clave);
+              if (r2Info.nombreReal === nombreEsq) { registroLocal = it; break; }
+            } catch(e) {}
+          }
+          if (registroLocal) {
+            // Está local — abrir directo
+            actualizarStatus('✅ Encontrado local, abriendo…');
+            await bovedaAbrirEnVisor(registroLocal, null);
+            return;
+          }
+          // No está local — descargar .webc de R2
+          actualizarStatus('⏳ Descargando desde R2…');
+          const base = CF_WORKER.replace(/\/$/, '');
+          const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(esq.r2_key));
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const blobCifrado = await resp.blob();
+          // Importar a IDB y abrir
+          await gfRestaurarDesdeEstructura(esq.r2_key, nombreEsq, blobCifrado, true);
+          // Buscar el registro recién importado
+          const todosNuevo = await new Promise((res, rej) => {
+            bvAbrirDB().then(db => {
+              const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+              req.onsuccess = e => res(e.target.result || []);
+              req.onerror   = e => rej(e.target.error);
+            });
+          });
+          // El más reciente es el recién importado
+          const nuevo = todosNuevo.sort((a,b) => (b.id||0)-(a.id||0))[0];
+          if (nuevo) await bovedaAbrirEnVisor(nuevo, null);
         } catch(err) {
           actualizarStatus('❌ Error: ' + err.message);
         }
@@ -6874,6 +7000,110 @@
               gfCargarCategoria(cat, cuerpo, btnSubirCat, null);
             });
 
+            // Botón 🗂️ generar .webc2 para los que ya están en R2 y son locales
+            const btnEsq = document.createElement('button');
+            btnEsq.className = 'btn-icon';
+            btnEsq.style.cssText = 'width:26px;height:26px;font-size:.75rem;flex-shrink:0';
+            btnEsq.title = 'Generar esqueletos .webc2 en R2';
+            btnEsq.textContent = '🗂️';
+            btnEsq.addEventListener('click', async e => {
+              e.stopPropagation();
+              if (!_gfPwdMaestra || !CF_WORKER) { actualizarStatus('⚠️ Activa clave maestra y Worker'); return; }
+              btnEsq.textContent = '⏳'; btnEsq.disabled = true;
+              try {
+                const base  = CF_WORKER.replace(/\/$/, '');
+                const clave = await gfDerivarClave(_gfPwdMaestra);
+                // Obtener lista R2 una sola vez
+                const r2Items = await _obtenerR2ConNombresReales(base, clave);
+                const r2Keys  = new Set(r2Items.map(o => o.key));
+                // Obtener .webc2 ya existentes para no duplicar
+                const r2Resp  = await fetch(base + '/r2-list');
+                const r2Data  = await r2Resp.json();
+                const webc2Ya = new Set((r2Data.objetos || []).filter(o => o.key.endsWith('.webc2')).map(o => o.key));
+                // Solo los de esta categoría que estén en R2 y no tengan .webc2 aún
+                const candidatos = lista.filter(it => it.nombre && it.nombre.endsWith('.zip.webc'));
+                let ok = 0, omitidos = 0, errores = 0;
+                for (const it of candidatos) {
+                  try {
+                    const r2Info  = await gfConstruirR2Key(it, clave);
+                    const enR2    = r2Keys.has(r2Info.key);
+                    const keyW2   = r2Info.key.replace(/\.webc$/i, '.webc2');
+                    const yaExiste = webc2Ya.has(keyW2);
+                    if (!enR2)     { omitidos++; continue; } // no está en R2
+                    if (yaExiste)  { omitidos++; continue; } // ya tiene .webc2
+                    // Portada: primero desde store portadas (rápido, sin RAM)
+                    let portadaBlob = await bvCargarPortada(it.id).catch(() => null);
+                    // Si no hay portada guardada → extraer del .webc sin cargar todo en RAM
+                    if (!portadaBlob) {
+                      try {
+                        const reg = await bvCargar(it.id);
+                        if (reg && reg.blob) {
+                          // Descifrar si es .webc
+                          let zipBlob = reg.blob;
+                          if (it.nombre && it.nombre.endsWith('.zip.webc')) {
+                            zipBlob = await gfDescifrarBlob(zipBlob, clave);
+                          }
+                          // Extraer solo la primera imagen del ZIP
+                          const zip = await JSZip.loadAsync(zipBlob);
+                          zipBlob = null; // liberar
+                          const primera = Object.values(zip.files)
+                            .filter(f => !f.dir && /\.(jpe?g|png|webp|gif)$/i.test(f.name))
+                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))[0];
+                          if (primera) {
+                            portadaBlob = await primera.async('blob');
+                            // Guardar para no repetir este proceso
+                            bvGuardarPortada(it.id, portadaBlob).catch(() => {});
+                          }
+                        }
+                      } catch(e) {}
+                    }
+                    const portada_b64 = portadaBlob ? await _portadaABase64(portadaBlob) : null;
+                    portadaBlob = null; // liberar
+                    // Armar metadatos desde registro IDB (sin tocar el blob del ZIP)
+                    const itCat    = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+                    const con2     = CAT_CONECTORES[itCat];
+                    const meta = {
+                      version:    1,
+                      tipo:       'esqueleto',
+                      cat:        itCat,
+                      nombre:     it.nombre.replace(/\.zip\.webc$/i,'').replace(/\.zip$/i,''),
+                      tamaño_zip: it.tamaño || 0,
+                      r2_key:     r2Info.key,
+                      nombreReal: r2Info.nombreReal,
+                      fecha:      it.fecha || new Date().toISOString(),
+                      portada_b64
+                    };
+                    if (con2 && con2.nivel === 3) {
+                      meta.coleccion_id = it[itCat + '_coleccion_id'] ?? null;
+                      meta.clave        = it[itCat + '_cap_num']       ?? null;
+                      meta.nombreManga  = r2Info.nombreManga;
+                      meta.capNum       = r2Info.capNum;
+                    }
+                    // Cifrar JSON y subir — sin blob del ZIP en memoria
+                    const jsonBlob    = new Blob([JSON.stringify(meta)], { type: 'application/json' });
+                    const blobCifrado = await gfCifrarBlob(jsonBlob, clave);
+                    const resp = await fetch(base + '/r2-upload', {
+                      method: 'POST',
+                      headers: { 'X-R2-Key': encodeURIComponent(keyW2) },
+                      body: blobCifrado
+                    });
+                    const data = await resp.json();
+                    if (!data.ok) throw new Error(data.error);
+                    ok++;
+                    actualizarStatus('🗂️ ' + ok + ' esqueleto(s) generado(s) — ' + meta.nombre);
+                  } catch(e) {
+                    errores++;
+                    actualizarStatus('❌ Error esqueleto: ' + e.message);
+                  }
+                }
+                actualizarStatus('✅ .webc2: ' + ok + ' generado(s) · ' + omitidos + ' omitido(s)' + (errores ? ' · ❌ ' + errores : ''));
+              } catch(e) {
+                actualizarStatus('❌ ' + e.message);
+              }
+              btnEsq.textContent = '🗂️'; btnEsq.disabled = false;
+              _r2Cache = null; // invalidar cache
+            });
+
             // Header clickeable
             const titulo = document.createElement('div');
             titulo.style.cssText = 'font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;padding:8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)';
@@ -6883,6 +7113,7 @@
               + (cifCat ? ' · <span style="color:var(--success)">🔐 ' + cifCat + '</span>' : '') + '</span>';
             titulo.appendChild(btnSubirCat);
             titulo.appendChild(btnGen);
+            titulo.appendChild(btnEsq);
 
             let abierto = false;
             let cargado = false;
@@ -7193,6 +7424,108 @@
         return resultado;
       }
 
+      // — Comprimir portada a thumbnail JPEG base64 (~15-25kb) —
+      async function _portadaABase64(blob, maxW = 280) {
+        return new Promise(resolve => {
+          const img = new Image();
+          const url = URL.createObjectURL(blob);
+          img.onload = () => {
+            const ratio  = Math.min(maxW / img.width, maxW / img.height, 1);
+            const canvas = document.createElement('canvas');
+            canvas.width  = Math.round(img.width  * ratio);
+            canvas.height = Math.round(img.height * ratio);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+            resolve(canvas.toDataURL('image/jpeg', 0.72));
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+          img.src = url;
+        });
+      }
+
+      // — Generar y subir .webc2 (esqueleto cifrado) para un registro de IDB —
+      async function gfGenerarWebc2(it, clave) {
+        const itCat      = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
+        const con        = CAT_CONECTORES[itCat];
+        const r2Info     = await gfConstruirR2Key(it, clave);
+        const base       = CF_WORKER.replace(/\/$/, '');
+
+        // Armar metadatos según nivel de categoría
+        const meta = {
+          version:   1,
+          tipo:      'esqueleto',
+          cat:       itCat,
+          nombre:    it.nombre.replace(/\.zip\.webc$/i,'').replace(/\.zip$/i,''),
+          tamaño_zip: it.tamaño || 0,
+          r2_key:    r2Info.key,          // key opaca del .webc en R2
+          nombreReal: r2Info.nombreReal,  // cat/nombre[/cap] legible
+          fecha:     it.fecha || new Date().toISOString(),
+          portada_b64: null
+        };
+
+        // Campos extra según nivel
+        if (con && con.nivel === 3) {
+          meta.coleccion_id = it[itCat + '_coleccion_id'] ?? null;
+          meta.clave        = it[itCat + '_cap_num']       ?? null;
+          meta.nombreManga  = r2Info.nombreManga;
+          meta.capNum       = r2Info.capNum;
+        }
+
+        // Portada: intentar desde store portadas → fallback primer slot temp
+        try {
+          const portadaBlob = await bvCargarPortada(it.id);
+          if (portadaBlob) {
+            meta.portada_b64 = await _portadaABase64(portadaBlob);
+          }
+        } catch(e) {}
+
+        // Cifrar JSON
+        const jsonBlob    = new Blob([JSON.stringify(meta)], { type: 'application/json' });
+        const blobCifrado = await gfCifrarBlob(jsonBlob, clave);
+
+        // Key del .webc2 = mismo nombre cifrado del .webc pero extensión .webc2
+        const keyWebc2 = r2Info.key.replace(/\.webc$/i, '.webc2');
+
+        // Subir a R2
+        const resp = await fetch(base + '/r2-upload', {
+          method:  'POST',
+          headers: { 'X-R2-Key': encodeURIComponent(keyWebc2) },
+          body:    blobCifrado,
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'Error R2 webc2');
+        return keyWebc2;
+      }
+
+      // — Listar y descifrar todos los .webc2 de R2 → array de esqueletos —
+      async function gfEscanearEsqueletos() {
+        if (!CF_WORKER || !_gfPwdMaestra) return [];
+        const base  = CF_WORKER.replace(/\/$/, '');
+        const clave = await gfDerivarClave(_gfPwdMaestra);
+        let lista;
+        try {
+          const resp = await fetch(base + '/r2-list');
+          const data = await resp.json();
+          if (!data.ok) return [];
+          lista = data.objetos.filter(o => o.key.endsWith('.webc2'));
+        } catch(e) { return []; }
+
+        const esqueletos = [];
+        for (const o of lista) {
+          try {
+            const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(o.key));
+            if (!resp.ok) continue;
+            const blobCifrado = await resp.blob();
+            const blobPlano   = await gfDescifrarBlob(blobCifrado, clave);
+            const json        = await blobPlano.text();
+            const esqueleto   = JSON.parse(json);
+            esqueleto._webc2_key = o.key; // guardar key opaca por si se necesita
+            esqueletos.push(esqueleto);
+          } catch(e) {}
+        }
+        return esqueletos;
+      }
+
       // — Subir un solo .zip.webc a R2 conservando categoría —
       async function gfSubirUnoR2(id, btnEl) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
@@ -7225,6 +7558,8 @@
           });
           const data = await resp.json();
           if (!data.ok) throw new Error(data.error);
+          // Generar y subir esqueleto .webc2 automáticamente
+          try { await gfGenerarWebc2(it, clave); } catch(e) {}
           btnEl.textContent = '✅';
           actualizarStatus('✅ Subido: ' + r2Info.nombreReal);
         } catch(err) {
@@ -7265,6 +7600,8 @@
             });
             const data = await resp.json();
             if (!data.ok) throw new Error(data.error);
+            // Generar y subir esqueleto .webc2
+            try { await gfGenerarWebc2(it, clave); } catch(e) {}
             ok++;
           } catch(err) {
             errores++;
