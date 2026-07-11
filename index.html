@@ -7034,42 +7034,46 @@
                 // Solo los de esta categoría que estén en R2 y no tengan .webc2 aún
                 const candidatos = lista.filter(it => it.nombre && it.nombre.endsWith('.zip.webc'));
                 let ok = 0, omitidos = 0, errores = 0;
+
+                // ── Paso 1: generar portadas faltantes (una a la vez para no saturar RAM) ──
+                actualizarStatus('🖼️ Generando portadas faltantes…');
+                for (const it of candidatos) {
+                  const yaPortada = await bvCargarPortada(it.id).catch(() => null);
+                  if (yaPortada) continue; // ya tiene portada, saltar
+                  try {
+                    actualizarStatus('🖼️ Portada: ' + (it.nombre || '').replace(/\.zip\.webc$/i,'').slice(0,40));
+                    const reg = await bvCargar(it.id);
+                    if (!reg || !reg.blob) continue;
+                    let zipBlob = reg.blob;
+                    // Descifrar .webc
+                    zipBlob = await gfDescifrarBlob(zipBlob, clave);
+                    // Abrir ZIP y extraer solo la primera imagen
+                    const zip = await JSZip.loadAsync(zipBlob);
+                    zipBlob = null; // liberar ZIP descifrado
+                    const primera = Object.values(zip.files)
+                      .filter(f => !f.dir && /\.(jpe?g|png|webp|gif|avif)$/i.test(f.name))
+                      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))[0];
+                    if (!primera) continue;
+                    const portadaBlob = await primera.async('blob');
+                    await bvGuardarPortada(it.id, portadaBlob);
+                  } catch(e) {
+                    actualizarStatus('⚠️ Sin portada: ' + (it.nombre||'').slice(0,30) + ' — ' + e.message);
+                  }
+                }
+
+                // ── Paso 2: generar y subir .webc2 con portada ya guardada ──
+                actualizarStatus('🗂️ Generando esqueletos .webc2…');
                 for (const it of candidatos) {
                   try {
-                    const r2Info  = await gfConstruirR2Key(it, clave);
-                    const enR2    = r2NombresSet.has(r2Info.nombreReal);
+                    const r2Info   = await gfConstruirR2Key(it, clave);
+                    const enR2     = r2NombresSet.has(r2Info.nombreReal);
                     const yaExiste = webc2NombresYa.has(r2Info.nombreReal);
-                    if (!enR2)    { omitidos++; continue; } // no está en R2
-                    if (yaExiste) { omitidos++; continue; } // ya tiene .webc2
-                    const keyW2   = r2Info.key.replace(/\.webc$/i, '.webc2');
-                    // Portada: primero desde store portadas (rápido, sin RAM)
-                    let portadaBlob = await bvCargarPortada(it.id).catch(() => null);
-                    // Si no hay portada guardada → extraer del .webc sin cargar todo en RAM
-                    if (!portadaBlob) {
-                      try {
-                        const reg = await bvCargar(it.id);
-                        if (reg && reg.blob) {
-                          // Descifrar si es .webc
-                          let zipBlob = reg.blob;
-                          if (it.nombre && it.nombre.endsWith('.zip.webc')) {
-                            zipBlob = await gfDescifrarBlob(zipBlob, clave);
-                          }
-                          // Extraer solo la primera imagen del ZIP
-                          const zip = await JSZip.loadAsync(zipBlob);
-                          zipBlob = null; // liberar
-                          const primera = Object.values(zip.files)
-                            .filter(f => !f.dir && /\.(jpe?g|png|webp|gif)$/i.test(f.name))
-                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))[0];
-                          if (primera) {
-                            portadaBlob = await primera.async('blob');
-                            // Guardar para no repetir este proceso
-                            bvGuardarPortada(it.id, portadaBlob).catch(() => {});
-                          }
-                        }
-                      } catch(e) {}
-                    }
+                    if (!enR2)    { omitidos++; continue; }
+                    if (yaExiste) { omitidos++; continue; }
+                    const keyW2 = r2Info.key.replace(/\.webc$/i, '.webc2');
+                    // Leer portada ya guardada (solo thumbnail, sin ZIP)
+                    const portadaBlob = await bvCargarPortada(it.id).catch(() => null);
                     const portada_b64 = portadaBlob ? await _portadaABase64(portadaBlob) : null;
-                    portadaBlob = null; // liberar
                     // Armar metadatos desde registro IDB (sin tocar el blob del ZIP)
                     const itCat    = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
                     const con2     = CAT_CONECTORES[itCat];
