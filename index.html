@@ -1984,7 +1984,7 @@
               db.createObjectStore('zips_blobs', { keyPath: 'id' });
             }
             if (!db.objectStoreNames.contains('esq_cache')) {
-              db.createObjectStore('esq_cache', { keyPath: 'r2_key' });
+              db.createObjectStore('esq_cache', { keyPath: 'nombreReal' });
             }
 
           };
@@ -7653,6 +7653,23 @@
         // Key del .webc2 = mismo nombre cifrado del .webc pero extensión .webc2
         const keyWebc2 = r2Info.key.replace(/\.webc$/i, '.webc2');
 
+        // Eliminar cualquier .webc2 previo con el mismo nombreReal antes de subir
+        try {
+          const listResp = await fetch(base + '/r2-list');
+          const listData = await listResp.json();
+          if (listData.ok) {
+            for (const o of (listData.objetos || [])) {
+              if (!o.key.endsWith('.webc2')) continue;
+              try {
+                const nr = await _descifrarKeyR2(o.key, clave);
+                if (nr === r2Info.nombreReal) {
+                  await fetch(base + '/r2-delete?key=' + encodeURIComponent(o.key));
+                }
+              } catch(e) {}
+            }
+          }
+        } catch(e) {}
+
         // Subir a R2
         const resp = await fetch(base + '/r2-upload', {
           method:  'POST',
@@ -7661,6 +7678,7 @@
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.error || 'Error R2 webc2');
+        _r2Cache = null;
         return keyWebc2;
       }
 
