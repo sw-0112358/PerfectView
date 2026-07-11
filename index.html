@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷347❄️
+          PerfectView🪷349❄️
         </div>
       </header>
 
@@ -6988,11 +6988,18 @@
               const r2Info  = await gfConstruirR2Key(it, clave);
               const regBlob = await bvCargar(it.id);
               if (!regBlob || !regBlob.blob) throw new Error('Blob no encontrado');
-              const resp  = await fetch(base + '/r2-upload', {
-                method: 'POST', headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) }, body: regBlob.blob
-              });
-              const data = await resp.json();
-              if (!data.ok) throw new Error(data.error);
+              if (regBlob.blob.size > 90 * 1024 * 1024) {
+                // Archivo > 90MB — usar multipart
+                await gfSubirR2Multipart(regBlob.blob, r2Info.key, base, (parte, total) => {
+                  btnUp.textContent = '⬆️' + parte + '/' + total;
+                });
+              } else {
+                const resp = await fetch(base + '/r2-upload', {
+                  method: 'POST', headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) }, body: regBlob.blob
+                });
+                const data = await resp.json();
+                if (!data.ok) throw new Error(data.error);
+              }
               // Generar y subir esqueleto .webc2
               try { await gfGenerarWebc2(it, clave); } catch(e) {}
               btnUp.remove();
@@ -7725,6 +7732,52 @@
         return esqueletos;
       }
 
+      // — Subida multipart para archivos > 90MB — chunks de 50MB —
+      const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB
+
+      async function gfSubirR2Multipart(blob, key, base, onProgreso) {
+        // 1. Iniciar
+        const initResp = await fetch(base + '/r2-multipart-create', {
+          method: 'POST',
+          headers: { 'X-R2-Key': encodeURIComponent(key) }
+        });
+        const initData = await initResp.json();
+        if (!initData.ok) throw new Error('Multipart init: ' + initData.error);
+        const { uploadId } = initData;
+
+        // 2. Subir partes
+        const parts = [];
+        const totalChunks = Math.ceil(blob.size / CHUNK_SIZE);
+        for (let i = 0; i < totalChunks; i++) {
+          const start  = i * CHUNK_SIZE;
+          const chunk  = blob.slice(start, start + CHUNK_SIZE);
+          const partNum = i + 1;
+          if (onProgreso) onProgreso(partNum, totalChunks);
+          const partResp = await fetch(base + '/r2-multipart-part', {
+            method:  'POST',
+            headers: {
+              'X-R2-Key':      encodeURIComponent(key),
+              'X-Upload-Id':   uploadId,
+              'X-Part-Number': String(partNum),
+            },
+            body: chunk
+          });
+          const partData = await partResp.json();
+          if (!partData.ok) throw new Error('Parte ' + partNum + ': ' + partData.error);
+          parts.push({ partNumber: partData.partNumber, etag: partData.etag });
+        }
+
+        // 3. Completar
+        const complResp = await fetch(base + '/r2-multipart-complete', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ key, uploadId, parts })
+        });
+        const complData = await complResp.json();
+        if (!complData.ok) throw new Error('Multipart complete: ' + complData.error);
+        return complData;
+      }
+
       // — Subir un solo .zip.webc a R2 conservando categoría —
       async function gfSubirUnoR2(id, btnEl) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
@@ -7792,13 +7845,19 @@
           try {
             const regBlob = await bvCargar(it.id);
             if (!regBlob || !regBlob.blob) { errores++; continue; }
-            const resp = await fetch(base + '/r2-upload', {
-              method:  'POST',
-              headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
-              body:    regBlob.blob,
-            });
-            const data = await resp.json();
-            if (!data.ok) throw new Error(data.error);
+            if (regBlob.blob.size > 90 * 1024 * 1024) {
+              await gfSubirR2Multipart(regBlob.blob, r2Info.key, base, (parte, total) => {
+                actualizarStatus('⬆️ ' + (r2Info.nombreReal||'').slice(0,30) + ' · parte ' + parte + '/' + total);
+              });
+            } else {
+              const resp = await fetch(base + '/r2-upload', {
+                method:  'POST',
+                headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
+                body:    regBlob.blob,
+              });
+              const data = await resp.json();
+              if (!data.ok) throw new Error(data.error);
+            }
             // Generar y subir esqueleto .webc2
             try { await gfGenerarWebc2(it, clave); } catch(e) {}
             ok++;
