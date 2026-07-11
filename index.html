@@ -2112,19 +2112,38 @@
 
       async function dtEliminar(slotId) {
         const db = await bvAbrirDB();
-        // Primero borrar todas las imágenes del slot via índice porSlot
-        await new Promise((resolve, reject) => {
-          const tx  = db.transaction('imgs_temp', 'readwrite');
-          const req = tx.objectStore('imgs_temp').index('porSlot')
-            .openCursor(IDBKeyRange.only(slotId));
-          req.onsuccess = e => {
-            const c = e.target.result;
-            if (c) { c.delete(); c.continue(); }
-          };
-          tx.oncomplete = () => resolve();
-          tx.onerror    = e => reject(e.target.error);
+        // Paso 1: obtener todos los ids de imágenes del slot
+        const ids = await new Promise((resolve, reject) => {
+          const tx  = db.transaction('imgs_temp', 'readonly');
+          const st  = tx.objectStore('imgs_temp');
+          // Intentar por índice primero; si falla, leer todo y filtrar
+          try {
+            const req = st.index('porSlot').getAllKeys(IDBKeyRange.only(slotId));
+            req.onsuccess = e => resolve(e.target.result || []);
+            req.onerror   = () => {
+              // Fallback: leer todos y filtrar manualmente
+              const req2 = st.getAll();
+              req2.onsuccess = e2 => resolve((e2.target.result || []).filter(r => r.slotId === slotId).map(r => r.id));
+              req2.onerror   = e2 => reject(e2.target.error);
+            };
+          } catch(e) {
+            const req2 = st.getAll();
+            req2.onsuccess = e2 => resolve((e2.target.result || []).filter(r => r.slotId === slotId).map(r => r.id));
+            req2.onerror   = e2 => reject(e2.target.error);
+          }
+          tx.onerror = e => reject(e.target.error);
         });
-        // Luego borrar el slot de metadatos
+        // Paso 2: borrar cada imagen por su keyPath (id autoincrement)
+        if (ids.length) {
+          await new Promise((resolve, reject) => {
+            const tx = db.transaction('imgs_temp', 'readwrite');
+            const st = tx.objectStore('imgs_temp');
+            ids.forEach(id => st.delete(id));
+            tx.oncomplete = () => resolve();
+            tx.onerror    = e => reject(e.target.error);
+          });
+        }
+        // Paso 3: borrar el slot de metadatos
         await new Promise((resolve, reject) => {
           const tx = db.transaction('descargas_temp', 'readwrite');
           tx.objectStore('descargas_temp').delete(slotId);
