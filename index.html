@@ -1946,7 +1946,7 @@
       function bvAbrirDB() {
         return new Promise((resolve, reject) => {
           if (_bvDB) { resolve(_bvDB); return; }
-          const req = indexedDB.open('PerfectViewBoveda', 11);
+          const req = indexedDB.open('PerfectViewBoveda', 12);
           req.onupgradeneeded = e => {
             const db  = e.target.result;
             const old = e.oldVersion;
@@ -1982,6 +1982,9 @@
             }
             if (!db.objectStoreNames.contains('zips_blobs')) {
               db.createObjectStore('zips_blobs', { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('esq_cache')) {
+              db.createObjectStore('esq_cache', { keyPath: 'r2_key' });
             }
 
           };
@@ -3076,6 +3079,36 @@
         return new Promise((resolve, reject) => {
           const tx = db.transaction('portadas', 'readwrite');
           tx.objectStore('portadas').delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      // — Cache local de esqueletos .webc2 —
+      async function esqGuardar(esqueleto) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('esq_cache', 'readwrite');
+          tx.objectStore('esq_cache').put(esqueleto);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
+      async function esqListar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction('esq_cache', 'readonly').objectStore('esq_cache').getAll();
+          req.onsuccess = e => resolve(e.target.result || []);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      async function esqLimpiar() {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('esq_cache', 'readwrite');
+          tx.objectStore('esq_cache').clear();
           tx.oncomplete = () => resolve();
           tx.onerror    = e => reject(e.target.error);
         });
@@ -4780,60 +4813,98 @@
         renderBoveda();
       }
 
+      function _renderEsqueletos(esqueletos, grid) {
+        grid.innerHTML = '';
+        esqueletos.forEach(esq => {
+          const nombre = esq.nombre || esq.nombreReal || '?';
+          const con    = CAT_CONECTORES[esq.cat];
+          const { card, ph, img } = crearTarjeta({
+            nombre:    nombre + (esq.capNum ? ' · ' + esq.capNum : ''),
+            phTexto:   con ? con.icon : '☁️',
+            esCifrado: true,
+          });
+          const badgeR2 = document.createElement('div');
+          badgeR2.textContent = '☁️';
+          badgeR2.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.85rem;line-height:1;pointer-events:none';
+          card.style.position = 'relative';
+          card.appendChild(badgeR2);
+          if (esq.portada_b64) {
+            img.src = esq.portada_b64;
+            img.style.display = 'block';
+            ph.style.display  = 'none';
+          }
+          card.addEventListener('click', () => bovedaAbrirDesdeEsqueleto(esq));
+          grid.appendChild(card);
+        });
+      }
+
       async function bvAbrirCarpetaR2() {
         document.getElementById('PanelAdmi').style.display = 'none';
         const contenedor = document.getElementById('bvLista');
         contenedor.innerHTML = '';
 
-        // Breadcrumb
+        // Breadcrumb + botón actualizar
+        const bcRow = document.createElement('div');
+        bcRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px';
         const bc = document.createElement('div');
         bc.className = 'bv-breadcrumb';
+        bc.style.flex = '1';
         bc.innerHTML = '<button class="bv-breadcrumb-back" onclick="bvVolverMenu()">← Menú</button>'
           + '<span class="bv-breadcrumb-sep">/</span>'
           + '<span class="bv-breadcrumb-label">☁️ Nube R2</span>';
-        contenedor.appendChild(bc);
+        const btnActualizar = document.createElement('button');
+        btnActualizar.className = 'btn-icon';
+        btnActualizar.title = 'Actualizar desde R2';
+        btnActualizar.textContent = '🔄';
+        bcRow.appendChild(bc);
+        bcRow.appendChild(btnActualizar);
+        contenedor.appendChild(bcRow);
 
-        // Estado de carga
         const estado = document.createElement('div');
         estado.style.cssText = 'font-size:.82rem;color:var(--text-muted);margin-bottom:12px';
-        estado.textContent = '⏳ Leyendo esqueletos de R2…';
         contenedor.appendChild(estado);
 
         const grid = document.createElement('div');
         grid.className = 'bv-grid';
         contenedor.appendChild(grid);
 
-        try {
-          const esqueletos = await gfEscanearEsqueletos();
-          if (!esqueletos.length) {
-            estado.textContent = '— Sin esqueletos .webc2 en R2 —';
-            return;
-          }
-          estado.textContent = esqueletos.length + ' esqueleto(s) en R2';
-
-          esqueletos.forEach(esq => {
-            const nombre = esq.nombre || esq.nombreReal || '?';
-            const con    = CAT_CONECTORES[esq.cat];
-            const { card, ph, img } = crearTarjeta({
-              nombre:    nombre + (esq.capNum ? ' · ' + esq.capNum : ''),
-              phTexto:   con ? con.icon : '☁️',
-              esCifrado: true,
-            });
-            // Badge ☁️ encima de la portada
-            const badgeR2 = document.createElement('div');
-            badgeR2.textContent = '☁️';
-            badgeR2.style.cssText = 'position:absolute;top:4px;left:4px;font-size:.85rem;line-height:1;pointer-events:none';
-            card.style.position = 'relative';
-            card.appendChild(badgeR2);
-
-            if (esq.portada_b64) {
-              img.src = esq.portada_b64;
-              img.style.display = 'block';
-              ph.style.display  = 'none';
+        // Función para cargar desde R2 y guardar en cache local
+        const cargarDesdeR2 = async () => {
+          btnActualizar.textContent = '⏳';
+          btnActualizar.disabled = true;
+          estado.textContent = '⏳ Descargando esqueletos de R2…';
+          try {
+            const esqueletos = await gfEscanearEsqueletos();
+            if (!esqueletos.length) {
+              estado.textContent = '— Sin esqueletos .webc2 en R2 —';
+              grid.innerHTML = '';
+              await esqLimpiar();
+              return;
             }
-            card.addEventListener('click', () => bovedaAbrirDesdeEsqueleto(esq));
-            grid.appendChild(card);
-          });
+            // Guardar en cache local
+            await esqLimpiar();
+            for (const esq of esqueletos) await esqGuardar(esq);
+            estado.textContent = esqueletos.length + ' esqueleto(s) · actualizado';
+            _renderEsqueletos(esqueletos, grid);
+          } catch(err) {
+            estado.textContent = '❌ Error: ' + err.message;
+          }
+          btnActualizar.textContent = '🔄';
+          btnActualizar.disabled = false;
+        };
+
+        btnActualizar.addEventListener('click', cargarDesdeR2);
+
+        // Cargar primero desde cache local (instantáneo)
+        try {
+          const cache = await esqListar();
+          if (cache.length) {
+            estado.textContent = cache.length + ' esqueleto(s) · desde caché local';
+            _renderEsqueletos(cache, grid);
+          } else {
+            // No hay cache — cargar directo de R2
+            await cargarDesdeR2();
+          }
         } catch(err) {
           estado.textContent = '❌ Error: ' + err.message;
         }
