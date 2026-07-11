@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷320❄️
+          PerfectView🪷321❄️
         </div>
       </header>
 
@@ -7654,38 +7654,73 @@
       async function diagnosticarDB() {
         const db   = await bvAbrirDB();
         const zips = await new Promise(r => { const q = db.transaction('zips','readonly').objectStore('zips').getAll(); q.onsuccess = e => r(e.target.result); });
+        const blobs = await new Promise(r => { const q = db.transaction('zips_blobs','readonly').objectStore('zips_blobs').getAll(); q.onsuccess = e => r(e.target.result); });
+        const blobsMap = new Set(blobs.map(b => b.id));
         const temp = await dtListar();
 
         let html = '<div style="position:fixed;inset:0;background:#111;color:#eee;font-family:monospace;font-size:11px;padding:16px;overflow-y:auto;z-index:99999">'
           + '<button onclick="this.parentNode.remove()" style="position:fixed;top:12px;right:12px;background:#e05050;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px">✕ Cerrar</button>'
-          + '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:#5b7fff">🔬 DIAGNÓSTICO DB</div>';
+          + '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:#5b7fff">🔬 DIAGNÓSTICO DB — PerfectView</div>';
 
-        html += '<div style="color:#4a9e6a;margin-bottom:8px">📦 ZIPS (' + zips.length + ' registros)</div>';
+        // ── Sección: ZIPS (store zips) con blob check ──
+        html += '<div style="color:#4a9e6a;margin-bottom:8px">📦 ZIPS store (' + zips.length + ' registros)</div>';
         if (!zips.length) {
           html += '<div style="color:#e05050;margin-bottom:12px">— Sin registros en store zips —</div>';
         }
-        // Cargar zips_blobs para verificar existencia
-        const blobs = await new Promise(r => {
-          const q = db.transaction('zips_blobs','readonly').objectStore('zips_blobs').getAll();
-          q.onsuccess = e => r(e.target.result);
-        });
-        const blobsMap = new Set(blobs.map(b => b.id));
-
         zips.forEach(z => {
           const tieneBlob = blobsMap.has(z.id);
           const blobInfo  = tieneBlob ? (z.tamaño ? gfFmtSize(z.tamaño) : '✅') : '❌ NULL';
           const color     = tieneBlob ? '#eee' : '#e05050';
+          // Campos de categoría dinámicos (samurai/manhwa/zonascans/etc.)
+          const catFields = Object.values(CAT_CONECTORES)
+            .filter(c => c.nivel === 3)
+            .map(c => {
+              const cat = c.zipCatField;
+              const colF = cat + '_coleccion_id';
+              const capF = cat + '_cap_num';
+              return z[colF] !== undefined
+                ? ' | ' + cat.substring(0,3) + '_col=' + z[colF] + ' cap=' + z[capF]
+                : '';
+            }).join('');
           html += '<div style="color:' + color + ';border-bottom:1px solid #333;padding:4px 0">'
             + '🆔 <b>' + z.id + '</b> | ' + (z.nombre || '?') + '<br>'
-            + 'cat=' + (z.categoria||'?')
+            + 'cat=' + (z.categoria || '?')
             + ' | blob=' + blobInfo
-            + (z.samurai_coleccion_id  !== undefined ? ' | sjz_col=' + z.samurai_coleccion_id  + ' cap=' + z.samurai_cap_num  : '')
-            + (z.manhwa_coleccion_id   !== undefined ? ' | mw_col='  + z.manhwa_coleccion_id   + ' cap=' + z.manhwa_cap_num   : '')
-            + (z.zonascans_coleccion_id !== undefined ? ' | zs_col=' + z.zonascans_coleccion_id + ' cap=' + z.zonascans_cap_num : '')
+            + catFields
             + '</div>';
         });
 
-        html += '<div style="color:#4a9e6a;margin:12px 0 8px">🗂️ SLOTS TEMP (' + temp.length + ' registros)</div>';
+        // ── Sección: Stores de categorías (via CAT_CONECTORES) ──
+        html += '<div style="color:#5b7fff;margin:14px 0 6px;font-size:12px;font-weight:700">📂 COLECCIONES / GALERÍAS POR CATEGORÍA</div>';
+        for (const [catId, con] of Object.entries(CAT_CONECTORES)) {
+          if (!con.store || con.store === 'zips') continue;
+          try {
+            const registros = await dbListar(con.store);
+            html += '<div style="color:#f5a623;margin:8px 0 4px">' + con.icon + ' ' + con.label + ' (' + registros.length + ' en ' + con.store + ')</div>';
+            if (!registros.length) {
+              html += '<div style="color:#777;padding-left:8px">— vacío —</div>';
+              continue;
+            }
+            registros.forEach(r => {
+              let info = '🆔 <b>' + r.id + '</b> | ' + (r.nombre || r.titulo || '?');
+              if (con.nivel === 2) {
+                // galería: tiene zip_id
+                const tBlob = r.zip_id ? blobsMap.has(r.zip_id) : false;
+                info += ' | zip_id=' + (r.zip_id || '❌') + (r.zip_id ? (tBlob ? ' ✅' : ' ❌blob') : '');
+              } else {
+                // colección nivel 3: tiene capitulos[]
+                const ncaps = r.capitulos ? r.capitulos.length : 0;
+                info += ' | caps=' + ncaps;
+              }
+              html += '<div style="color:#ccc;border-bottom:1px solid #222;padding:3px 0 3px 8px">' + info + '</div>';
+            });
+          } catch(e) {
+            html += '<div style="color:#e05050">❌ Error leyendo ' + con.store + ': ' + e.message + '</div>';
+          }
+        }
+
+        // ── Sección: SLOTS TEMP ──
+        html += '<div style="color:#4a9e6a;margin:14px 0 6px">🗂️ SLOTS TEMP (' + temp.length + ' registros)</div>';
         if (!temp.length) {
           html += '<div style="color:#e05050">— Sin slots en descargas_temp —</div>';
         }
