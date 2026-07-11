@@ -6941,11 +6941,12 @@
           req.onsuccess = e => res(e.target.result);
           req.onerror   = e => rej(e.target.error);
         });
-        const lista = items.filter(it => {
+        const _sorter = (a, b) => (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric: true, sensitivity: 'base' });
+        _gfItems = items.sort(_sorter);
+        const lista = _gfItems.filter(it => {
           const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
           return itCat === cat;
         });
-        _gfItems = items.sort((a, b) => (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric: true, sensitivity: 'base' }));
         cuerpoEl.innerHTML = '';
 
         // Cache R2 si no viene
