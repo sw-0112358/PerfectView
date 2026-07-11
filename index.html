@@ -7939,13 +7939,19 @@
             actualizarStatus('⚠️ Ya existe en R2: ' + it.nombre);
             return;
           }
-          const resp = await fetch(base + '/r2-upload', {
-            method:  'POST',
-            headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
-            body:    blobCifrado,
-          });
-          const data = await resp.json();
-          if (!data.ok) throw new Error(data.error);
+          if (blobCifrado.size > 90 * 1024 * 1024) {
+            await gfSubirR2Multipart(blobCifrado, r2Info.key, base, (parte, total) => {
+              btnEl.textContent = '⬆️' + parte + '/' + total;
+            });
+          } else {
+            const resp = await fetch(base + '/r2-upload', {
+              method:  'POST',
+              headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
+              body:    blobCifrado,
+            });
+            const data = await resp.json();
+            if (!data.ok) throw new Error(data.error);
+          }
           // Generar y subir esqueleto .webc2 automáticamente
           try { await gfGenerarWebc2(it, clave); } catch(e) {}
           btnEl.textContent = '✅';
@@ -7962,6 +7968,7 @@
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         if (!_gfItems.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
+        await wlAcquire();
         const prog  = document.getElementById('gfProgresoDescifrar');
         const base  = CF_WORKER.replace(/\/$/, '');
         const clave = await gfDerivarClave(_gfPwdMaestra);
@@ -8007,6 +8014,7 @@
           + (errores  ? ' · ❌ ' + errores + ' error(es)'    : '')
           + ' — R2</div>';
         _r2Cache = null;
+        wlRelease();
       }
 
       // — Recuperar .zip.webc de R2 → importar a IDB — solo los que no están en local —
