@@ -5445,7 +5445,7 @@
                 dl.onclick = async e => {
                   e.stopPropagation();
                   const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
-                  const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                  const slotKey = (CAT_CONECTORES[cfg.categoriaDB]?.slotPrefix || cfg.categoriaDB)
                                   + '-' + cfg.coleccion.id + '-' + clave;
                   if (cfg.buscarZipFn) {
                     const reg2 = await cfg.buscarZipFn(cfg.coleccion.id, clave);
@@ -5481,7 +5481,7 @@
                       const nuevoNombre = (regZip.nombre || '').replace(/\.zip$/i, '') + '.zip.webc';
                       await gfActualizarItem(zipId, nuevoNombre, blobCifrado);
                       // Limpiar slot temporal
-                      const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                      const slotKey = (CAT_CONECTORES[cfg.categoriaDB]?.slotPrefix || cfg.categoriaDB)
                                     + '-' + cfg.coleccion.id + '-' + clave;
                       await dtEliminar(slotKey).catch(() => {});
                       badgeCif.textContent = '🔐';
@@ -5518,7 +5518,7 @@
                 const blobCifrado = await gfCifrarBlob(regZip.blob, claveCrypto);
                 const nuevoNombre = (regZip.nombre || '').replace(/\.zip$/i, '') + '.zip.webc';
                 await gfActualizarItem(zipId, nuevoNombre, blobCifrado);
-                const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+                const slotKey = (CAT_CONECTORES[cfg.categoriaDB]?.slotPrefix || cfg.categoriaDB)
                               + '-' + cfg.coleccion.id + '-' + clave;
                 await dtEliminar(slotKey).catch(() => {});
                 badgeChip.textContent = '🔐';
@@ -5534,7 +5534,7 @@
             dl.onclick = async e => {
               e.stopPropagation();
               const nombre  = cfg.getDescargarLabel(cap, cfg.coleccion.nombre);
-              const slotKey = cfg.categoriaDB.replace('samurai','sjz').replace('manhwa','mw').replace('zonascans','zs')
+              const slotKey = (CAT_CONECTORES[cfg.categoriaDB]?.slotPrefix || cfg.categoriaDB)
                               + '-' + cfg.coleccion.id + '-' + clave;
               if (cfg.buscarZipFn) {
                 const reg = await cfg.buscarZipFn(cfg.coleccion.id, clave);
