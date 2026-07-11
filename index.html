@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷332❄️
+          PerfectView🪷334❄️
         </div>
       </header>
 
@@ -7041,6 +7041,7 @@
                     const yaExiste = webc2NombresYa.has(r2Info.nombreReal);
                     if (!enR2)    { omitidos++; continue; } // no está en R2
                     if (yaExiste) { omitidos++; continue; } // ya tiene .webc2
+                    const keyW2   = r2Info.key.replace(/\.webc$/i, '.webc2');
                     // Portada: primero desde store portadas (rápido, sin RAM)
                     let portadaBlob = await bvCargarPortada(it.id).catch(() => null);
                     // Si no hay portada guardada → extraer del .webc sin cargar todo en RAM
