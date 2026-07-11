@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷315❄️
+          PerfectView🪷317❄️
         </div>
       </header>
 
@@ -3764,7 +3764,17 @@
             nombre:        col.nombre,
             phTexto:       con.icon,
             onTap:         () => { con.setColActual(col); renderBoveda(); },
-            onDelete:      async () => { await con.eliminar(col); card.remove(); },
+            onDelete: async () => {
+              for (const cap of (col.capitulos || col.caps || [])) {
+                const clave  = con.getCapClave(cap);
+                const slotId = con.slotPrefix + '-' + col.id + '-' + clave;
+                const reg    = await capBuscarZip(cfg.cat, col.id, isNaN(Number(clave)) ? clave : Number(clave));
+                if (reg) { await bvEliminarDB(reg.id); await bvEliminarPortada(reg.id); }
+                dtEliminar(slotId).catch(() => {});
+              }
+              await con.eliminar(col);
+              card.remove();
+            },
             btnSecundario: con.exportar ? {
               texto: '📦', titulo: 'Exportar colección completa',
               onClick: () => con.exportar(col),
@@ -4346,7 +4356,12 @@
             phTexto:       con.tieneZip && con.tieneZip(gal) ? '📖' : '⬇️',
             esCifrado:     gal.zip_id ? esWebc : undefined,
             onTap:         () => cfg.onTap(gal, card),
-            onDelete:      async () => { await con.eliminar(gal); renderNivel2(contenedor, cfg); },
+            onDelete: async () => {
+              const slotId = con.slotPrefix + '-' + gal.id;
+              await con.eliminar(gal);
+              dtEliminar(slotId).catch(() => {});
+              renderNivel2(contenedor, cfg);
+            },
             btnSecundario: cfg.getBtnSec ? cfg.getBtnSec(gal) : null,
             onCifrar: (!esWebc && gal.zip_id && _gfPwdMaestra) ? async () => {
               try {
