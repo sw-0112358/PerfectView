@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷352❄️
+          PerfectView🪷354❄️
         </div>
       </header>
 
@@ -6840,7 +6840,7 @@
             if (clave) nombreReal = await _descifrarKeyR2(o.key, clave);
             objetos.push({ ...o, nombreReal });
           }
-          _gfCloudItems = objetos;
+          _gfCloudItems = objetos.sort((a, b) => (a.nombreReal||'').localeCompare(b.nombreReal||'', undefined, { numeric: true, sensitivity: 'base' }));
 
           // Cargar nombres reales locales para detectar duplicados
           let localNombresReales = new Set();
@@ -6945,7 +6945,7 @@
           const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
           return itCat === cat;
         });
-        _gfItems = items; // cache global
+        _gfItems = items.sort((a, b) => (a.nombre||'').localeCompare(b.nombre||'', undefined, { numeric: true, sensitivity: 'base' }));
         cuerpoEl.innerHTML = '';
 
         // Cache R2 si no viene
