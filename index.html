@@ -7015,22 +7015,32 @@
                 const clave = await gfDerivarClave(_gfPwdMaestra);
                 // Obtener lista R2 una sola vez
                 const r2Items = await _obtenerR2ConNombresReales(base, clave);
-                const r2Keys  = new Set(r2Items.map(o => o.key));
-                // Obtener .webc2 ya existentes para no duplicar
-                const r2Resp  = await fetch(base + '/r2-list');
-                const r2Data  = await r2Resp.json();
-                const webc2Ya = new Set((r2Data.objetos || []).filter(o => o.key.endsWith('.webc2')).map(o => o.key));
+                // Comparar por nombreReal (determinístico) no por key cifrada (IV aleatorio)
+                const r2NombresSet = new Set(r2Items.map(o => o.nombreReal));
+                // .webc2 ya existentes — descifrar sus nombreReal para comparar
+                const webc2NombresYa = new Set();
+                for (const o of r2Items) {
+                  // _obtenerR2ConNombresReales ya filtró los .webc2, obtenerlos por separado
+                }
+                const r2RespRaw = await fetch(base + '/r2-list');
+                const r2DataRaw = await r2RespRaw.json();
+                for (const o of (r2DataRaw.objetos || [])) {
+                  if (!o.key.endsWith('.webc2')) continue;
+                  try {
+                    const nr = await _descifrarKeyR2(o.key, clave);
+                    webc2NombresYa.add(nr);
+                  } catch(e) {}
+                }
                 // Solo los de esta categoría que estén en R2 y no tengan .webc2 aún
                 const candidatos = lista.filter(it => it.nombre && it.nombre.endsWith('.zip.webc'));
                 let ok = 0, omitidos = 0, errores = 0;
                 for (const it of candidatos) {
                   try {
                     const r2Info  = await gfConstruirR2Key(it, clave);
-                    const enR2    = r2Keys.has(r2Info.key);
-                    const keyW2   = r2Info.key.replace(/\.webc$/i, '.webc2');
-                    const yaExiste = webc2Ya.has(keyW2);
-                    if (!enR2)     { omitidos++; continue; } // no está en R2
-                    if (yaExiste)  { omitidos++; continue; } // ya tiene .webc2
+                    const enR2    = r2NombresSet.has(r2Info.nombreReal);
+                    const yaExiste = webc2NombresYa.has(r2Info.nombreReal);
+                    if (!enR2)    { omitidos++; continue; } // no está en R2
+                    if (yaExiste) { omitidos++; continue; } // ya tiene .webc2
                     // Portada: primero desde store portadas (rápido, sin RAM)
                     let portadaBlob = await bvCargarPortada(it.id).catch(() => null);
                     // Si no hay portada guardada → extraer del .webc sin cargar todo en RAM
