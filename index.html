@@ -7651,7 +7651,8 @@
             canvas.height = Math.round(img.height * ratio);
             canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(url);
-            resolve(canvas.toDataURL('image/jpeg', 0.92));
+            const fmt = canvas.toDataURL('image/webp', 0.01).startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+            resolve(canvas.toDataURL(fmt, 0.92));
           };
           img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
           img.src = url;
