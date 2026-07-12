@@ -4851,7 +4851,7 @@
           // Botón 🗑️ — elimina .webc local + .webc en R2 + .webc2 en R2
           const btnDel = document.createElement('button');
           btnDel.textContent = '🗑️';
-          btnDel.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(224,80,80,.85);border:none;border-radius:8px;padding:3px 7px;font-size:.78rem;cursor:pointer;z-index:2';
+          btnDel.className = 'bv-menu-btn del';
           btnDel.addEventListener('click', async e => {
             e.stopPropagation();
             if (!confirm('¿Eliminar "' + nombre + '" de R2 y local?')) return;
