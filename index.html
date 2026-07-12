@@ -6458,12 +6458,17 @@
             await bovedaAbrirEnVisor(registroLocal, null);
             return;
           }
-          // No está local — descargar .webc de R2
-          actualizarStatus('⏳ Descargando desde R2…');
+          // No está local — buscar .webc en R2 por nombreReal y descargar
+          actualizarStatus('⏳ Buscando en R2…');
           await wlAcquire();
-          const base    = CF_WORKER.replace(/\/$/, '');
-          const keyWebc = (esq.r2_key || '').replace(/\.webc2$/i, '.webc');
-          const resp    = await fetch(base + '/r2-download?key=' + encodeURIComponent(keyWebc));
+          const base     = CF_WORKER.replace(/\/$/, '');
+          const clave2   = await gfDerivarClave(_gfPwdMaestra);
+          const r2Items  = await _obtenerR2ConNombresReales(base, clave2);
+          const nombreEsq2 = esq.nombreReal || (esq.cat + '/' + esq.nombre + (esq.capNum ? '/' + esq.capNum : ''));
+          const r2Item   = r2Items.find(o => o.nombreReal === nombreEsq2);
+          if (!r2Item) throw new Error('No encontrado en R2: ' + nombreEsq2);
+          actualizarStatus('⏳ Descargando desde R2…');
+          const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(r2Item.key));
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
           const blobCifrado = await resp.blob();
           // Importar a IDB y abrir
