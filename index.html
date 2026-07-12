@@ -4837,6 +4837,66 @@
             ph.style.display  = 'none';
           }
           card.addEventListener('click', () => bovedaAbrirDesdeEsqueleto(esq));
+
+          // Botón 🗑️ — elimina .webc local + .webc en R2 + .webc2 en R2
+          const btnDel = document.createElement('button');
+          btnDel.textContent = '🗑️';
+          btnDel.style.cssText = 'position:absolute;bottom:4px;right:4px;background:rgba(224,80,80,.85);border:none;border-radius:8px;padding:3px 7px;font-size:.78rem;cursor:pointer;z-index:2';
+          btnDel.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!confirm('¿Eliminar "' + nombre + '" de R2 y local?')) return;
+            btnDel.textContent = '⏳';
+            btnDel.disabled = true;
+            try {
+              const base    = CF_WORKER.replace(/\/$/, '');
+              const clave   = await gfDerivarClave(_gfPwdMaestra);
+              const nombreEsq = esq.nombreReal || (esq.cat + '/' + esq.nombre + (esq.capNum ? '/' + esq.capNum : ''));
+
+              // 1 — Eliminar .webc de R2
+              const r2Items = await _obtenerR2ConNombresReales(base, clave);
+              const r2Item  = r2Items.find(o => o.nombreReal === nombreEsq);
+              if (r2Item) {
+                await fetch(base + '/r2-delete?key=' + encodeURIComponent(r2Item.key));
+              }
+
+              // 2 — Eliminar .webc2 de R2
+              const keyWebc2 = esq._webc2_key || (r2Item ? r2Item.key.replace(/\.webc$/i, '.webc2') : null);
+              if (keyWebc2) {
+                await fetch(base + '/r2-delete?key=' + encodeURIComponent(keyWebc2));
+              }
+
+              // 3 — Eliminar local de IDB si existe
+              const db   = await bvAbrirDB();
+              const zips = await new Promise((res, rej) => {
+                const req = db.transaction('zips','readonly').objectStore('zips').getAll();
+                req.onsuccess = e2 => res(e2.target.result || []);
+                req.onerror   = e2 => rej(e2.target.error);
+              });
+              for (const z of zips) {
+                try {
+                  const ri = await gfConstruirR2Key(z, clave);
+                  if (ri.nombreReal === nombreEsq) {
+                    await bvEliminar(z.id, null);
+                    break;
+                  }
+                } catch(e2) {}
+              }
+
+              // 4 — Eliminar del cache local esq_cache
+              await esqEliminar(esq.nombreReal || nombreEsq);
+              _r2Cache = null;
+
+              // Quitar tarjeta del grid
+              card.remove();
+              actualizarStatus('🗑️ Eliminado: ' + nombre);
+            } catch(e) {
+              actualizarStatus('❌ Error: ' + e.message);
+              btnDel.textContent = '🗑️';
+              btnDel.disabled = false;
+            }
+          });
+          card.appendChild(btnDel);
+
           grid.appendChild(card);
         });
       }
