@@ -3107,6 +3107,16 @@
         });
       }
 
+      async function esqEliminar(nombreReal) {
+        const db = await bvAbrirDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction('esq_cache', 'readwrite');
+          tx.objectStore('esq_cache').delete(nombreReal);
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e => reject(e.target.error);
+        });
+      }
+
       async function esqLimpiar() {
         const db = await bvAbrirDB();
         return new Promise((resolve, reject) => {
