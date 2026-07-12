@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷355❄️
+          PerfectView🪷357❄️
         </div>
       </header>
 
@@ -6460,8 +6460,10 @@
           }
           // No está local — descargar .webc de R2
           actualizarStatus('⏳ Descargando desde R2…');
-          const base = CF_WORKER.replace(/\/$/, '');
-          const resp = await fetch(base + '/r2-download?key=' + encodeURIComponent(esq.r2_key));
+          await wlAcquire();
+          const base    = CF_WORKER.replace(/\/$/, '');
+          const keyWebc = (esq.r2_key || '').replace(/\.webc2$/i, '.webc');
+          const resp    = await fetch(base + '/r2-download?key=' + encodeURIComponent(keyWebc));
           if (!resp.ok) throw new Error('HTTP ' + resp.status);
           const blobCifrado = await resp.blob();
           // Importar a IDB y abrir
@@ -6479,7 +6481,7 @@
           if (nuevo) await bovedaAbrirEnVisor(nuevo, null);
         } catch(err) {
           actualizarStatus('❌ Error: ' + err.message);
-        }
+        } finally { wlRelease(); }
       }
 
       // — Descargar ZIP desde bóveda —
