@@ -7215,8 +7215,8 @@
               e.stopPropagation();
               if (!_gfPwdMaestra || !CF_WORKER) { actualizarStatus('⚠️ Activa clave maestra y Worker'); return; }
               btnSubirCat.textContent = '⏳'; btnSubirCat.disabled = true;
-              _gfItems = lista;
-              await gfSubirTodosR2();
+              const _itemsCat = lista.slice();
+              await gfSubirTodosR2(_itemsCat);
               btnSubirCat.disabled = false;
               gfCargarCategoria(cat, cuerpo, btnSubirCat, null);
             });
@@ -8043,10 +8043,11 @@
       }
 
       // — Subir todos los .zip.webc de la lista a R2 —
-      async function gfSubirTodosR2() {
+      async function gfSubirTodosR2(itemsOverride) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
-        if (!_gfItems.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
+        const itemsBase = itemsOverride || _gfItems;
+        if (!itemsBase.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
         await wlAcquire();
         const prog  = document.getElementById('gfProgresoDescifrar');
         const base  = CF_WORKER.replace(/\/$/, '');
@@ -8056,12 +8057,12 @@
         const r2Items = await _obtenerR2ConNombresReales(base, clave);
         const r2NombresSet = new Set(r2Items.map(o => o.nombreReal));
         const pendientesSubir = [];
-        for (const it of _gfItems) {
+        for (const it of itemsBase) {
           const r2Info = await gfConstruirR2Key(it, clave);
           // Usar r2Info.nombreReal directamente — misma fuente que la comparación
           if (!r2NombresSet.has(r2Info.nombreReal)) pendientesSubir.push({ it, r2Info });
         }
-        let ok = 0, errores = 0, omitidos = _gfItems.length - pendientesSubir.length;
+        let ok = 0, errores = 0, omitidos = itemsBase.length - pendientesSubir.length;
         for (const { it, r2Info } of pendientesSubir) {
           gfMostrarProgreso(prog, ok + errores + 1, pendientesSubir.length, '☁️', r2Info.nombreReal, '#60a5fa');
           try {
