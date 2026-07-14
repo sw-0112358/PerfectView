@@ -1055,7 +1055,7 @@
       <header class="app-header">
         <div class="app-logo">
           <span>📖</span>
-          PerfectView🪷374❄️
+          PerfectView🪷375❄️
         </div>
       </header>
 
@@ -6872,7 +6872,7 @@
 
       // — Subir todos los .zip.webc listados a R2 —
       async function gfCifrarTodosCloud() {
-        const prog = document.getElementById('gfProgresoCifrar');
+        const prog = document.getElementById('gfProgreso');
         if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para subir.'; return; }
         const base = CF_WORKER.replace(/\/$/, '');
         let ok = 0;
@@ -7071,25 +7071,11 @@
             if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra'); return; }
             btnUp.textContent = '⏳'; btnUp.disabled = true;
             try {
-              const base  = CF_WORKER.replace(/\/$/, '');
-              const clave = await gfDerivarClave(_gfPwdMaestra);
-              const r2Info  = await gfConstruirR2Key(it, clave);
-              const regBlob = await bvCargar(it.id);
-              if (!regBlob || !regBlob.blob) throw new Error('Blob no encontrado');
-              if (regBlob.blob.size > 90 * 1024 * 1024) {
-                // Archivo > 90MB — usar multipart
-                await gfSubirR2Multipart(regBlob.blob, r2Info.key, base, (parte, total) => {
-                  btnUp.textContent = '⬆️' + parte + '/' + total;
-                });
-              } else {
-                const resp = await fetch(base + '/r2-upload', {
-                  method: 'POST', headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) }, body: regBlob.blob
-                });
-                const data = await resp.json();
-                if (!data.ok) throw new Error(data.error);
-              }
-              // Generar y subir esqueleto .webc2
-              try { await gfGenerarWebc2(it, clave); } catch(e) {}
+              const clave  = await gfDerivarClave(_gfPwdMaestra);
+              const base   = CF_WORKER.replace(/\/$/, '');
+              const r2Info = await gfSubirItemR2(it, clave, base, (parte, total) => {
+                btnUp.textContent = '⬆️' + parte + '/' + total;
+              });
               btnUp.remove();
               row.style.borderColor = 'var(--success)';
               row.querySelector('span:last-of-type[style*="65rem"]')?.remove();
@@ -7581,7 +7567,7 @@
       async function gfCifrarTodos() {
         const pwd = _gfPwdMaestra || '';
         if (!pwd) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); abrirPanelClave(); return; }
-        const prog = document.getElementById('gfProgresoCifrar');
+        const prog = document.getElementById('gfProgreso');
         if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para cifrar.'; return; }
         try {
           const clave = await gfDerivarClave(pwd);
@@ -7606,7 +7592,7 @@
       async function gfDescifrarTodos() {
         const pwd = _gfPwdMaestra || '';
         if (!pwd) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); abrirPanelClave(); return; }
-        const prog = document.getElementById('gfProgresoDescifrar');
+        const prog = document.getElementById('gfProgreso');
         if (!_gfItems.length) { prog.textContent = '⚠️ Sin archivos para descifrar.'; return; }
         try {
           const clave = await gfDerivarClave(pwd);
@@ -7994,50 +7980,49 @@
       }
 
       // — Subir un solo .zip.webc a R2 conservando categoría —
+      // — Núcleo de subida: lógica pura compartida por botón individual y masivo —
+      async function gfSubirItemR2(it, clave, base, onProgreso) {
+        const r2Info = await gfConstruirR2Key(it, clave);
+        const reg    = await bvCargar(it.id);
+        if (!reg || !reg.blob) throw new Error('Blob no encontrado: ' + it.nombre);
+        if (reg.blob.size > 90 * 1024 * 1024) {
+          await gfSubirR2Multipart(reg.blob, r2Info.key, base, onProgreso || null);
+        } else {
+          const resp = await fetch(base + '/r2-upload', {
+            method:  'POST',
+            headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
+            body:    reg.blob,
+          });
+          const data = await resp.json();
+          if (!data.ok) throw new Error(data.error);
+        }
+        try { await gfGenerarWebc2(it, clave); } catch(e) {}
+        return r2Info;
+      }
+
       async function gfSubirUnoR2(id, btnEl) {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfPwdMaestra) { actualizarStatus('⚠️ Activa la clave maestra en 🧬 primero'); return; }
         const it = _gfItems.find(i => i.id === id);
         if (!it) return;
-        const itCat = (!it.categoria || it.categoria === 'boveda1') ? 'mangas' : it.categoria;
-        btnEl.textContent = '⏳';
-        btnEl.disabled    = true;
+        btnEl.textContent = '⏳'; btnEl.disabled = true;
         try {
-          const clave      = await gfDerivarClave(_gfPwdMaestra);
-          const r2Info     = await gfConstruirR2Key(it, clave);
-          const reg = await bvCargar(it.id);
-          if (!reg || !reg.blob) { btnEl.textContent = '❌'; actualizarStatus('❌ Blob no encontrado'); return; }
-          const blobCifrado = reg.blob;
-          const base       = CF_WORKER.replace(/\/$/, '');
-
-          // Verificar duplicado por nombreReal
-          const r2Items  = await _obtenerR2ConNombresReales(base, clave);
-          const yaExiste = r2Items.find(o => o.nombreReal === r2Info.nombreReal);
-          if (yaExiste) {
+          const clave  = await gfDerivarClave(_gfPwdMaestra);
+          const base   = CF_WORKER.replace(/\/$/, '');
+          const r2Info = await gfConstruirR2Key(it, clave);
+          const r2Its  = await _obtenerR2ConNombresReales(base, clave);
+          if (r2Its.find(o => o.nombreReal === r2Info.nombreReal)) {
             btnEl.textContent = '✅';
             actualizarStatus('⚠️ Ya existe en R2: ' + it.nombre);
             return;
           }
-          if (blobCifrado.size > 90 * 1024 * 1024) {
-            await gfSubirR2Multipart(blobCifrado, r2Info.key, base, (parte, total) => {
-              btnEl.textContent = '⬆️' + parte + '/' + total;
-            });
-          } else {
-            const resp = await fetch(base + '/r2-upload', {
-              method:  'POST',
-              headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
-              body:    blobCifrado,
-            });
-            const data = await resp.json();
-            if (!data.ok) throw new Error(data.error);
-          }
-          // Generar y subir esqueleto .webc2 automáticamente
-          try { await gfGenerarWebc2(it, clave); } catch(e) {}
+          await gfSubirItemR2(it, clave, base, (parte, total) => {
+            btnEl.textContent = '⬆️' + parte + '/' + total;
+          });
           btnEl.textContent = '✅';
           actualizarStatus('✅ Subido: ' + r2Info.nombreReal);
         } catch(err) {
-          btnEl.textContent = '❌';
-          btnEl.disabled    = false;
+          btnEl.textContent = '❌'; btnEl.disabled = false;
           actualizarStatus('❌ Error al subir: ' + err.message);
         }
       }
@@ -8049,43 +8034,37 @@
         const itemsBase = itemsOverride || _gfItems;
         if (!itemsBase.length) { actualizarStatus('⚠️ Sin archivos para subir.'); return; }
         await wlAcquire();
-        const prog  = document.getElementById('gfProgresoDescifrar');
+        const prog  = document.getElementById('gfProgreso');
         const base  = CF_WORKER.replace(/\/$/, '');
         const clave = await gfDerivarClave(_gfPwdMaestra);
-        // Cargar lista R2 una sola vez para verificar duplicados
         _r2Cache = null;
-        const r2Items = await _obtenerR2ConNombresReales(base, clave);
+        actualizarStatus('🔍 Consultando R2…');
+        const r2Items      = await _obtenerR2ConNombresReales(base, clave);
         const r2NombresSet = new Set(r2Items.map(o => o.nombreReal));
         const pendientesSubir = [];
         for (const it of itemsBase) {
+          if (!it.nombre || !it.nombre.endsWith('.zip.webc')) continue;
           const r2Info = await gfConstruirR2Key(it, clave);
-          // Usar r2Info.nombreReal directamente — misma fuente que la comparación
           if (!r2NombresSet.has(r2Info.nombreReal)) pendientesSubir.push({ it, r2Info });
+        }
+        if (!pendientesSubir.length) {
+          prog.innerHTML = '<div style="color:var(--success);font-size:.82rem">✅ Sin pendientes — todo sincronizado</div>';
+          actualizarStatus('✅ Todos los archivos ya están en R2.');
+          wlRelease(); return;
         }
         let ok = 0, errores = 0, omitidos = itemsBase.length - pendientesSubir.length;
         for (const { it, r2Info } of pendientesSubir) {
-          gfMostrarProgreso(prog, ok + errores + 1, pendientesSubir.length, '☁️', r2Info.nombreReal, '#60a5fa');
+          const n = ok + errores + 1;
+          gfMostrarProgreso(prog, n, pendientesSubir.length, '☁️', r2Info.nombreReal, '#60a5fa');
+          actualizarStatus('⬆️ ' + n + '/' + pendientesSubir.length + ' — ' + r2Info.nombreReal);
           try {
-            const regBlob = await bvCargar(it.id);
-            if (!regBlob || !regBlob.blob) { errores++; continue; }
-            if (regBlob.blob.size > 90 * 1024 * 1024) {
-              await gfSubirR2Multipart(regBlob.blob, r2Info.key, base, (parte, total) => {
-                actualizarStatus('⬆️ ' + (r2Info.nombreReal||'').slice(0,30) + ' · parte ' + parte + '/' + total);
-              });
-            } else {
-              const resp = await fetch(base + '/r2-upload', {
-                method:  'POST',
-                headers: { 'X-R2-Key': encodeURIComponent(r2Info.key) },
-                body:    regBlob.blob,
-              });
-              const data = await resp.json();
-              if (!data.ok) throw new Error(data.error);
-            }
-            // Generar y subir esqueleto .webc2
-            try { await gfGenerarWebc2(it, clave); } catch(e) {}
+            await gfSubirItemR2(it, clave, base, (parte, total) => {
+              actualizarStatus('⬆️ ' + r2Info.nombreReal.slice(0, 28) + ' · parte ' + parte + '/' + total);
+            });
             ok++;
           } catch(err) {
             errores++;
+            actualizarStatus('❌ ' + r2Info.nombreReal + ' — ' + err.message);
             prog.innerHTML += '<div style="color:var(--danger);font-size:.75rem">❌ ' + it.nombre + ': ' + err.message + '</div>';
           }
         }
@@ -8093,6 +8072,7 @@
           + (omitidos ? ' · ⏭️ ' + omitidos + ' ya existían' : '')
           + (errores  ? ' · ❌ ' + errores + ' error(es)'    : '')
           + ' — R2</div>';
+        actualizarStatus('✅ Sincronización completa: ' + ok + ' subido(s)' + (errores ? ', ' + errores + ' error(es)' : ''));
         _r2Cache = null;
         wlRelease();
       }
