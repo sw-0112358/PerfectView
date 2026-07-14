@@ -8081,7 +8081,7 @@
       async function gfCloudDescargarTodos() {
         if (!CF_WORKER) { actualizarStatus('⚠️ Configura el Worker primero'); return; }
         if (!_gfCloudItems.length) { actualizarStatus('⚠️ Sin archivos en R2.'); return; }
-        const prog  = document.getElementById('gfProgresoDescifrar');
+        const prog  = document.getElementById('gfProgreso');
         const base  = CF_WORKER.replace(/\/$/, '');
 
         // Construir set de nombreReal locales para filtrar duplicados
