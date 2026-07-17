@@ -1663,42 +1663,125 @@
          6. VISOR
       ============================================= */
 
-      function mostrarImagenesEnVisor() {
-        const visor = document.getElementById("visor");
-        visor.innerHTML = "";
-        archivosDescargados.forEach((a, i) => {
-          const img = document.createElement("img");
-          img.src = URL.createObjectURL(a.blob);
-          img.alt = a.nombre;
-          img.classList.add("mangaImg");
-          img.style.maxWidth = "100%";
-          img.style.margin = "0";
-          // Las primeras 3 imágenes se cargan inmediato; el resto lazy
-          if (i >= 3) { img.loading = "lazy"; img.decoding = "async"; }
-          if (filtroActivo) img.classList.add(filtroActivo);
-          visor.appendChild(img);
-        });
+      /* ── Visor por bloques ──────────────────────────────────────────
+         Siempre 3 bloques de 10 en el DOM (30 imgs máximo).
+         Al entrar al bloque 2 (img índice local 10):
+           → se agrega el bloque siguiente
+           → se elimina el bloque más antiguo
+         _vBloque = índice del bloque más antiguo en el DOM
+      ──────────────────────────────────────────────────────────────── */
+      const _vTAM   = 10;   // imágenes por bloque
+      let   _vBloque = 0;   // primer bloque renderizado actualmente
+      let   _vObs    = null;
 
-        // Sentinel de siguiente episodio
-        if (_visorContexto) {
-          const sig      = visorSiguienteCap();
-          const sentinel = document.createElement('div');
-          sentinel.style.cssText = 'padding:28px 16px;text-align:center;';
-          if (sig) {
-            const btn = document.createElement('button');
-            btn.className = 'action-btn';
-            btn.style.cssText = 'width:100%;padding:14px;font-size:1rem;';
-            const esGaleria = _visorContexto && (_visorContexto.tipo === 'hitomi' || _visorContexto.tipo === 'nhentai' || _visorContexto.tipo === 'mangas');
-            const sigNombre = esGaleria
+      function _vCrearImg(a, idx) {
+        const img = document.createElement('img');
+        img.src   = URL.createObjectURL(a.blob);
+        img.alt   = a.nombre;
+        img.classList.add('mangaImg');
+        img.style.cssText = 'max-width:100%;margin:0;';
+        img.dataset.idx   = idx;
+        if (idx >= 3) { img.loading = 'lazy'; img.decoding = 'async'; }
+        if (filtroActivo) img.classList.add(filtroActivo);
+        return img;
+      }
+
+      function _vRenderBloque(numBloque) {
+        const visor   = document.getElementById('visor');
+        const inicio  = numBloque * _vTAM;
+        const fin     = Math.min(inicio + _vTAM, archivosDescargados.length);
+        const sentinel = document.getElementById('_vSentinel');
+        for (let i = inicio; i < fin; i++) {
+          const img = _vCrearImg(archivosDescargados[i], i);
+          visor.insertBefore(img, sentinel);
+        }
+      }
+
+      function _vEliminarBloque(numBloque) {
+        const inicio = numBloque * _vTAM;
+        const fin    = inicio + _vTAM;
+        document.querySelectorAll('#visor img[data-idx]').forEach(img => {
+          const idx = parseInt(img.dataset.idx);
+          if (idx >= inicio && idx < fin) img.remove();
+        });
+      }
+
+      function _vConectarObs() {
+        if (_vObs) { _vObs.disconnect(); _vObs = null; }
+        const total = archivosDescargados.length;
+
+        // Trigger: ÚLTIMA imagen del bloque 1 relativo (img 19 en el inicio)
+        // Cuando esa imagen es visible, el bloque 0 ya está lejos → seguro eliminarlo
+        const triggerIdx = (_vBloque + 2) * _vTAM - 1;
+        if (triggerIdx >= total) return; // no hay más bloques que cargar
+        const trigger = document.querySelector(`#visor img[data-idx="${triggerIdx}"]`);
+        if (!trigger) return;
+
+        _vObs = new IntersectionObserver(entries => {
+          if (!entries[0].isIntersecting) return;
+          _vObs.disconnect();
+          _vObs = null;
+
+          const bloqueAgregar  = _vBloque + 3;  // bloque nuevo a renderizar al frente
+          const bloqueEliminar = _vBloque;       // bloque viejo a eliminar
+
+          if (bloqueAgregar * _vTAM < archivosDescargados.length) {
+            _vRenderBloque(bloqueAgregar);        // agregar bloque 3 adelante
+          }
+          _vEliminarBloque(bloqueEliminar);       // eliminar bloque 0 atrás
+          _vBloque++;                             // ventana avanza 1 bloque
+          _vConectarObs();                        // reconectar en nueva posición
+        }, { root: null, threshold: 0.1 });       // root:null = viewport (más confiable en móvil)
+
+        _vObs.observe(trigger);
+      }
+
+      function _vSentinelSig() {
+        const div = document.createElement('div');
+        div.id    = '_vSentinel';
+        div.style.cssText = 'padding:28px 16px;text-align:center;';
+        if (!_visorContexto) return div;
+        const sig = visorSiguienteCap();
+        if (sig) {
+          const btn = document.createElement('button');
+          btn.className     = 'action-btn';
+          btn.style.cssText = 'width:100%;padding:14px;font-size:1rem;';
+          const esGaleria   = _visorContexto.tipo === 'hitomi' || _visorContexto.tipo === 'nhentai' || _visorContexto.tipo === 'mangas';
+          const sigNombre   = esGaleria
             ? (sig.nombre || '').replace(/\.zip$/i, '').slice(0, 25)
             : 'Cap. ' + sig.num;
-            btn.textContent = '▶️ Siguiente · ' + sigNombre;
-            btn.onclick = visorCargarSiguiente;
-            sentinel.appendChild(btn);
-          } else {
-            sentinel.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:8px">✅ Último episodio</div>';
+          btn.textContent   = '▶️ Siguiente · ' + sigNombre;
+          btn.onclick       = visorCargarSiguiente;
+          div.appendChild(btn);
+        } else {
+          div.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;padding:8px">✅ Último episodio</div>';
+        }
+        return div;
+      }
+
+      function mostrarImagenesEnVisor() {
+        const visor = document.getElementById('visor');
+        visor.innerHTML = '';
+        _vBloque = 0;
+        if (_vObs) { _vObs.disconnect(); _vObs = null; }
+
+        const total = archivosDescargados.length;
+
+        // Sentinel siempre al final del DOM
+        visor.appendChild(_vSentinelSig());
+
+        if (total <= _vTAM * 3) {
+          // 30 imgs o menos → cargar todo sin ventana deslizante
+          for (let i = 0; i < total; i++) {
+            visor.insertBefore(_vCrearImg(archivosDescargados[i], i),
+                               document.getElementById('_vSentinel'));
           }
-          visor.appendChild(sentinel);
+        } else {
+          // Renderizar bloques 0, 1 y 2 (30 imgs)
+          _vRenderBloque(0);
+          _vRenderBloque(1);
+          _vRenderBloque(2);
+          _vConectarObs();
         }
 
         mostrarVisor(true);
